@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+
+	"github.com/WahyuS002/uploy/jobs"
 )
 
 func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
@@ -18,14 +20,17 @@ func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func dockerNginxHandler(w http.ResponseWriter, r *http.Request) {
-	out, err := exec.Command("docker", "pull", "nginx:latest").Output()
+	// out, err := exec.Command("docker", "pull", "nginx:latest").Output()
 
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	go jobs.RunNginx()
 
-	w.Write(out)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status": "success"}`))
 }
 
 func main() {
