@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
-	"time"
 
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/jobs"
@@ -23,16 +22,14 @@ func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func dockerNginxHandler(w http.ResponseWriter, r *http.Request) {
-	deploymentID := fmt.Sprintf("dep-%d", time.Now().UnixNano())
-	_, err := db.Conn.Exec(context.Background(),
-		`INSERT INTO deployments (id, status) VALUES ($1, 'in_progress')`, deploymentID)
+	deployment, err := db.CreateDeployment(context.Background())
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	go jobs.RunNginx()
+	go jobs.RunNginx(deployment.ID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status": "success"}`))
