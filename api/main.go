@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 
 	"github.com/WahyuS002/uploy/jobs"
+	"github.com/jackc/pgx/v5"
 )
 
 func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +37,18 @@ func dockerNginxHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		url = "postgres://uploy:password@localhost:5432/uploy"
+	}
+
+	conn, err := pgx.Connect(context.Background(), url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer conn.Close(context.Background())
+
 	http.HandleFunc("/api/docker/ps", dockerPsHandler)
 	http.HandleFunc("/api/docker/nginx", dockerNginxHandler)
 	fmt.Println("Server berjalan di localhost:8080")
