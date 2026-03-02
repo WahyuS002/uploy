@@ -9,7 +9,5 @@
 
 <h1>Hello World (uploy)</h1>
 
-<button class="cursor-pointer rounded-md bg-black px-2 py-2 text-white" onclick={fetchDockerNginx}
-	>Fetch Nginx (pull)</button
->
+<button class="cursor-pointer rounded-md bg-black px-2 py-2 text-white" onclick={fetchDockerNginx}>Deploy Nginx</button>
 <p>{output}</p>

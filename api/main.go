@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/WahyuS002/uploy/jobs"
 	"github.com/jackc/pgx/v5"
 )
+
+var conn *pgx.Conn
 
 func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
 	out, err := exec.Command("docker", "ps").Output()
@@ -23,14 +26,16 @@ func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func dockerNginxHandler(w http.ResponseWriter, r *http.Request) {
-	// out, err := exec.Command("docker", "pull", "nginx:latest").Output()
+	deploymentID := fmt.Sprintf("dep-%d", time.Now().UnixNano())
+	_, err := conn.Exec(context.Background(),
+		`INSERT INTO deployments (id, status) VALUES ($1, 'in_progress')`, deploymentID)
+
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	go jobs.RunNginx()
-
-	// if err != nil {
-	// 	http.Error(w, err.Error(), 500)
-	// 	return
-	// }
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status": "success"}`))
@@ -42,12 +47,20 @@ func main() {
 		url = "postgres://uploy:password@localhost:5432/uploy"
 	}
 
-	conn, err := pgx.Connect(context.Background(), url)
+	var err error
+
+	conn, err = pgx.Connect(context.Background(), url)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
 		os.Exit(1)
 	}
 	defer conn.Close(context.Background())
+
+	conn.Exec(context.Background(),
+		`CREATE TABLE IF NOT EXISTS deployments (
+			id TEXT PRIMARY KEY,
+			status TEXT
+		)`)
 
 	http.HandleFunc("/api/docker/ps", dockerPsHandler)
 	http.HandleFunc("/api/docker/nginx", dockerNginxHandler)
