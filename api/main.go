@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/jobs"
@@ -36,11 +42,52 @@ func dockerNginxHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	db.Init()
-	defer db.Conn.Close(context.Background())
+	// signal-aware context
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	http.HandleFunc("/api/docker/ps", dockerPsHandler)
-	http.HandleFunc("/api/docker/nginx", dockerNginxHandler)
-	fmt.Println("Server berjalan di localhost:8080")
-	http.ListenAndServe(":8080", nil)
+	db.Init()
+	defer func() {
+		fmt.Println("DEFER: closing db...")
+		closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := db.Conn.Close(closeCtx); err != nil {
+			log.Println("db close error:", err)
+		}
+	}()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/docker/ps", dockerPsHandler)
+	mux.HandleFunc("/api/docker/nginx", dockerNginxHandler)
+
+	srv := &http.Server{Addr: ":8080", Handler: mux}
+
+	srvErr := make(chan error, 1)
+	go func() {
+		fmt.Println("Server berjalan di localhost:8080")
+		srvErr <- srv.ListenAndServe()
+	}()
+
+	// tunggu: signal atau server error
+	select {
+	case <-ctx.Done():
+		fmt.Println("\nSignal received, shutting down...")
+	case err := <-srvErr:
+		// kalau server gagal start / crash
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Println("ListenAndServe error:", err)
+			return // biar defer jalan
+		}
+		return
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Println("Shutdown error:", err)
+	}
+
+	// main return -> defer db close kepanggil
 }
