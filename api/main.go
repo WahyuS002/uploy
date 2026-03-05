@@ -49,12 +49,7 @@ func main() {
 	db.Init()
 	defer func() {
 		fmt.Println("DEFER: closing db...")
-		closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		if err := db.Conn.Close(closeCtx); err != nil {
-			log.Println("db close error:", err)
-		}
+		db.Close()
 	}()
 
 	mux := http.NewServeMux()
