@@ -53,19 +53,19 @@ func finishDeploy(deploymentID, status string) {
 func RunNginx(deploymentID string) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered deploymentID=%v: %v\n%s", deploymentID, r, debug.Stack())
+			log.Printf("Recovered deploymentID=%s: %v\n%s", deploymentID, r, debug.Stack())
 
-			dbCtx, dbCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer dbCancel()
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 
-			if dbErr := db.SetDeploymentStatus(dbCtx, deploymentID, "failed"); dbErr != nil {
-				log.Printf("error SetDeploymentStatus in recover deploymentID=%v", deploymentID)
+			appendLog(cleanupCtx, deploymentID, fmt.Sprintf("panic: %v", r))
+
+			if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, "failed"); err != nil {
+				log.Printf("SetDeploymentStatus in recover deploymentID=%s: %v", deploymentID, err)
+				return
 			}
 
-			if dbErr := db.AppendLog(dbCtx, deploymentID, fmt.Sprintf("panic: %v", r)); dbErr != nil {
-				log.Printf("error AppendLog in recover deploymentID=%v", deploymentID)
-			}
-
+			appendLog(cleanupCtx, deploymentID, "deployment failed")
 			broker.PublishDone(deploymentID, "failed")
 		}
 	}()

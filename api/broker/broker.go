@@ -21,7 +21,7 @@ type Event struct {
 }
 
 var (
-	mu   sync.RWMutex
+	mu   sync.Mutex
 	subs = make(map[string]map[chan Event]struct{})
 )
 
