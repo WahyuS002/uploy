@@ -53,14 +53,18 @@ func Unsubscribe(deploymentID string, ch chan Event) {
 func publish(deploymentID string, event Event) {
 	mu.Lock()
 	defer mu.Unlock()
-	for ch := range subs[deploymentID] {
+	s := subs[deploymentID]
+	for ch := range s {
 		select {
 		case ch <- event:
 		default:
 			// subscriber too slow — close to force reconnect via Last-Event-ID
-			delete(subs[deploymentID], ch)
+			delete(s, ch)
 			close(ch)
 		}
+	}
+	if len(s) == 0 {
+		delete(subs, deploymentID)
 	}
 }
 
