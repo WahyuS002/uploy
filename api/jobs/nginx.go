@@ -53,7 +53,8 @@ func RunNginx(deploymentID string) {
 			broker.PublishDone(deploymentID, "failed")
 		}
 	}()
-	ctx := context.Background()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer ctxCancel()
 
 	pullCtx, pullCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer pullCancel()

@@ -29,7 +29,10 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 
 	sendError := func(msg string) {
-		payload, _ := json.Marshal(map[string]string{"message": msg})
+		payload, err := json.Marshal(map[string]string{"message": msg})
+		if err != nil {
+			return
+		}
 		fmt.Fprintf(w, "event: stream-error\ndata: %s\n\n", payload)
 		flusher.Flush()
 	}
