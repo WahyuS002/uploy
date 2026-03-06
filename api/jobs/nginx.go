@@ -14,23 +14,27 @@ import (
 	"github.com/WahyuS002/uploy/db"
 )
 
-func failDeploy(ctx context.Context, deploymentID, msg string) {
+func failDeploy(deploymentID, msg string) {
 	log.Println(msg)
-	db.AppendLog(ctx, deploymentID, msg)
-	db.SetDeploymentStatus(ctx, deploymentID, "failed")
-	db.AppendLog(ctx, deploymentID, "deployment failed")
+
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	db.AppendLog(cleanupCtx, deploymentID, msg)
+	db.SetDeploymentStatus(cleanupCtx, deploymentID, "failed")
+	db.AppendLog(cleanupCtx, deploymentID, "deployment failed")
 	broker.PublishDone(deploymentID, "failed")
 }
 
-func finishDeploy(ctx context.Context, deploymentID, status string) {
-	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer dbCancel()
+func finishDeploy(deploymentID, status string) {
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	if err := db.SetDeploymentStatus(dbCtx, deploymentID, status); err != nil {
+	if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, status); err != nil {
 		log.Println("error SetDeploymentStatus: ", err)
 	}
 
-	db.AppendLog(ctx, deploymentID, fmt.Sprintf("deployment %s", status))
+	db.AppendLog(cleanupCtx, deploymentID, fmt.Sprintf("deployment %s", status))
 	broker.PublishDone(deploymentID, status)
 }
 
@@ -64,13 +68,13 @@ func RunNginx(deploymentID string) {
 	cmd := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		failDeploy(ctx, deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
+		failDeploy(deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
 		return
 	}
 	cmd.Stderr = cmd.Stdout // merge stderr into stdout
 
 	if err := cmd.Start(); err != nil {
-		failDeploy(ctx, deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
+		failDeploy(deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
 		return
 	}
 
@@ -91,5 +95,5 @@ func RunNginx(deploymentID string) {
 		db.AppendLog(ctx, deploymentID, fmt.Sprintf("docker pull failed: %v", err))
 	}
 
-	finishDeploy(ctx, deploymentID, status)
+	finishDeploy(deploymentID, status)
 }

@@ -40,12 +40,14 @@ func Unsubscribe(deploymentID string, ch chan Event) {
 	mu.Lock()
 	defer mu.Unlock()
 	if s, ok := subs[deploymentID]; ok {
-		delete(s, ch)
+		if _, exists := s[ch]; exists {
+			delete(s, ch)
+			close(ch)
+		}
 		if len(s) == 0 {
 			delete(subs, deploymentID)
 		}
 	}
-	close(ch)
 }
 
 func publish(deploymentID string, event Event) {
