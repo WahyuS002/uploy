@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/handlers"
 	"github.com/WahyuS002/uploy/jobs"
 )
 
@@ -55,6 +56,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/docker/ps", dockerPsHandler)
 	mux.HandleFunc("/api/docker/nginx", dockerNginxHandler)
+	mux.HandleFunc("/api/deployments/{id}/logs", handlers.LogsHandler)
 
 	srv := &http.Server{Addr: ":8080", Handler: mux}
 
@@ -64,15 +66,13 @@ func main() {
 		srvErr <- srv.ListenAndServe()
 	}()
 
-	// tunggu: signal atau server error
 	select {
 	case <-ctx.Done():
 		fmt.Println("\nSignal received, shutting down...")
 	case err := <-srvErr:
-		// kalau server gagal start / crash
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Println("ListenAndServe error:", err)
-			return // biar defer jalan
+			return // to trigger defer
 		}
 		return
 	}
@@ -83,6 +83,4 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Println("Shutdown error:", err)
 	}
-
-	// main return -> defer db close kepanggil
 }
