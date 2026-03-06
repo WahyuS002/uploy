@@ -14,6 +14,26 @@ import (
 	"github.com/WahyuS002/uploy/db"
 )
 
+func failDeploy(ctx context.Context, deploymentID, msg string) {
+	log.Println(msg)
+	db.AppendLog(ctx, deploymentID, msg)
+	db.SetDeploymentStatus(ctx, deploymentID, "failed")
+	db.AppendLog(ctx, deploymentID, "deployment failed")
+	broker.PublishDone(deploymentID, "failed")
+}
+
+func finishDeploy(ctx context.Context, deploymentID, status string) {
+	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer dbCancel()
+
+	if err := db.SetDeploymentStatus(dbCtx, deploymentID, status); err != nil {
+		log.Println("error SetDeploymentStatus: ", err)
+	}
+
+	db.AppendLog(ctx, deploymentID, fmt.Sprintf("deployment %s", status))
+	broker.PublishDone(deploymentID, status)
+}
+
 func RunNginx(deploymentID string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -43,12 +63,14 @@ func RunNginx(deploymentID string) {
 	cmd := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		db.AppendLog(ctx, deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
+		failDeploy(ctx, deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
+		return
 	}
 	cmd.Stderr = cmd.Stdout // merge stderr into stdout
 
 	if err := cmd.Start(); err != nil {
-		db.AppendLog(ctx, deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
+		failDeploy(ctx, deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
+		return
 	}
 
 	scanner := bufio.NewScanner(stdout)
@@ -68,14 +90,5 @@ func RunNginx(deploymentID string) {
 		db.AppendLog(ctx, deploymentID, fmt.Sprintf("docker pull failed: %v", err))
 	}
 
-	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer dbCancel()
-
-	dbErr := db.SetDeploymentStatus(dbCtx, deploymentID, status)
-	if dbErr != nil {
-		log.Println("error SetDeploymentStatus: ", dbErr)
-	}
-
-	db.AppendLog(ctx, deploymentID, fmt.Sprintf("deployment %s", status))
-	broker.PublishDone(deploymentID, status)
+	finishDeploy(ctx, deploymentID, status)
 }
