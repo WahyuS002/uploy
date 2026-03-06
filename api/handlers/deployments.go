@@ -26,7 +26,6 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
 
 	var after time.Time
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -37,15 +36,18 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
-			logs, err := db.GetLogsAfter(deployment.ID, after)
+			logs, err := db.GetLogsAfter(r.Context(), deployment.ID, after)
 			if err != nil {
-				fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
+				fmt.Fprintf(w, "event: stream-error\ndata: %s\n\n", err.Error())
 				flusher.Flush()
 				return
 			}
 
 			for _, log := range logs {
-				data, _ := json.Marshal(log)
+				data, err := json.Marshal(log)
+				if err != nil {
+					continue
+				}
 				fmt.Fprintf(w, "data: %s\n\n", data)
 				after = log.CreatedAt
 			}

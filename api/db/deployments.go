@@ -58,8 +58,8 @@ type LogEntry struct {
 	Output string `json:"output"`
 }
 
-func GetLogsAfter(deploymentID string, after time.Time) ([]LogEntry, error) {
-    rows, err := Pool.Query(context.Background(),
+func GetLogsAfter(ctx context.Context, deploymentID string, after time.Time) ([]LogEntry, error) {
+    rows, err := Pool.Query(ctx,
         `SELECT created_at, output
 				 FROM deployment_logs
          WHERE deployment_id=$1 AND created_at > $2

@@ -29,9 +29,13 @@
 			eventSource?.close();
 		});
 
-		eventSource.addEventListener('error', () => {
+		eventSource.addEventListener('stream-error', () => {
 			eventSource?.close();
 		});
+
+		eventSource.onerror = () => {
+			eventSource?.close();
+		};
 	});
 
 	onDestroy(() => {
