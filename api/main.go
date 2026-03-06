@@ -28,7 +28,7 @@ func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(out)
 }
 
-func dockerNginxHandler(w http.ResponseWriter, r *http.Request) {
+func deployHandler(w http.ResponseWriter, r *http.Request) {
 	deployment, err := db.CreateDeployment(context.Background())
 
 	if err != nil {
@@ -39,7 +39,7 @@ func dockerNginxHandler(w http.ResponseWriter, r *http.Request) {
 	go jobs.RunNginx(deployment.ID)
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status": "success"}`))
+	w.Write([]byte(fmt.Sprintf(`{"deployment_id": "%s"}`, deployment.ID)))
 }
 
 func main() {
@@ -55,7 +55,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/docker/ps", dockerPsHandler)
-	mux.HandleFunc("/api/docker/nginx", dockerNginxHandler)
+	mux.HandleFunc("/api/deployments", deployHandler)
 	mux.HandleFunc("/api/deployments/{id}/logs", handlers.LogsHandler)
 
 	srv := &http.Server{Addr: ":8080", Handler: mux}

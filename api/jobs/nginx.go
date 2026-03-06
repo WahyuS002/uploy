@@ -31,7 +31,13 @@ func RunNginx(deploymentID string) {
 	pullCtx, pullCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer pullCancel()
 
-	err := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest").Run()
+	db.AppendLog(deploymentID, "pulling nginx:latest...")
+
+	cmd := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest")
+	output, err := cmd.CombinedOutput()
+	if len(output) > 0 {
+		db.AppendLog(deploymentID, string(output))
+	}
 
 	status := "success"
 	if err != nil {
