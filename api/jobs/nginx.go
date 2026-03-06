@@ -1,8 +1,10 @@
 package jobs
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os/exec"
 	"runtime/debug"
@@ -34,10 +36,25 @@ func RunNginx(deploymentID string) {
 	db.AppendLog(deploymentID, "pulling nginx:latest...")
 
 	cmd := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest")
-	output, err := cmd.CombinedOutput()
-	if len(output) > 0 {
-		db.AppendLog(deploymentID, string(output))
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		db.AppendLog(deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
 	}
+	cmd.Stderr = cmd.Stdout // merge stderr into stdout
+
+	if err := cmd.Start(); err != nil {
+		db.AppendLog(deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		db.AppendLog(deploymentID, scanner.Text())
+	}
+	if scanner.Err() != nil && scanner.Err() != io.EOF {
+		db.AppendLog(deploymentID, fmt.Sprintf("error reading output: %v", scanner.Err()))
+	}
+
+	err = cmd.Wait()
 
 	status := "success"
 	if err != nil {
