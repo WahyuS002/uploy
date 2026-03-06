@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,14 +12,10 @@ import (
 func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	deploymentID := r.PathValue("id")
 
-	var after time.Time
-	if afterStr := r.URL.Query().Get("after"); afterStr != "" {
-		var err error
-		after, err = time.Parse(time.RFC3339Nano, afterStr)
-		if err != nil {
-			http.Error(w, "invalid 'after' parameter (use RFC3339Nano)", 400)
-			return
-		}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", 500)
+		return
 	}
 
 	deployment, err := db.GetDeployment(r.Context(), deploymentID)
@@ -27,24 +24,44 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logs, err := db.GetLogsAfter(deployment.ID, after)
-	if err != nil {
-		http.Error(w, "failed to fetch logs", 500)
-		return
-	}
-	if logs == nil {
-		logs = []db.LogEntry{}
-	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
 
-	nextAfter := after.Format(time.RFC3339Nano)
-	if len(logs) > 0 {
-		nextAfter = logs[len(logs)-1].CreatedAt.Format(time.RFC3339Nano)
-	}
+	var after time.Time
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"status": deployment.Status,
-		"logs": logs,
-		"next_after": nextAfter,
-	})
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			logs, err := db.GetLogsAfter(deployment.ID, after)
+			if err != nil {
+				fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
+				flusher.Flush()
+				return
+			}
+
+			for _, log := range logs {
+				data, _ := json.Marshal(log)
+				fmt.Fprintf(w, "data: %s\n\n", data)
+				after = log.CreatedAt
+			}
+
+			deployment, err = db.GetDeployment(r.Context(), deploymentID)
+			if err != nil {
+				return
+			}
+
+			if deployment.Status == "success" || deployment.Status == "failed" {
+				fmt.Fprintf(w, "event: done\ndata: %s\n\n", deployment.Status)
+				flusher.Flush()
+				return
+			}
+
+			flusher.Flush()
+		}
+	}
 }

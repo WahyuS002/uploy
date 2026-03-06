@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+
 	interface LogEntry {
 		created_at: string;
 		output: string;
@@ -12,26 +14,29 @@
 
 	let logs: LogEntry[] = $state([]);
 	let status: string = $state('in_progress');
-	let after = '';
+	let eventSource: EventSource | null = null;
 
-	async function fetchLogs() {
-		const res = await fetch(`/api/deployments/${deploymentId}/logs?after=${encodeURIComponent(after)}`);
-		const data = await res.json();
+	onMount(() => {
+		eventSource = new EventSource(`/api/deployments/${deploymentId}/logs`);
 
-		logs = [...logs, ...data.logs];
-		after = data.next_after;
-		status = data.status;
-	}
+		eventSource.onmessage = (e) => {
+			const log: LogEntry = JSON.parse(e.data);
+			logs = [...logs, log];
+		};
 
-	// pooling
-	const interval = setInterval(async () => {
-		await fetchLogs();
-		if (status === 'success' || status === 'failed') {
-			clearInterval(interval);
-		}
-	}, 2000);
+		eventSource.addEventListener('done', (e) => {
+			status = (e as MessageEvent).data;
+			eventSource?.close();
+		});
 
-	fetchLogs();
+		eventSource.addEventListener('error', () => {
+			eventSource?.close();
+		});
+	});
+
+	onDestroy(() => {
+		eventSource?.close();
+	});
 </script>
 
 <div>
