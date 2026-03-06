@@ -16,7 +16,7 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		after, err = time.Parse(time.RFC3339Nano, afterStr)
 		if err != nil {
-			http.Error(w, "invalid 'after' parameter", 400)
+			http.Error(w, "invalid 'after' parameter (use RFC3339Nano)", 400)
 			return
 		}
 	}
