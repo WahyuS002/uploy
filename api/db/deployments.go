@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/WahyuS002/uploy/broker"
 )
 
 type Deployment struct {
@@ -46,40 +48,49 @@ func GetDeployment(ctx context.Context, deploymentID string) (Deployment, error)
 	return d, err
 }
 
-func AppendLog(deploymentID, output string) error {
-	_, err := Pool.Exec(context.Background(),
-		`INSERT INTO deployment_logs (deployment_id, output) VALUES ($1, $2)`, deploymentID, output)
+func AppendLog(ctx context.Context, deploymentID, output string) error {
+	var id int64
+	var createdAt time.Time
+	err := Pool.QueryRow(ctx,
+		`INSERT INTO deployment_logs (deployment_id, output) VALUES ($1, $2)
+		 RETURNING id, created_at`,
+		deploymentID, output).Scan(&id, &createdAt)
+	if err != nil {
+		return err
+	}
 
-	return err
+	broker.PublishLog(deploymentID, id, createdAt, output)
+	return nil
 }
 
 type LogEntry struct {
+	ID        int64     `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
-	Output string `json:"output"`
+	Output    string    `json:"output"`
 }
 
-func GetLogsAfter(ctx context.Context, deploymentID string, after time.Time) ([]LogEntry, error) {
-    rows, err := Pool.Query(ctx,
-        `SELECT created_at, output
-				 FROM deployment_logs
-         WHERE deployment_id=$1 AND created_at > $2
-         ORDER BY created_at ASC`,
-        deploymentID, after)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close()
+func GetLogsAfter(ctx context.Context, deploymentID string, afterID int64) ([]LogEntry, error) {
+	rows, err := Pool.Query(ctx,
+		`SELECT id, created_at, output
+		 FROM deployment_logs
+		 WHERE deployment_id=$1 AND id > $2
+		 ORDER BY id ASC`,
+		deploymentID, afterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-    var logs []LogEntry
-    for rows.Next() {
-        var l LogEntry
-				if err := rows.Scan(&l.CreatedAt, &l.Output); err != nil {
-					return nil, err
-				}
-        logs = append(logs, l)
-    }
-		if err := rows.Err(); err != nil {
+	var logs []LogEntry
+	for rows.Next() {
+		var l LogEntry
+		if err := rows.Scan(&l.ID, &l.CreatedAt, &l.Output); err != nil {
 			return nil, err
 		}
-		return logs, nil
+		logs = append(logs, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return logs, nil
 }

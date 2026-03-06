@@ -10,6 +10,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
 )
 
@@ -25,33 +26,37 @@ func RunNginx(deploymentID string) {
 				log.Printf("error SetDeploymentStatus in recover deploymentID=%v", deploymentID)
 			}
 
-			if dbErr := db.AppendLog(deploymentID, fmt.Sprintf("panic: %v", r)); dbErr != nil {
+			if dbErr := db.AppendLog(dbCtx, deploymentID, fmt.Sprintf("panic: %v", r)); dbErr != nil {
 				log.Printf("error AppendLog in recover deploymentID=%v", deploymentID)
 			}
+
+			broker.PublishDone(deploymentID, "failed")
 		}
 	}()
-	pullCtx, pullCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx := context.Background()
+
+	pullCtx, pullCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer pullCancel()
 
-	db.AppendLog(deploymentID, "pulling nginx:latest...")
+	db.AppendLog(ctx, deploymentID, "pulling nginx:latest...")
 
 	cmd := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		db.AppendLog(deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
+		db.AppendLog(ctx, deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
 	}
 	cmd.Stderr = cmd.Stdout // merge stderr into stdout
 
 	if err := cmd.Start(); err != nil {
-		db.AppendLog(deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
+		db.AppendLog(ctx, deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
 	}
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
-		db.AppendLog(deploymentID, scanner.Text())
+		db.AppendLog(ctx, deploymentID, scanner.Text())
 	}
 	if scanner.Err() != nil && scanner.Err() != io.EOF {
-		db.AppendLog(deploymentID, fmt.Sprintf("error reading output: %v", scanner.Err()))
+		db.AppendLog(ctx, deploymentID, fmt.Sprintf("error reading output: %v", scanner.Err()))
 	}
 
 	err = cmd.Wait()
@@ -60,16 +65,17 @@ func RunNginx(deploymentID string) {
 	if err != nil {
 		status = "failed"
 		log.Println("Docker pull nginx:latest err: ", err)
-		db.AppendLog(deploymentID, fmt.Sprintf("docker pull failed: %v", err))
+		db.AppendLog(ctx, deploymentID, fmt.Sprintf("docker pull failed: %v", err))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer dbCancel()
 
-	dbErr := db.SetDeploymentStatus(ctx, deploymentID, status)
+	dbErr := db.SetDeploymentStatus(dbCtx, deploymentID, status)
 	if dbErr != nil {
 		log.Println("error SetDeploymentStatus: ", dbErr)
 	}
 
-	db.AppendLog(deploymentID, fmt.Sprintf("deployment %s", status))
+	db.AppendLog(ctx, deploymentID, fmt.Sprintf("deployment %s", status))
+	broker.PublishDone(deploymentID, status)
 }
