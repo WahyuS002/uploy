@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os/exec"
 	"runtime/debug"
@@ -21,6 +22,10 @@ func RunNginx(deploymentID string) {
 			if dbErr := db.SetDeploymentStatus(dbCtx, deploymentID, "failed"); dbErr != nil {
 				log.Printf("error SetDeploymentStatus in recover deploymentID=%v", deploymentID)
 			}
+
+			if dbErr := db.AppendLog(deploymentID, fmt.Sprintf("panic: %v", r)); dbErr != nil {
+				log.Printf("error AppendLog in recover deploymentID=%v", deploymentID)
+			}
 		}
 	}()
 	pullCtx, pullCancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -32,6 +37,7 @@ func RunNginx(deploymentID string) {
 	if err != nil {
 		status = "failed"
 		log.Println("Docker pull nginx:latest err: ", err)
+		db.AppendLog(deploymentID, fmt.Sprintf("docker pull failed: %v", err))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -41,4 +47,6 @@ func RunNginx(deploymentID string) {
 	if dbErr != nil {
 		log.Println("error SetDeploymentStatus: ", dbErr)
 	}
+
+	db.AppendLog(deploymentID, fmt.Sprintf("deployment %s", status))
 }

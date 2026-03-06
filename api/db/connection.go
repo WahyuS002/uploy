@@ -50,12 +50,23 @@ func Close() {
 }
 
 func migrate() {
-	_, err := Pool.Exec(context.Background(),
-		`CREATE TABLE IF NOT EXISTS deployments (
+	_, err := Pool.Exec(context.Background(),`
+		CREATE TABLE IF NOT EXISTS deployments (
 			id TEXT PRIMARY KEY,
 			status TEXT
-		)`)
+		);
+
+		CREATE TABLE IF NOT EXISTS deployment_logs (
+			id BIGSERIAL PRIMARY KEY,
+			deployment_id TEXT NOT NULL REFERENCES deployments(id),
+			output TEXT NOT NULL,
+			created_at TIMESTAMPTZ DEFAULT NOW()
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_deployment_logs_deployment_id_created_at
+			ON deployment_logs (deployment_id, created_at)
+	`)
 	if err != nil {
-		log.Fatal("migrate failed: ", err)
+		log.Fatal("Migrate failed: ", err)
 	}
 }
