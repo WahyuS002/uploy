@@ -2,9 +2,9 @@
 	import { onMount, onDestroy } from 'svelte';
 
 	interface LogEntry {
-		id: number;
-		created_at: string;
+		order: number;
 		output: string;
+		type: 'stdout' | 'stderr';
 	}
 
 	interface Props {
@@ -50,8 +50,10 @@
 		<p style="color: red;">{streamError}</p>
 	{/if}
 	<div style="background: #1a1a1a; color: #fff; padding: 1rem; font-family: monospace;">
-		{#each logs as log (log.id)}
-			<p style="margin: 0">{log.output}</p>
+		{#each logs as log (log.order)}
+			<p style="margin: 0; color: {log.type === 'stderr' ? '#ff6b6b' : '#fff'}">
+				{log.output}
+			</p>
 		{/each}
 	</div>
 </div>

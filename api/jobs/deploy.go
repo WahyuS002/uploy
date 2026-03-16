@@ -1,18 +1,25 @@
 package jobs
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"os/exec"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/ssh"
 )
+
+type DeployConfig struct {
+	DeploymentID  string
+	Image         string
+	ContainerName string
+	Port          int
+	Server        ssh.ServerConfig
+}
 
 func appendLog(ctx context.Context, deploymentID, msg, logType string) {
 	if err := db.AppendLog(ctx, deploymentID, msg, logType); err != nil {
@@ -50,63 +57,66 @@ func finishDeploy(deploymentID, status string) {
 	broker.PublishDone(deploymentID, status)
 }
 
-func RunNginx(deploymentID string) {
+func RunDeploy(cfg DeployConfig) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered deploymentID=%s: %v\n%s", deploymentID, r, debug.Stack())
-
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			appendLog(cleanupCtx, deploymentID, fmt.Sprintf("panic: %v", r), "stderr")
-
-			if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, "failed"); err != nil {
-				log.Printf("SetDeploymentStatus in recover deploymentID=%s: %v", deploymentID, err)
-				return
-			}
-
-			appendLog(cleanupCtx, deploymentID, "deployment failed", "stderr")
-			broker.PublishDone(deploymentID, "failed")
+			log.Printf("Recovered deploymentID=%s: %v\n%s", cfg.DeploymentID, r, debug.Stack())
+			failDeploy(cfg.DeploymentID, fmt.Sprintf("panic: %v", r))
 		}
 	}()
-	ctx, ctxCancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer ctxCancel()
 
-	pullCtx, pullCancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer pullCancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
-	appendLog(ctx, deploymentID, "pulling nginx:latest...", "stdout")
+	appendLog(ctx, cfg.DeploymentID, "connecting to server...", "stdout")
 
-	cmd := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest")
-	stdout, err := cmd.StdoutPipe()
+	client, err := ssh.NewClient(cfg.Server)
 	if err != nil {
-		failDeploy(deploymentID, fmt.Sprintf("failed to create stdout pipe: %v", err))
+		failDeploy(cfg.DeploymentID, "SSH connection failed: "+err.Error())
 		return
 	}
-	cmd.Stderr = cmd.Stdout // merge stderr into stdout
+	defer client.Close()
 
-	if err := cmd.Start(); err != nil {
-		failDeploy(deploymentID, fmt.Sprintf("failed to start docker pull: %v", err))
+	// step 1: docker pull
+	if !runStep(ctx, client, cfg.DeploymentID, "docker pull "+cfg.Image) {
 		return
 	}
 
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		appendLog(ctx, deploymentID, scanner.Text(), "stdout")
-	}
-	if scanner.Err() != nil && scanner.Err() != io.EOF {
-		appendLog(ctx, deploymentID, fmt.Sprintf("error reading output: %v", scanner.Err()), "stderr")
+	// step 2: docker run
+	cmd := fmt.Sprintf("docker run -d --name %s -p %d:80 %s",
+		cfg.ContainerName, cfg.Port, cfg.Image)
+	if !runStep(ctx, client, cfg.DeploymentID, cmd) {
+		return
 	}
 
-	err = cmd.Wait()
+	finishDeploy(cfg.DeploymentID, "success")
+}
 
-	status := "success"
-	if err != nil {
-		status = "failed"
-		log.Println("Docker pull nginx:latest err: ", err)
-		appendLog(ctx, deploymentID, fmt.Sprintf("docker pull failed: %v", err), "stderr")
+func runStep(ctx context.Context, client *ssh.Client, deploymentID, command string) bool {
+	appendLog(ctx, deploymentID, "→ "+command, "stdout")
+
+	stdoutCh, stderrCh, done := client.StreamCommand(command)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for line := range stdoutCh {
+			appendLog(ctx, deploymentID, line, "stdout")
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for line := range stderrCh {
+			appendLog(ctx, deploymentID, line, "stderr")
+		}
+	}()
+
+	wg.Wait()
+
+	if err := <-done; err != nil {
+		failDeploy(deploymentID, fmt.Sprintf("command failed: %s: %v", command, err))
+		return false
 	}
-
-	finishDeploy(deploymentID, status)
+	return true
 }

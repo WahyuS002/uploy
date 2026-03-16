@@ -10,7 +10,21 @@
 	}
 
 	async function startDeploy() {
-		const res = await fetch('/api/deployments', { method: 'POST' });
+		const res = await fetch('/api/deployments', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				image: 'nginx:latest',
+				container_name: 'nginx-test',
+				port: 8080,
+				server: {
+					host: '127.0.0.1',
+					port: 22,
+					user: 'root',
+					private_key: ''
+				}
+			})
+		});
 		const data = await res.json();
 		deploymentId = data.deployment_id;
 	}
