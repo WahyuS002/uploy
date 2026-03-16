@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"sync"
 
 	gossh "golang.org/x/crypto/ssh"
 )
@@ -51,38 +52,50 @@ func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-
 	done := make(chan error, 1)
 
 	go func() {
-		defer close(stdout)
-		defer close(stderr)
-
 		session, err := c.client.NewSession()
 		if err != nil {
+			close(stdout)
+			close(stderr)
 			done <- err
 			return
 		}
-		defer session.Close()
 
 		outPipe, _ := session.StdoutPipe()
 		errPipe, _ := session.StderrPipe()
 
-		session.Start(command)
+		if err := session.Start(command); err != nil {
+			session.Close()
+			close(stdout)
+			close(stderr)
+			done <- err
+			return
+		}
 
-		// read stdout
+		var wg sync.WaitGroup
+		wg.Add(2)
+
 		go func() {
+			defer wg.Done()
 			scanner := bufio.NewScanner(outPipe)
 			for scanner.Scan() {
 				stdout <- scanner.Text()
 			}
 		}()
 
-		// read stderr
 		go func() {
+			defer wg.Done()
 			scanner := bufio.NewScanner(errPipe)
 			for scanner.Scan() {
 				stderr <- scanner.Text()
 			}
 		}()
 
-		done <- session.Wait()
+		err = session.Wait()
+		wg.Wait() // wait for pipe readers to drain all remaining data
+		session.Close()
+		close(stdout)
+		close(stderr)
+		done <- err
 	}()
 
 	return stdout, stderr, done
