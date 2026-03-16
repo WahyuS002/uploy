@@ -42,18 +42,18 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		fmt.Fprintf(w, "id: %d\ndata: %s\n\n", log.ID, data)
+		fmt.Fprintf(w, "id: %d\ndata: %s\n\n", log.Order, data)
 	}
 
 	// Handle reconnect via Last-Event-ID
-	var afterID int64
+	var afterOrder int
 	if lastID := r.Header.Get("Last-Event-ID"); lastID != "" {
-		id, err := strconv.ParseInt(lastID, 10, 64)
+		order, err := strconv.Atoi(lastID)
 		if err != nil {
 			sendError("invalid Last-Event-ID")
 			return
 		}
-		afterID = id
+		afterOrder = order
 	}
 
 	// 1. Subscribe FIRST so no events are missed during catch-up
@@ -61,14 +61,14 @@ func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	defer broker.Unsubscribe(deploymentID, ch)
 
 	// 2. Catch-up from DB
-	missed, err := db.GetLogsAfter(r.Context(), deployment.ID, afterID)
+	missed, err := db.GetLogsAfter(r.Context(), deployment.ID, afterOrder)
 	if err != nil {
 		sendError(err.Error())
 		return
 	}
 	for _, log := range missed {
 		sendLog(log)
-		afterID = log.ID
+		afterOrder = log.Order
 	}
 	if len(missed) > 0 {
 		flusher.Flush()
@@ -87,11 +87,11 @@ drain:
 				flusher.Flush()
 				return
 			}
-			if event.ID <= afterID {
+			if event.Order <= afterOrder {
 				continue // already sent from DB catch-up
 			}
-			sendLog(db.LogEntry{ID: event.ID, CreatedAt: event.CreatedAt, Output: event.Output})
-			afterID = event.ID
+			sendLog(db.LogEntry{ID: event.ID, Order: event.Order, CreatedAt: event.CreatedAt, Output: event.Output, Type: event.LogType})
+			afterOrder = event.Order
 			flusher.Flush()
 		default:
 			break drain
@@ -121,7 +121,7 @@ drain:
 			}
 			switch event.Type {
 			case broker.Log:
-				sendLog(db.LogEntry{ID: event.ID, CreatedAt: event.CreatedAt, Output: event.Output})
+				sendLog(db.LogEntry{ID: event.ID, Order: event.Order, CreatedAt: event.CreatedAt, Output: event.Output, Type: event.LogType})
 				flusher.Flush()
 			case broker.Done:
 				fmt.Fprintf(w, "event: done\ndata: %s\n\n", event.Status)

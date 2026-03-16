@@ -14,8 +14,8 @@ import (
 	"github.com/WahyuS002/uploy/db"
 )
 
-func appendLog(ctx context.Context, deploymentID, msg string) {
-	if err := db.AppendLog(ctx, deploymentID, msg); err != nil {
+func appendLog(ctx context.Context, deploymentID, msg, logType string) {
+	if err := db.AppendLog(ctx, deploymentID, msg, logType); err != nil {
 		log.Printf("AppendLog deploymentID=%s error: %v", deploymentID, err)
 	}
 }
@@ -26,14 +26,14 @@ func failDeploy(deploymentID, msg string) {
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	appendLog(cleanupCtx, deploymentID, msg)
+	appendLog(cleanupCtx, deploymentID, msg, "stderr")
 
 	if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, "failed"); err != nil {
 		log.Printf("SetDeploymentStatus deploymentID=%s error: %v", deploymentID, err)
 		return
 	}
 
-	appendLog(cleanupCtx, deploymentID, "deployment failed")
+	appendLog(cleanupCtx, deploymentID, "deployment failed", "stderr")
 	broker.PublishDone(deploymentID, "failed")
 }
 
@@ -46,7 +46,7 @@ func finishDeploy(deploymentID, status string) {
 		return
 	}
 
-	appendLog(cleanupCtx, deploymentID, fmt.Sprintf("deployment %s", status))
+	appendLog(cleanupCtx, deploymentID, fmt.Sprintf("deployment %s", status), "stdout")
 	broker.PublishDone(deploymentID, status)
 }
 
@@ -58,14 +58,14 @@ func RunNginx(deploymentID string) {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			appendLog(cleanupCtx, deploymentID, fmt.Sprintf("panic: %v", r))
+			appendLog(cleanupCtx, deploymentID, fmt.Sprintf("panic: %v", r), "stderr")
 
 			if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, "failed"); err != nil {
 				log.Printf("SetDeploymentStatus in recover deploymentID=%s: %v", deploymentID, err)
 				return
 			}
 
-			appendLog(cleanupCtx, deploymentID, "deployment failed")
+			appendLog(cleanupCtx, deploymentID, "deployment failed", "stderr")
 			broker.PublishDone(deploymentID, "failed")
 		}
 	}()
@@ -75,7 +75,7 @@ func RunNginx(deploymentID string) {
 	pullCtx, pullCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer pullCancel()
 
-	appendLog(ctx, deploymentID, "pulling nginx:latest...")
+	appendLog(ctx, deploymentID, "pulling nginx:latest...", "stdout")
 
 	cmd := exec.CommandContext(pullCtx, "docker", "pull", "nginx:latest")
 	stdout, err := cmd.StdoutPipe()
@@ -93,10 +93,10 @@ func RunNginx(deploymentID string) {
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		appendLog(ctx, deploymentID, scanner.Text())
+		appendLog(ctx, deploymentID, scanner.Text(), "stdout")
 	}
 	if scanner.Err() != nil && scanner.Err() != io.EOF {
-		appendLog(ctx, deploymentID, fmt.Sprintf("error reading output: %v", scanner.Err()))
+		appendLog(ctx, deploymentID, fmt.Sprintf("error reading output: %v", scanner.Err()), "stderr")
 	}
 
 	err = cmd.Wait()
@@ -105,7 +105,7 @@ func RunNginx(deploymentID string) {
 	if err != nil {
 		status = "failed"
 		log.Println("Docker pull nginx:latest err: ", err)
-		appendLog(ctx, deploymentID, fmt.Sprintf("docker pull failed: %v", err))
+		appendLog(ctx, deploymentID, fmt.Sprintf("docker pull failed: %v", err), "stderr")
 	}
 
 	finishDeploy(deploymentID, status)

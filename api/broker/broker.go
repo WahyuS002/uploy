@@ -15,8 +15,10 @@ const (
 type Event struct {
 	Type      EventType
 	ID        int64
+	Order     int
 	CreatedAt time.Time
 	Output    string
+	LogType   string // "stdout" or "stderr"
 	Status    string // only for Done
 }
 
@@ -68,12 +70,14 @@ func publish(deploymentID string, event Event) {
 	}
 }
 
-func PublishLog(deploymentID string, id int64, createdAt time.Time, output string) {
+func PublishLog(deploymentID string, id int64, order int, createdAt time.Time, output, logType string) {
 	publish(deploymentID, Event{
 		Type:      Log,
 		ID:        id,
+		Order:     order,
 		CreatedAt: createdAt,
 		Output:    output,
+		LogType:   logType,
 	})
 }
 
