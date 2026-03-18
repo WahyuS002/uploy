@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/respond"
@@ -36,6 +37,14 @@ func RequireAuth(next http.Handler) http.Handler {
 			ClearSessionCookie(w)
 			respond.JSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired session"})
 			return
+		}
+
+		// Sliding session: extend if remaining time < threshold
+		remaining := time.Until(session.ExpiresAt)
+		if remaining < RenewalThreshold {
+			if newExpiry, err := db.ExtendSession(r.Context(), cookie.Value, IdleTimeout, AbsoluteLifetime); err == nil {
+				SetSessionCookieWithExpiry(w, cookie.Value, newExpiry)
+			}
 		}
 
 		sc := SessionContext{

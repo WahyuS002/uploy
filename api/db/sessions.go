@@ -33,6 +33,18 @@ func GetSession(ctx context.Context, token string) (Session, error) {
 	return s, err
 }
 
+func ExtendSession(ctx context.Context, token string, idleTimeout, absoluteLifetime time.Duration) (time.Time, error) {
+	var newExpiry time.Time
+	err := Pool.QueryRow(ctx,
+		`UPDATE sessions
+		 SET expires_at = LEAST(NOW() + $2::interval, created_at + $3::interval)
+		 WHERE token = $1 AND expires_at > NOW()
+		 RETURNING expires_at`,
+		token, idleTimeout, absoluteLifetime,
+	).Scan(&newExpiry)
+	return newExpiry, err
+}
+
 func DeleteSession(ctx context.Context, token string) error {
 	_, err := Pool.Exec(ctx, `DELETE FROM sessions WHERE token = $1`, token)
 	return err

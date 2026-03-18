@@ -5,12 +5,16 @@ import (
 	"encoding/hex"
 	"net/http"
 	"os"
+	"time"
 )
 
 const (
-	CookieName    = "session"
-	cookieMaxAge  = 7 * 24 * 60 * 60 // 7 days
-	tokenByteSize = 32
+	CookieName       = "session"
+	cookieMaxAge     = 7 * 24 * 60 * 60 // 7 days
+	tokenByteSize    = 32
+	IdleTimeout      = 7 * 24 * time.Hour  // 7 days
+	AbsoluteLifetime = 30 * 24 * time.Hour // 30 days
+	RenewalThreshold = IdleTimeout / 2     // extend when remaining < 3.5 days
 )
 
 func GenerateSessionToken() (string, error) {
@@ -34,6 +38,22 @@ func SetSessionCookie(w http.ResponseWriter, token string) {
 		Secure:   isSecureCookie(),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   cookieMaxAge,
+	})
+}
+
+func SetSessionCookieWithExpiry(w http.ResponseWriter, token string, expiresAt time.Time) {
+	maxAge := int(time.Until(expiresAt).Seconds())
+	if maxAge < 1 {
+		maxAge = 1
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     CookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecureCookie(),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
 	})
 }
 
