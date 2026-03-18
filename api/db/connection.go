@@ -79,4 +79,51 @@ func migrate() {
 	if err != nil {
 		log.Fatal("Migrate failed: ", err)
 	}
+
+	_, err = Pool.Exec(context.Background(), `
+		CREATE TABLE IF NOT EXISTS users (
+			id TEXT PRIMARY KEY,
+			email TEXT NOT NULL,
+			password_hash TEXT NOT NULL,
+			platform_role TEXT NOT NULL DEFAULT 'user',
+			status TEXT NOT NULL DEFAULT 'active',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email);
+
+		CREATE TABLE IF NOT EXISTS workspaces (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			owner_user_id TEXT NOT NULL REFERENCES users(id),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS workspace_memberships (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+			user_id TEXT NOT NULL REFERENCES users(id),
+			role TEXT NOT NULL DEFAULT 'viewer',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_wm_workspace_user ON workspace_memberships (workspace_id, user_id);
+		CREATE INDEX IF NOT EXISTS idx_wm_user_id ON workspace_memberships (user_id);
+
+		CREATE TABLE IF NOT EXISTS sessions (
+			token TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id),
+			workspace_id TEXT NOT NULL REFERENCES workspaces(id),
+			workspace_role TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			expires_at TIMESTAMPTZ NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id);
+		CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
+
+		ALTER TABLE deployments ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES workspaces(id);
+	`)
+	if err != nil {
+		log.Fatal("Migrate failed: ", err)
+	}
 }

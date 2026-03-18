@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/handlers"
 	"github.com/WahyuS002/uploy/jobs"
@@ -31,6 +32,8 @@ func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func deployHandler(w http.ResponseWriter, r *http.Request) {
+	sc, _ := auth.GetSessionContext(r)
+
 	var req struct {
 		Image         string `json:"image"`
 		ContainerName string `json:"container_name"`
@@ -47,7 +50,7 @@ func deployHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deployment, err := db.CreateDeployment(context.Background())
+	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -82,9 +85,17 @@ func main() {
 	}()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/docker/ps", dockerPsHandler)
-	mux.HandleFunc("/api/deployments", deployHandler)
-	mux.HandleFunc("/api/deployments/{id}/logs", handlers.LogsHandler)
+
+	// Public routes
+	mux.HandleFunc("POST /api/auth/register", handlers.RegisterHandler)
+	mux.HandleFunc("POST /api/auth/login", handlers.LoginHandler)
+
+	// Protected routes
+	mux.Handle("POST /api/auth/logout", auth.RequireAuth(http.HandlerFunc(handlers.LogoutHandler)))
+	mux.Handle("GET /api/auth/me", auth.RequireAuth(http.HandlerFunc(handlers.MeHandler)))
+	mux.Handle("GET /api/docker/ps", auth.RequireAuth(http.HandlerFunc(dockerPsHandler)))
+	mux.Handle("POST /api/deployments", auth.RequireAuth(auth.RequireRole("owner", "developer")(http.HandlerFunc(deployHandler))))
+	mux.Handle("GET /api/deployments/{id}/logs", auth.RequireAuth(http.HandlerFunc(handlers.LogsHandler)))
 
 	srv := &http.Server{Addr: ":8080", Handler: mux}
 

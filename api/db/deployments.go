@@ -9,24 +9,26 @@ import (
 )
 
 type Deployment struct {
-	ID     string
-	Status string
+	ID          string
+	Status      string
+	WorkspaceID string
 }
 
-func CreateDeployment(ctx context.Context) (Deployment, error) {
+func CreateDeployment(ctx context.Context, workspaceID string) (Deployment, error) {
 	deploymentID := fmt.Sprintf("dep-%d", time.Now().UnixNano())
 
 	_, err := Pool.Exec(ctx,
-		`INSERT INTO deployments (id, status) VALUES ($1, 'in_progress')`,
-		deploymentID,
+		`INSERT INTO deployments (id, status, workspace_id) VALUES ($1, 'in_progress', $2)`,
+		deploymentID, workspaceID,
 	)
 	if err != nil {
 		return Deployment{}, err
 	}
 
 	return Deployment{
-		ID:     deploymentID,
-		Status: "in_progress",
+		ID:          deploymentID,
+		Status:      "in_progress",
+		WorkspaceID: workspaceID,
 	}, nil
 }
 
@@ -40,10 +42,14 @@ func SetDeploymentStatus(ctx context.Context, deploymentID, status string) error
 
 func GetDeployment(ctx context.Context, deploymentID string) (Deployment, error) {
 	var d Deployment
+	var wsID *string
 	err := Pool.QueryRow(ctx,
-		`SELECT id, status FROM deployments WHERE id=$1`,
+		`SELECT id, status, workspace_id FROM deployments WHERE id=$1`,
 		deploymentID,
-	).Scan(&d.ID, &d.Status)
+	).Scan(&d.ID, &d.Status, &wsID)
+	if wsID != nil {
+		d.WorkspaceID = *wsID
+	}
 
 	return d, err
 }
