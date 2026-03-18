@@ -1,14 +1,60 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/jobs"
+	"github.com/WahyuS002/uploy/ssh"
 )
+
+func DeployHandler(w http.ResponseWriter, r *http.Request) {
+	sc, _ := auth.GetSessionContext(r)
+
+	var req struct {
+		Image         string `json:"image"`
+		ContainerName string `json:"container_name"`
+		Port          int    `json:"port"`
+		Server        struct {
+			Host       string `json:"host"`
+			Port       int    `json:"port"`
+			User       string `json:"user"`
+			PrivateKey string `json:"private_key"`
+		} `json:"server"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", 400)
+		return
+	}
+
+	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	go jobs.RunDeploy(jobs.DeployConfig{
+		DeploymentID:  deployment.ID,
+		Image:         req.Image,
+		ContainerName: req.ContainerName,
+		Port:          req.Port,
+		Server: ssh.ServerConfig{
+			Host:       req.Server.Host,
+			Port:       req.Server.Port,
+			User:       req.Server.User,
+			PrivateKey: req.Server.PrivateKey,
+		},
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"deployment_id": "%s"}`, deployment.ID)
+}
 
 func LogsHandler(w http.ResponseWriter, r *http.Request) {
 	deploymentID := r.PathValue("id")
