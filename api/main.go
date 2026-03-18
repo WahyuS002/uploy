@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"github.com/WahyuS002/uploy/auth"
+	"github.com/WahyuS002/uploy/config"
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/handlers"
 	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/ssh"
+	"github.com/joho/godotenv"
 )
 
 func dockerPsHandler(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +80,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	db.Init()
+	_ = godotenv.Load()
+
+	if err := config.Load(); err != nil {
+		log.Fatal("Config error: ", err)
+	}
+
+	db.Init(config.C.DatabaseURL)
 	defer func() {
 		fmt.Println("DEFER: closing db...")
 		db.Close()
@@ -89,6 +97,10 @@ func main() {
 	// Public routes
 	mux.HandleFunc("POST /api/auth/register", handlers.RegisterHandler)
 	mux.HandleFunc("POST /api/auth/login", handlers.LoginHandler)
+	mux.HandleFunc("GET /api/auth/github", handlers.GitHubLoginHandler)
+	mux.HandleFunc("GET /api/auth/github/callback", handlers.GitHubCallbackHandler)
+	mux.HandleFunc("GET /api/auth/google", handlers.GoogleLoginHandler)
+	mux.HandleFunc("GET /api/auth/google/callback", handlers.GoogleCallbackHandler)
 
 	// Protected routes
 	mux.Handle("POST /api/auth/logout", auth.RequireAuth(http.HandlerFunc(handlers.LogoutHandler)))

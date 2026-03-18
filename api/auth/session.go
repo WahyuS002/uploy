@@ -4,8 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
-	"os"
 	"time"
+
+	"github.com/WahyuS002/uploy/config"
 )
 
 const (
@@ -26,7 +27,7 @@ func GenerateSessionToken() (string, error) {
 }
 
 func isSecureCookie() bool {
-	return os.Getenv("COOKIE_SECURE") != "false"
+	return config.C.CookieSecure
 }
 
 func SetSessionCookie(w http.ResponseWriter, token string) {

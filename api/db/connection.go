@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"log"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,14 +10,9 @@ import (
 
 var Pool *pgxpool.Pool
 
-func Init() {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
-		url = "postgres://uploy:password@localhost:5432/uploy"
-	}
-
+func Init(databaseURL string) {
 	// 1) Parse config  for tuning
-	cfg, err := pgxpool.ParseConfig(url)
+	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		log.Fatal("Invalid DATABASE_URL: ", err)
 	}
@@ -122,6 +116,22 @@ func migrate() {
 		CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
 
 		ALTER TABLE deployments ADD COLUMN IF NOT EXISTS workspace_id TEXT REFERENCES workspaces(id);
+	`)
+	if err != nil {
+		log.Fatal("Migrate failed: ", err)
+	}
+
+	_, err = Pool.Exec(context.Background(), `
+		CREATE TABLE IF NOT EXISTS oauth_identities (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id),
+			provider TEXT NOT NULL,
+			provider_user_id TEXT NOT NULL,
+			provider_email TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_provider_user ON oauth_identities (provider, provider_user_id);
+		CREATE INDEX IF NOT EXISTS idx_oauth_user_id ON oauth_identities (user_id);
 	`)
 	if err != nil {
 		log.Fatal("Migrate failed: ", err)

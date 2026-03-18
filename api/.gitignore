@@ -1,0 +1,16 @@
+# Environment
+.env
+
+# Binary
+uploy
+*.exe
+
+# Test
+*.test
+*.out
+cover.html
+
+# IDE
+.idea/
+*.swp
+*.swo
