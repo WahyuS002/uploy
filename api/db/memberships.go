@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,12 +16,11 @@ type Membership struct {
 }
 
 func CreateMembershipTx(ctx context.Context, tx pgx.Tx, workspaceID, userID, role string) (Membership, error) {
-	id := fmt.Sprintf("wm-%d", time.Now().UnixNano())
 	var m Membership
 	err := tx.QueryRow(ctx,
-		`INSERT INTO workspace_memberships (id, workspace_id, user_id, role) VALUES ($1, $2, $3, $4)
+		`INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ($1, $2, $3)
 		 RETURNING id, workspace_id, user_id, role, created_at`,
-		id, workspaceID, userID, role,
+		workspaceID, userID, role,
 	).Scan(&m.ID, &m.WorkspaceID, &m.UserID, &m.Role, &m.CreatedAt)
 	return m, err
 }

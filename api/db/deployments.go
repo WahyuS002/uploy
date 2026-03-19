@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/WahyuS002/uploy/broker"
@@ -15,21 +14,16 @@ type Deployment struct {
 }
 
 func CreateDeployment(ctx context.Context, workspaceID string) (Deployment, error) {
-	deploymentID := fmt.Sprintf("dep-%d", time.Now().UnixNano())
-
-	_, err := Pool.Exec(ctx,
-		`INSERT INTO deployments (id, status, workspace_id) VALUES ($1, 'in_progress', $2)`,
-		deploymentID, workspaceID,
-	)
+	var d Deployment
+	err := Pool.QueryRow(ctx,
+		`INSERT INTO deployments (status, workspace_id) VALUES ('in_progress', $1)
+		 RETURNING id, status, workspace_id`,
+		workspaceID,
+	).Scan(&d.ID, &d.Status, &d.WorkspaceID)
 	if err != nil {
 		return Deployment{}, err
 	}
-
-	return Deployment{
-		ID:          deploymentID,
-		Status:      "in_progress",
-		WorkspaceID: workspaceID,
-	}, nil
+	return d, nil
 }
 
 func SetDeploymentStatus(ctx context.Context, deploymentID, status string) error {

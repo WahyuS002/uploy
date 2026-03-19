@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,12 +18,11 @@ type User struct {
 }
 
 func CreateUserTx(ctx context.Context, tx pgx.Tx, email, passwordHash string) (User, error) {
-	id := fmt.Sprintf("usr-%d", time.Now().UnixNano())
 	var u User
 	err := tx.QueryRow(ctx,
-		`INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3)
+		`INSERT INTO users (email, password_hash) VALUES ($1, $2)
 		 RETURNING id, email, password_hash, platform_role, status, created_at, updated_at`,
-		id, email, passwordHash,
+		email, passwordHash,
 	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.PlatformRole, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	return u, err
 }

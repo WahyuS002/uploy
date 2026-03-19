@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,12 +16,11 @@ type Workspace struct {
 }
 
 func CreateWorkspaceTx(ctx context.Context, tx pgx.Tx, name, ownerUserID string) (Workspace, error) {
-	id := fmt.Sprintf("ws-%d", time.Now().UnixNano())
 	var w Workspace
 	err := tx.QueryRow(ctx,
-		`INSERT INTO workspaces (id, name, owner_user_id) VALUES ($1, $2, $3)
+		`INSERT INTO workspaces (name, owner_user_id) VALUES ($1, $2)
 		 RETURNING id, name, owner_user_id, created_at, updated_at`,
-		id, name, ownerUserID,
+		name, ownerUserID,
 	).Scan(&w.ID, &w.Name, &w.OwnerUserID, &w.CreatedAt, &w.UpdatedAt)
 	return w, err
 }

@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -18,13 +17,12 @@ type OAuthIdentity struct {
 }
 
 func CreateOAuthIdentityTx(ctx context.Context, tx pgx.Tx, userID, provider, providerUserID, providerEmail string) (OAuthIdentity, error) {
-	id := fmt.Sprintf("oi-%d", time.Now().UnixNano())
 	var oi OAuthIdentity
 	err := tx.QueryRow(ctx,
-		`INSERT INTO oauth_identities (id, user_id, provider, provider_user_id, provider_email)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO oauth_identities (user_id, provider, provider_user_id, provider_email)
+		 VALUES ($1, $2, $3, $4)
 		 RETURNING id, user_id, provider, provider_user_id, provider_email, created_at`,
-		id, userID, provider, providerUserID, providerEmail,
+		userID, provider, providerUserID, providerEmail,
 	).Scan(&oi.ID, &oi.UserID, &oi.Provider, &oi.ProviderUserID, &oi.ProviderEmail, &oi.CreatedAt)
 	return oi, err
 }

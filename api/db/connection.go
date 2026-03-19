@@ -46,7 +46,7 @@ func Close() {
 func migrate() {
 	_, err := Pool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS deployments (
-			id TEXT PRIMARY KEY,
+			id TEXT PRIMARY KEY DEFAULT 'dep-' || gen_random_uuid()::text,
 			status TEXT
 		);
 
@@ -76,7 +76,7 @@ func migrate() {
 
 	_, err = Pool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS users (
-			id TEXT PRIMARY KEY,
+			id TEXT PRIMARY KEY DEFAULT 'usr-' || gen_random_uuid()::text,
 			email TEXT NOT NULL,
 			password_hash TEXT NOT NULL,
 			platform_role TEXT NOT NULL DEFAULT 'user',
@@ -87,7 +87,7 @@ func migrate() {
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email);
 
 		CREATE TABLE IF NOT EXISTS workspaces (
-			id TEXT PRIMARY KEY,
+			id TEXT PRIMARY KEY DEFAULT 'ws-' || gen_random_uuid()::text,
 			name TEXT NOT NULL,
 			owner_user_id TEXT NOT NULL REFERENCES users(id),
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -95,7 +95,7 @@ func migrate() {
 		);
 
 		CREATE TABLE IF NOT EXISTS workspace_memberships (
-			id TEXT PRIMARY KEY,
+			id TEXT PRIMARY KEY DEFAULT 'wm-' || gen_random_uuid()::text,
 			workspace_id TEXT NOT NULL REFERENCES workspaces(id),
 			user_id TEXT NOT NULL REFERENCES users(id),
 			role TEXT NOT NULL DEFAULT 'viewer',
@@ -123,7 +123,7 @@ func migrate() {
 
 	_, err = Pool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS oauth_identities (
-			id TEXT PRIMARY KEY,
+			id TEXT PRIMARY KEY DEFAULT 'oi-' || gen_random_uuid()::text,
 			user_id TEXT NOT NULL REFERENCES users(id),
 			provider TEXT NOT NULL,
 			provider_user_id TEXT NOT NULL,
@@ -132,6 +132,17 @@ func migrate() {
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_provider_user ON oauth_identities (provider, provider_user_id);
 		CREATE INDEX IF NOT EXISTS idx_oauth_user_id ON oauth_identities (user_id);
+	`)
+	if err != nil {
+		log.Fatal("Migrate failed: ", err)
+	}
+
+	_, err = Pool.Exec(context.Background(), `
+		ALTER TABLE deployments ALTER COLUMN id SET DEFAULT 'dep-' || gen_random_uuid()::text;
+		ALTER TABLE users ALTER COLUMN id SET DEFAULT 'usr-' || gen_random_uuid()::text;
+		ALTER TABLE workspaces ALTER COLUMN id SET DEFAULT 'ws-' || gen_random_uuid()::text;
+		ALTER TABLE workspace_memberships ALTER COLUMN id SET DEFAULT 'wm-' || gen_random_uuid()::text;
+		ALTER TABLE oauth_identities ALTER COLUMN id SET DEFAULT 'oi-' || gen_random_uuid()::text;
 	`)
 	if err != nil {
 		log.Fatal("Migrate failed: ", err)
