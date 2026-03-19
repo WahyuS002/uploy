@@ -48,7 +48,6 @@ func main() {
 	// Protected routes
 	mux.Handle("POST /api/auth/logout", auth.RequireAuth(http.HandlerFunc(handlers.LogoutHandler)))
 	mux.Handle("GET /api/auth/me", auth.RequireAuth(http.HandlerFunc(handlers.MeHandler)))
-	mux.Handle("GET /api/docker/ps", auth.RequireAuth(http.HandlerFunc(handlers.DockerPsHandler)))
 	mux.Handle("POST /api/deployments", auth.RequireAuth(auth.RequireRole("owner", "developer")(http.HandlerFunc(handlers.DeployHandler))))
 	mux.Handle("GET /api/deployments/{id}/logs", auth.RequireAuth(http.HandlerFunc(handlers.LogsHandler)))
 
