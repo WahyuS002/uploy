@@ -55,7 +55,7 @@ func main() {
 
 	srvErr := make(chan error, 1)
 	go func() {
-		fmt.Println("Server berjalan di localhost:8080")
+		fmt.Println("Server running on localhost:8080")
 		srvErr <- srv.ListenAndServe()
 	}()
 
