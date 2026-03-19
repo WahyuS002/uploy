@@ -1,4 +1,4 @@
-.PHONY: migrate-up run dev
+.PHONY: migrate-up run dev sqlc
 
 migrate-up:
 	go run ./cmd/migrate
@@ -8,3 +8,6 @@ run:
 
 dev:
 	air
+
+sqlc:
+	sqlc generate

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/WahyuS002/uploy/db/sqlcgen"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -17,32 +18,41 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+func userFromGen(u sqlcgen.User) User {
+	return User{
+		ID:           u.ID,
+		Email:        u.Email,
+		PasswordHash: u.PasswordHash,
+		PlatformRole: u.PlatformRole,
+		Status:       u.Status,
+		CreatedAt:    u.CreatedAt,
+		UpdatedAt:    u.UpdatedAt,
+	}
+}
+
 func CreateUserTx(ctx context.Context, tx pgx.Tx, email, passwordHash string) (User, error) {
-	var u User
-	err := tx.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash) VALUES ($1, $2)
-		 RETURNING id, email, password_hash, platform_role, status, created_at, updated_at`,
-		email, passwordHash,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.PlatformRole, &u.Status, &u.CreatedAt, &u.UpdatedAt)
-	return u, err
+	u, err := sqlcgen.New(tx).CreateUser(ctx, sqlcgen.CreateUserParams{
+		Email:        email,
+		PasswordHash: passwordHash,
+	})
+	if err != nil {
+		return User{}, err
+	}
+	return userFromGen(u), nil
 }
 
 func GetUserByEmail(ctx context.Context, email string) (User, error) {
-	var u User
-	err := Pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, platform_role, status, created_at, updated_at
-		 FROM users WHERE email = $1`,
-		email,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.PlatformRole, &u.Status, &u.CreatedAt, &u.UpdatedAt)
-	return u, err
+	u, err := Queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		return User{}, err
+	}
+	return userFromGen(u), nil
 }
 
 func GetUserByID(ctx context.Context, id string) (User, error) {
-	var u User
-	err := Pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, platform_role, status, created_at, updated_at
-		 FROM users WHERE id = $1`,
-		id,
-	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.PlatformRole, &u.Status, &u.CreatedAt, &u.UpdatedAt)
-	return u, err
+	u, err := Queries.GetUserByID(ctx, id)
+	if err != nil {
+		return User{}, err
+	}
+	return userFromGen(u), nil
 }

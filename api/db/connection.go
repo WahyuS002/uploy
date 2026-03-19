@@ -5,10 +5,12 @@ import (
 	"log"
 	"time"
 
+	"github.com/WahyuS002/uploy/db/sqlcgen"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var Pool *pgxpool.Pool
+var Queries *sqlcgen.Queries
 
 func Init(databaseURL string) {
 	// 1) Parse config  for tuning
@@ -33,6 +35,9 @@ func Init(databaseURL string) {
 	if err := Pool.Ping(context.Background()); err != nil {
 		log.Fatal("DB ping failed: ", err)
 	}
+
+	// 5) Init sqlc queries
+	Queries = sqlcgen.New(Pool)
 }
 
 func Close() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/WahyuS002/uploy/db/sqlcgen"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -15,39 +16,55 @@ type Membership struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+func membershipFromGen(m sqlcgen.WorkspaceMembership) Membership {
+	return Membership{
+		ID:          m.ID,
+		WorkspaceID: m.WorkspaceID,
+		UserID:      m.UserID,
+		Role:        m.Role,
+		CreatedAt:   m.CreatedAt,
+	}
+}
+
 func CreateMembershipTx(ctx context.Context, tx pgx.Tx, workspaceID, userID, role string) (Membership, error) {
-	var m Membership
-	err := tx.QueryRow(ctx,
-		`INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ($1, $2, $3)
-		 RETURNING id, workspace_id, user_id, role, created_at`,
-		workspaceID, userID, role,
-	).Scan(&m.ID, &m.WorkspaceID, &m.UserID, &m.Role, &m.CreatedAt)
-	return m, err
+	m, err := sqlcgen.New(tx).CreateMembership(ctx, sqlcgen.CreateMembershipParams{
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+		Role:        role,
+	})
+	if err != nil {
+		return Membership{}, err
+	}
+	return membershipFromGen(m), nil
 }
 
 func GetMembership(ctx context.Context, workspaceID, userID string) (Membership, error) {
-	var m Membership
-	err := Pool.QueryRow(ctx,
-		`SELECT id, workspace_id, user_id, role, created_at
-		 FROM workspace_memberships WHERE workspace_id = $1 AND user_id = $2`,
-		workspaceID, userID,
-	).Scan(&m.ID, &m.WorkspaceID, &m.UserID, &m.Role, &m.CreatedAt)
-	return m, err
+	m, err := Queries.GetMembership(ctx, sqlcgen.GetMembershipParams{
+		WorkspaceID: workspaceID,
+		UserID:      userID,
+	})
+	if err != nil {
+		return Membership{}, err
+	}
+	return membershipFromGen(m), nil
 }
 
 func GetUserFirstWorkspace(ctx context.Context, userID string) (Workspace, Membership, error) {
-	var w Workspace
-	var m Membership
-	err := Pool.QueryRow(ctx,
-		`SELECT w.id, w.name, w.owner_user_id, w.created_at, w.updated_at,
-		        wm.id, wm.workspace_id, wm.user_id, wm.role, wm.created_at
-		 FROM workspace_memberships wm
-		 JOIN workspaces w ON w.id = wm.workspace_id
-		 WHERE wm.user_id = $1
-		 ORDER BY wm.created_at ASC
-		 LIMIT 1`,
-		userID,
-	).Scan(&w.ID, &w.Name, &w.OwnerUserID, &w.CreatedAt, &w.UpdatedAt,
-		&m.ID, &m.WorkspaceID, &m.UserID, &m.Role, &m.CreatedAt)
-	return w, m, err
+	row, err := Queries.GetUserFirstWorkspace(ctx, userID)
+	if err != nil {
+		return Workspace{}, Membership{}, err
+	}
+	return Workspace{
+			ID:          row.WID,
+			Name:        row.WName,
+			OwnerUserID: row.WOwnerUserID,
+			CreatedAt:   row.WCreatedAt,
+			UpdatedAt:   row.WUpdatedAt,
+		}, Membership{
+			ID:          row.WmID,
+			WorkspaceID: row.WmWorkspaceID,
+			UserID:      row.WmUserID,
+			Role:        row.WmRole,
+			CreatedAt:   row.WmCreatedAt,
+		}, nil
 }

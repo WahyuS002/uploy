@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/WahyuS002/uploy/db/sqlcgen"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,45 +17,49 @@ type OAuthIdentity struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+func oauthIdentityFromGen(oi sqlcgen.OauthIdentity) OAuthIdentity {
+	return OAuthIdentity{
+		ID:             oi.ID,
+		UserID:         oi.UserID,
+		Provider:       oi.Provider,
+		ProviderUserID: oi.ProviderUserID,
+		ProviderEmail:  oi.ProviderEmail,
+		CreatedAt:      oi.CreatedAt,
+	}
+}
+
 func CreateOAuthIdentityTx(ctx context.Context, tx pgx.Tx, userID, provider, providerUserID, providerEmail string) (OAuthIdentity, error) {
-	var oi OAuthIdentity
-	err := tx.QueryRow(ctx,
-		`INSERT INTO oauth_identities (user_id, provider, provider_user_id, provider_email)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, user_id, provider, provider_user_id, provider_email, created_at`,
-		userID, provider, providerUserID, providerEmail,
-	).Scan(&oi.ID, &oi.UserID, &oi.Provider, &oi.ProviderUserID, &oi.ProviderEmail, &oi.CreatedAt)
-	return oi, err
+	oi, err := sqlcgen.New(tx).CreateOAuthIdentity(ctx, sqlcgen.CreateOAuthIdentityParams{
+		UserID:         userID,
+		Provider:       provider,
+		ProviderUserID: providerUserID,
+		ProviderEmail:  providerEmail,
+	})
+	if err != nil {
+		return OAuthIdentity{}, err
+	}
+	return oauthIdentityFromGen(oi), nil
 }
 
 func GetOAuthIdentity(ctx context.Context, provider, providerUserID string) (OAuthIdentity, error) {
-	var oi OAuthIdentity
-	err := Pool.QueryRow(ctx,
-		`SELECT id, user_id, provider, provider_user_id, provider_email, created_at
-		 FROM oauth_identities WHERE provider = $1 AND provider_user_id = $2`,
-		provider, providerUserID,
-	).Scan(&oi.ID, &oi.UserID, &oi.Provider, &oi.ProviderUserID, &oi.ProviderEmail, &oi.CreatedAt)
-	return oi, err
+	oi, err := Queries.GetOAuthIdentity(ctx, sqlcgen.GetOAuthIdentityParams{
+		Provider:       provider,
+		ProviderUserID: providerUserID,
+	})
+	if err != nil {
+		return OAuthIdentity{}, err
+	}
+	return oauthIdentityFromGen(oi), nil
 }
 
 func GetOAuthIdentitiesByUser(ctx context.Context, userID string) ([]OAuthIdentity, error) {
-	rows, err := Pool.Query(ctx,
-		`SELECT id, user_id, provider, provider_user_id, provider_email, created_at
-		 FROM oauth_identities WHERE user_id = $1`,
-		userID,
-	)
+	rows, err := Queries.GetOAuthIdentitiesByUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var identities []OAuthIdentity
-	for rows.Next() {
-		var oi OAuthIdentity
-		if err := rows.Scan(&oi.ID, &oi.UserID, &oi.Provider, &oi.ProviderUserID, &oi.ProviderEmail, &oi.CreatedAt); err != nil {
-			return nil, err
-		}
-		identities = append(identities, oi)
+	identities := make([]OAuthIdentity, len(rows))
+	for i, r := range rows {
+		identities[i] = oauthIdentityFromGen(r)
 	}
-	return identities, rows.Err()
+	return identities, nil
 }

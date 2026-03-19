@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/WahyuS002/uploy/broker"
+	"github.com/WahyuS002/uploy/db/sqlcgen"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Deployment struct {
@@ -13,55 +15,50 @@ type Deployment struct {
 	WorkspaceID string
 }
 
+func deploymentFromGen(d sqlcgen.Deployment) Deployment {
+	dep := Deployment{
+		ID:     d.ID,
+		Status: d.Status,
+	}
+	if d.WorkspaceID.Valid {
+		dep.WorkspaceID = d.WorkspaceID.String
+	}
+	return dep
+}
+
 func CreateDeployment(ctx context.Context, workspaceID string) (Deployment, error) {
-	var d Deployment
-	err := Pool.QueryRow(ctx,
-		`INSERT INTO deployments (status, workspace_id) VALUES ('in_progress', $1)
-		 RETURNING id, status, workspace_id`,
-		workspaceID,
-	).Scan(&d.ID, &d.Status, &d.WorkspaceID)
+	row, err := Queries.CreateDeployment(ctx, pgtype.Text{String: workspaceID, Valid: true})
 	if err != nil {
 		return Deployment{}, err
 	}
-	return d, nil
+	return deploymentFromGen(row), nil
 }
 
 func SetDeploymentStatus(ctx context.Context, deploymentID, status string) error {
-	_, err := Pool.Exec(ctx,
-		`UPDATE deployments SET status=$1 WHERE id=$2`,
-		status, deploymentID,
-	)
-	return err
+	return Queries.SetDeploymentStatus(ctx, sqlcgen.SetDeploymentStatusParams{
+		Status: status,
+		ID:     deploymentID,
+	})
 }
 
 func GetDeployment(ctx context.Context, deploymentID string) (Deployment, error) {
-	var d Deployment
-	var wsID *string
-	err := Pool.QueryRow(ctx,
-		`SELECT id, status, workspace_id FROM deployments WHERE id=$1`,
-		deploymentID,
-	).Scan(&d.ID, &d.Status, &wsID)
-	if wsID != nil {
-		d.WorkspaceID = *wsID
+	row, err := Queries.GetDeployment(ctx, deploymentID)
+	if err != nil {
+		return Deployment{}, err
 	}
-
-	return d, err
+	return deploymentFromGen(row), err
 }
 
 func AppendLog(ctx context.Context, deploymentID, output, logType string) error {
-	var id int64
-	var order int
-	var createdAt time.Time
-	err := Pool.QueryRow(ctx,
-		`INSERT INTO deployment_logs (deployment_id, "order", output, type)
-		 VALUES ($1, (SELECT COALESCE(MAX("order"), 0) + 1 FROM deployment_logs WHERE deployment_id=$1), $2, $3)
-		 RETURNING id, "order", created_at`,
-		deploymentID, output, logType).Scan(&id, &order, &createdAt)
+	row, err := Queries.InsertDeploymentLog(ctx, sqlcgen.InsertDeploymentLogParams{
+		DeploymentID: deploymentID,
+		Output:       output,
+		Type:         logType,
+	})
 	if err != nil {
 		return err
 	}
-
-	broker.PublishLog(deploymentID, id, order, createdAt, output, logType)
+	broker.PublishLog(deploymentID, row.ID, int(row.Order), row.CreatedAt, output, logType)
 	return nil
 }
 
@@ -74,27 +71,22 @@ type LogEntry struct {
 }
 
 func GetLogsAfter(ctx context.Context, deploymentID string, afterOrder int) ([]LogEntry, error) {
-	rows, err := Pool.Query(ctx,
-		`SELECT id, "order", created_at, output, type
-		 FROM deployment_logs
-		 WHERE deployment_id=$1 AND "order" > $2
-		 ORDER BY "order" ASC`,
-		deploymentID, afterOrder)
+	rows, err := Queries.GetLogsAfter(ctx, sqlcgen.GetLogsAfterParams{
+		DeploymentID: deploymentID,
+		Order:        int32(afterOrder),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var logs []LogEntry
-	for rows.Next() {
-		var l LogEntry
-		if err := rows.Scan(&l.ID, &l.Order, &l.CreatedAt, &l.Output, &l.Type); err != nil {
-			return nil, err
+	logs := make([]LogEntry, len(rows))
+	for i, r := range rows {
+		logs[i] = LogEntry{
+			ID:        r.ID,
+			Order:     int(r.Order),
+			CreatedAt: r.CreatedAt,
+			Output:    r.Output,
+			Type:      r.Type,
 		}
-		logs = append(logs, l)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	return logs, nil
 }

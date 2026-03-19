@@ -3,6 +3,9 @@ package db
 import (
 	"context"
 	"time"
+
+	"github.com/WahyuS002/uploy/db/sqlcgen"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Session struct {
@@ -14,43 +17,53 @@ type Session struct {
 	ExpiresAt     time.Time `json:"expires_at"`
 }
 
+func sessionFromGen(s sqlcgen.Session) Session {
+	return Session{
+		Token:         s.Token,
+		UserID:        s.UserID,
+		WorkspaceID:   s.WorkspaceID,
+		WorkspaceRole: s.WorkspaceRole,
+		CreatedAt:     s.CreatedAt,
+		ExpiresAt:     s.ExpiresAt,
+	}
+}
+
 func CreateSession(ctx context.Context, token, userID, workspaceID, workspaceRole string, expiresAt time.Time) error {
-	_, err := Pool.Exec(ctx,
-		`INSERT INTO sessions (token, user_id, workspace_id, workspace_role, expires_at)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		token, userID, workspaceID, workspaceRole, expiresAt,
-	)
-	return err
+	return Queries.CreateSession(ctx, sqlcgen.CreateSessionParams{
+		Token:         token,
+		UserID:        userID,
+		WorkspaceID:   workspaceID,
+		WorkspaceRole: workspaceRole,
+		ExpiresAt:     expiresAt,
+	})
 }
 
 func GetSession(ctx context.Context, token string) (Session, error) {
-	var s Session
-	err := Pool.QueryRow(ctx,
-		`SELECT token, user_id, workspace_id, workspace_role, created_at, expires_at
-		 FROM sessions WHERE token = $1 AND expires_at > NOW()`,
-		token,
-	).Scan(&s.Token, &s.UserID, &s.WorkspaceID, &s.WorkspaceRole, &s.CreatedAt, &s.ExpiresAt)
-	return s, err
+	s, err := Queries.GetSession(ctx, token)
+	if err != nil {
+		return Session{}, err
+	}
+	return sessionFromGen(s), nil
 }
 
 func ExtendSession(ctx context.Context, token string, idleTimeout, absoluteLifetime time.Duration) (time.Time, error) {
-	var newExpiry time.Time
-	err := Pool.QueryRow(ctx,
-		`UPDATE sessions
-		 SET expires_at = LEAST(NOW() + $2::interval, created_at + $3::interval)
-		 WHERE token = $1 AND expires_at > NOW()
-		 RETURNING expires_at`,
-		token, idleTimeout, absoluteLifetime,
-	).Scan(&newExpiry)
-	return newExpiry, err
+	return Queries.ExtendSession(ctx, sqlcgen.ExtendSessionParams{
+		Token: token,
+		IdleTimeout: pgtype.Interval{
+			Microseconds: int64(idleTimeout / time.Microsecond),
+			Valid:        true,
+		},
+		AbsoluteLifetime: pgtype.Interval{
+			Microseconds: int64(absoluteLifetime / time.Microsecond),
+			Valid:        true,
+		},
+	})
 }
 
 func DeleteSession(ctx context.Context, token string) error {
-	_, err := Pool.Exec(ctx, `DELETE FROM sessions WHERE token = $1`, token)
-	return err
+	return Queries.DeleteSession(ctx, token)
 }
 
 func DeleteUserSessions(ctx context.Context, userID string) error {
-	_, err := Pool.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
-	return err
+	return Queries.DeleteUserSessions(ctx, userID)
 }
