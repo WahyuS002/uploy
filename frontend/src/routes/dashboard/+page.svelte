@@ -1,7 +1,6 @@
 <script lang="ts">
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
 
-	let output = $state('Click the button to see running containers');
 	let deploymentId = $state<string | null>(null);
 
 	let image = $state('nginx:latest');
@@ -11,11 +10,6 @@
 	let serverPort = $state(22);
 	let serverUser = $state('uploy');
 	let privateKey = $state('');
-
-	async function fetchDockerPs() {
-		const res = await fetch('/api/docker/ps');
-		output = await res.text();
-	}
 
 	async function startDeploy() {
 		const res = await fetch('/api/deployments', {
@@ -39,14 +33,6 @@
 </script>
 
 <section>
-	<h2 class="mb-4 text-xl font-bold">Docker PS</h2>
-	<button onclick={fetchDockerPs} class="cursor-pointer rounded-sm bg-black p-2 text-white"
-		>Refresh</button
-	>
-	<pre class="mt-2">{output}</pre>
-</section>
-
-<section class="mt-8">
 	<h2 class="mb-4 text-xl font-bold">Deploy</h2>
 	<form
 		onsubmit={(e) => {
