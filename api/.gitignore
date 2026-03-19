@@ -10,6 +10,9 @@ uploy
 *.out
 cover.html
 
+# Air
+tmp/
+
 # IDE
 .idea/
 *.swp
