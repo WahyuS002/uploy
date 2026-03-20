@@ -1,9 +1,9 @@
 import createClient from 'openapi-fetch';
 import type { paths } from './v1';
 
-export function createApiClient(customFetch?: typeof fetch) {
+export function createApiClient(customFetch?: typeof fetch, baseUrl = '') {
 	return createClient<paths>({
-		baseUrl: '',
+		baseUrl,
 		credentials: 'include',
 		...(customFetch ? { fetch: customFetch } : {})
 	});
