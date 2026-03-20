@@ -143,14 +143,12 @@ export interface components {
             password: string;
         };
         User: {
-            /** Format: uuid */
             id: string;
             /** Format: email */
             email: string;
             platform_role: string;
         };
         Workspace: {
-            /** Format: uuid */
             id: string;
             name: string;
             role?: string;
@@ -174,7 +172,6 @@ export interface components {
             };
         };
         DeployResponse: {
-            /** Format: uuid */
             deployment_id: string;
         };
         ErrorResponse: {
