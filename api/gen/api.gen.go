@@ -63,12 +63,7 @@ type DeployRequest struct {
 	ContainerName string `json:"container_name"`
 	Image         string `json:"image"`
 	Port          int    `json:"port"`
-	Server        struct {
-		Host       string `json:"host"`
-		Port       int    `json:"port"`
-		PrivateKey string `json:"private_key"`
-		User       string `json:"user"`
-	} `json:"server"`
+	ServerId      string `json:"server_id"`
 }
 
 // DeployResponse defines model for DeployResponse.
@@ -170,7 +165,7 @@ type ServerInterface interface {
 	CreateDeployment(w http.ResponseWriter, r *http.Request)
 	// Stream deployment logs via SSE
 	// (GET /api/deployments/{id}/logs)
-	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id string)
+	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// List registered servers
 	// (GET /api/servers)
 	ListServers(w http.ResponseWriter, r *http.Request)
@@ -288,9 +283,9 @@ func (siw *ServerInterfaceWrapper) GetDeploymentLogs(w http.ResponseWriter, r *h
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id string
+	var id openapi_types.UUID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return

@@ -1,35 +1,68 @@
 <script lang="ts">
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
 	import { api } from '$lib/api/client';
+	import type { components } from '$lib/api/v1';
+
+	type ServerResponse = components['schemas']['ServerResponse'];
 
 	let deploymentId = $state<string | null>(null);
+	let servers = $state<ServerResponse[]>([]);
+	let selectedServerId = $state('');
+	let serverLoadError = $state<string | null>(null);
+	let deployError = $state('');
+	let deploying = $state(false);
 
 	let image = $state('nginx:latest');
 	let containerName = $state('nginx-test');
 	let port = $state(8080);
-	let serverHost = $state('');
-	let serverPort = $state(22);
-	let serverUser = $state('uploy');
-	let privateKey = $state('');
 
-	async function startDeploy() {
-		const { data } = await api.POST('/api/deployments', {
-			body: {
-				image,
-				container_name: containerName,
-				port,
-				server: {
-					host: serverHost,
-					port: serverPort,
-					user: serverUser,
-					private_key: privateKey
+	async function loadServers() {
+		try {
+			const { data, error } = await api.GET('/api/servers');
+			if (error) {
+				serverLoadError = (error as { error: string }).error;
+				return;
+			}
+			if (data) {
+				servers = data;
+				if (servers.length > 0 && !selectedServerId) {
+					selectedServerId = servers[0].id;
 				}
 			}
-		});
-		if (data) {
-			deploymentId = data.deployment_id;
+		} catch {
+			serverLoadError = 'Network error, please try again';
 		}
 	}
+
+	async function startDeploy() {
+		deployError = '';
+		deploying = true;
+		try {
+			const { data, error } = await api.POST('/api/deployments', {
+				body: {
+					image,
+					container_name: containerName,
+					port,
+					server_id: selectedServerId
+				}
+			});
+			if (error) {
+				deployError = (error as { error: string }).error;
+				return;
+			}
+			if (data) {
+				deploymentId = data.deployment_id;
+			}
+		} catch {
+			deployError = 'Network error, please try again';
+		} finally {
+			deploying = false;
+		}
+	}
+
+	$effect(() => {
+		loadServers();
+	});
 </script>
 
 <section>
@@ -43,34 +76,23 @@
 	>
 		<fieldset class="flex flex-col gap-2 rounded border border-gray-300 p-3">
 			<legend class="px-1 text-sm font-bold">Server</legend>
-			<label class="flex flex-col gap-1 text-sm">
-				Host
-				<input
-					type="text"
-					bind:value={serverHost}
-					required
-					class="rounded border p-1"
-					placeholder="103.xxx.xxx.xxx"
-				/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				Port
-				<input type="number" bind:value={serverPort} class="rounded border p-1" />
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				User
-				<input type="text" bind:value={serverUser} class="rounded border p-1" />
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				Private Key
-				<textarea
-					bind:value={privateKey}
-					required
-					rows="5"
-					class="rounded border p-1 font-mono text-xs"
-					placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-				></textarea>
-			</label>
+			{#if serverLoadError}
+				<p class="text-sm text-red-600">{serverLoadError}</p>
+			{:else if servers.length === 0}
+				<p class="text-sm text-gray-500">
+					No servers registered.
+					<a href="/dashboard/servers" class="text-blue-600 underline">Add a server</a> first.
+				</p>
+			{:else}
+				<label class="flex flex-col gap-1 text-sm">
+					Select Server
+					<select bind:value={selectedServerId} required class="rounded border p-1">
+						{#each servers as server}
+							<option value={server.id}>{server.name} ({server.host})</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
 		</fieldset>
 
 		<fieldset class="flex flex-col gap-2 rounded border border-gray-300 p-3">
@@ -101,7 +123,17 @@
 			</label>
 		</fieldset>
 
-		<button type="submit" class="cursor-pointer rounded-sm bg-black p-2 text-white">Deploy</button>
+		{#if deployError}
+			<p class="text-sm text-red-600">{deployError}</p>
+		{/if}
+
+		<button
+			type="submit"
+			disabled={servers.length === 0 || !!serverLoadError || deploying}
+			class="cursor-pointer rounded-sm bg-black p-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+		>
+			{deploying ? 'Deploying...' : 'Deploy'}
+		</button>
 	</form>
 
 	{#if deploymentId}

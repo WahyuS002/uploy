@@ -182,12 +182,7 @@ export interface components {
             image: string;
             container_name: string;
             port: number;
-            server: {
-                host: string;
-                port: number;
-                user: string;
-                private_key: string;
-            };
+            server_id: string;
         };
         DeployResponse: {
             deployment_id: string;
@@ -471,6 +466,15 @@ export interface operations {
             };
             /** @description Insufficient permissions */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Server not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

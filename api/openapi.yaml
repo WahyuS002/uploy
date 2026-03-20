@@ -172,6 +172,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal server error
           content:
@@ -199,6 +205,7 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
       responses:
         "200":
           description: SSE log stream
@@ -451,7 +458,7 @@ components:
         - image
         - container_name
         - port
-        - server
+        - server_id
       properties:
         image:
           type: string
@@ -459,22 +466,8 @@ components:
           type: string
         port:
           type: integer
-        server:
-          type: object
-          required:
-            - host
-            - port
-            - user
-            - private_key
-          properties:
-            host:
-              type: string
-            port:
-              type: integer
-            user:
-              type: string
-            private_key:
-              type: string
+        server_id:
+          type: string
 
     DeployResponse:
       type: object

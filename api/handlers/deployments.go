@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"errors"
+
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
@@ -14,6 +16,8 @@ import (
 	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/WahyuS002/uploy/ssh"
+	"github.com/jackc/pgx/v5"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +34,20 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	serverWithKey, err := db.GetServerWithKey(r.Context(), req.ServerId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
+		} else {
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up server"})
+		}
+		return
+	}
+	if serverWithKey.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
+		return
+	}
+
 	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create deployment"})
@@ -42,10 +60,10 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		ContainerName: req.ContainerName,
 		Port:          req.Port,
 		Server: ssh.ServerConfig{
-			Host:       req.Server.Host,
-			Port:       req.Server.Port,
-			User:       req.Server.User,
-			PrivateKey: req.Server.PrivateKey,
+			Host:       serverWithKey.Host,
+			Port:       int(serverWithKey.Port),
+			User:       serverWithKey.SSHUser,
+			PrivateKey: serverWithKey.PrivateKey,
 		},
 	})
 
@@ -54,9 +72,9 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	sc, _ := auth.GetSessionContext(r)
-	deploymentID := id
+	deploymentID := id.String()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
