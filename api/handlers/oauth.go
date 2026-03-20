@@ -161,7 +161,7 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request, provider string, i
 		return
 	}
 
-	createSessionAndRedirect(w, r, newUser.ID, workspace.ID, "owner")
+	createSessionAndRedirect(w, r, newUser.ID, workspace.ID)
 }
 
 func loginExistingUser(w http.ResponseWriter, r *http.Request, userID string) {
@@ -179,7 +179,7 @@ func loginExistingUser(w http.ResponseWriter, r *http.Request, userID string) {
 
 	_ = db.DeleteUserSessions(ctx, userID)
 
-	workspace, membership, err := db.GetUserFirstWorkspace(ctx, userID)
+	workspace, _, err := db.GetUserFirstWorkspace(ctx, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			http.Redirect(w, r, "/login?error=no_workspace", http.StatusFound)
@@ -189,10 +189,10 @@ func loginExistingUser(w http.ResponseWriter, r *http.Request, userID string) {
 		return
 	}
 
-	createSessionAndRedirect(w, r, userID, workspace.ID, membership.Role)
+	createSessionAndRedirect(w, r, userID, workspace.ID)
 }
 
-func createSessionAndRedirect(w http.ResponseWriter, r *http.Request, userID, workspaceID, role string) {
+func createSessionAndRedirect(w http.ResponseWriter, r *http.Request, userID, workspaceID string) {
 	token, err := auth.GenerateSessionToken()
 	if err != nil {
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
@@ -200,7 +200,7 @@ func createSessionAndRedirect(w http.ResponseWriter, r *http.Request, userID, wo
 	}
 
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	if err := db.CreateSession(r.Context(), token, userID, workspaceID, role, expiresAt); err != nil {
+	if err := db.CreateSession(r.Context(), token, userID, workspaceID, expiresAt); err != nil {
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}

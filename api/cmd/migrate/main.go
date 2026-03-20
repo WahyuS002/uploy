@@ -16,8 +16,23 @@ func main() {
 		log.Fatal("DATABASE_URL is required")
 	}
 
-	if err := db.RunMigrations(databaseURL); err != nil {
-		log.Fatal("Migration failed: ", err)
+	direction := "up"
+	if len(os.Args) > 1 {
+		direction = os.Args[1]
 	}
-	log.Println("Migrations applied successfully")
+
+	switch direction {
+	case "up":
+		if err := db.RunMigrations(databaseURL); err != nil {
+			log.Fatal("Migration failed: ", err)
+		}
+		log.Println("Migrations applied successfully")
+	case "down":
+		if err := db.RollbackMigration(databaseURL); err != nil {
+			log.Fatal("Rollback failed: ", err)
+		}
+		log.Println("Rolled back one migration")
+	default:
+		log.Fatalf("Unknown command: %s (use 'up' or 'down')", direction)
+	}
 }

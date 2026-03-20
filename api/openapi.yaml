@@ -232,6 +232,76 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/ssh-keys:
+    post:
+      operationId: createSSHKey
+      summary: Store an SSH private key
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSSHKeyRequest"
+      responses:
+        "201":
+          description: SSH key created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SSHKeyResponse"
+        "400":
+          description: Invalid request or key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listSSHKeys
+      summary: List stored SSH keys
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: List of SSH keys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SSHKeyResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -349,6 +419,32 @@ components:
       properties:
         error:
           type: string
+
+    CreateSSHKeyRequest:
+      type: object
+      required:
+        - name
+        - private_key
+      properties:
+        name:
+          type: string
+        private_key:
+          type: string
+
+    SSHKeyResponse:
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
 
     LogEntry:
       type: object

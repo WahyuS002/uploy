@@ -2,12 +2,14 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/respond"
+	"github.com/jackc/pgx/v5"
 )
 
 type contextKey string
@@ -48,10 +50,22 @@ func RequireAuth(next http.Handler) http.Handler {
 			}
 		}
 
+		membership, err := db.GetMembership(r.Context(), session.WorkspaceID, session.UserID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				_ = db.DeleteSession(r.Context(), cookie.Value)
+				ClearSessionCookie(w)
+				respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "no longer a member of this workspace"})
+				return
+			}
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "internal error"})
+			return
+		}
+
 		sc := SessionContext{
 			UserID:        session.UserID,
 			WorkspaceID:   session.WorkspaceID,
-			WorkspaceRole: session.WorkspaceRole,
+			WorkspaceRole: membership.Role,
 		}
 		ctx := context.WithValue(r.Context(), sessionContextKey, sc)
 		next.ServeHTTP(w, r.WithContext(ctx))

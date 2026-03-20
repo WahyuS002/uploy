@@ -1,7 +1,10 @@
-.PHONY: migrate-up run dev sqlc oapi generate
+.PHONY: migrate-up migrate-down run dev sqlc oapi generate
 
 migrate-up:
 	go run ./cmd/migrate
+
+migrate-down:
+	go run ./cmd/migrate down
 
 run:
 	go run .

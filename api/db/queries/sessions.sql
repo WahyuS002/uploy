@@ -1,9 +1,9 @@
 -- name: CreateSession :exec
-INSERT INTO sessions (token, user_id, workspace_id, workspace_role, expires_at)
-VALUES ($1, $2, $3, $4, $5);
+INSERT INTO sessions (token, user_id, workspace_id, expires_at)
+VALUES ($1, $2, $3, $4);
 
 -- name: GetSession :one
-SELECT token, user_id, workspace_id, workspace_role, created_at, expires_at
+SELECT token, user_id, workspace_id, created_at, expires_at
 FROM sessions WHERE token = $1 AND expires_at > NOW();
 
 -- name: ExtendSession :one

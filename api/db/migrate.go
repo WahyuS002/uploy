@@ -30,3 +30,22 @@ func RunMigrations(databaseURL string) error {
 
 	return nil
 }
+
+func RollbackMigration(databaseURL string) error {
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		return fmt.Errorf("open db for rollback: %w", err)
+	}
+	defer db.Close()
+
+	goose.SetBaseFS(migrations)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("set dialect: %w", err)
+	}
+
+	if err := goose.Down(db, "migrations"); err != nil {
+		return fmt.Errorf("rollback migration: %w", err)
+	}
+
+	return nil
+}

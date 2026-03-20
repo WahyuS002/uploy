@@ -84,7 +84,7 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	if err := db.CreateSession(ctx, token, user.ID, workspace.ID, "owner", expiresAt); err != nil {
+	if err := db.CreateSession(ctx, token, user.ID, workspace.ID, expiresAt); err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "internal error"})
 		return
 	}
@@ -155,7 +155,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	if err := db.CreateSession(ctx, token, user.ID, workspace.ID, membership.Role, expiresAt); err != nil {
+	if err := db.CreateSession(ctx, token, user.ID, workspace.ID, expiresAt); err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "internal error"})
 		return
 	}

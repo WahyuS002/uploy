@@ -9,32 +9,29 @@ import (
 )
 
 type Session struct {
-	Token         string    `json:"token"`
-	UserID        string    `json:"user_id"`
-	WorkspaceID   string    `json:"workspace_id"`
-	WorkspaceRole string    `json:"workspace_role"`
-	CreatedAt     time.Time `json:"created_at"`
-	ExpiresAt     time.Time `json:"expires_at"`
+	Token       string    `json:"token"`
+	UserID      string    `json:"user_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 func sessionFromGen(s sqlcgen.Session) Session {
 	return Session{
-		Token:         s.Token,
-		UserID:        s.UserID,
-		WorkspaceID:   s.WorkspaceID,
-		WorkspaceRole: s.WorkspaceRole,
-		CreatedAt:     s.CreatedAt,
-		ExpiresAt:     s.ExpiresAt,
+		Token:       s.Token,
+		UserID:      s.UserID,
+		WorkspaceID: s.WorkspaceID,
+		CreatedAt:   s.CreatedAt,
+		ExpiresAt:   s.ExpiresAt,
 	}
 }
 
-func CreateSession(ctx context.Context, token, userID, workspaceID, workspaceRole string, expiresAt time.Time) error {
+func CreateSession(ctx context.Context, token, userID, workspaceID string, expiresAt time.Time) error {
 	return Queries.CreateSession(ctx, sqlcgen.CreateSessionParams{
-		Token:         token,
-		UserID:        userID,
-		WorkspaceID:   workspaceID,
-		WorkspaceRole: workspaceRole,
-		ExpiresAt:     expiresAt,
+		Token:       token,
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		ExpiresAt:   expiresAt,
 	})
 }
 

@@ -35,12 +35,19 @@ type OauthIdentity struct {
 }
 
 type Session struct {
-	Token         string    `json:"token"`
-	UserID        string    `json:"user_id"`
-	WorkspaceID   string    `json:"workspace_id"`
-	WorkspaceRole string    `json:"workspace_role"`
-	CreatedAt     time.Time `json:"created_at"`
-	ExpiresAt     time.Time `json:"expires_at"`
+	Token       string    `json:"token"`
+	UserID      string    `json:"user_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+type SshKey struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	PrivateKey  string    `json:"private_key"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type User struct {

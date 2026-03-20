@@ -115,6 +115,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ssh-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stored SSH keys */
+        get: operations["listSSHKeys"];
+        put?: never;
+        /** Store an SSH private key */
+        post: operations["createSSHKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -161,6 +179,16 @@ export interface components {
         };
         ErrorResponse: {
             error: string;
+        };
+        CreateSSHKeyRequest: {
+            name: string;
+            private_key: string;
+        };
+        SSHKeyResponse: {
+            id: string;
+            name: string;
+            /** Format: date-time */
+            created_at: string;
         };
         LogEntry: {
             /** Format: int64 */
@@ -468,6 +496,104 @@ export interface operations {
             };
             /** @description Deployment not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listSSHKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of SSH keys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHKeyResponse"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createSSHKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSSHKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description SSH key created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHKeyResponse"];
+                };
+            };
+            /** @description Invalid request or key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

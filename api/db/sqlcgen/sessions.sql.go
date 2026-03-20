@@ -13,16 +13,15 @@ import (
 )
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (token, user_id, workspace_id, workspace_role, expires_at)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO sessions (token, user_id, workspace_id, expires_at)
+VALUES ($1, $2, $3, $4)
 `
 
 type CreateSessionParams struct {
-	Token         string    `json:"token"`
-	UserID        string    `json:"user_id"`
-	WorkspaceID   string    `json:"workspace_id"`
-	WorkspaceRole string    `json:"workspace_role"`
-	ExpiresAt     time.Time `json:"expires_at"`
+	Token       string    `json:"token"`
+	UserID      string    `json:"user_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
@@ -30,7 +29,6 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.Token,
 		arg.UserID,
 		arg.WorkspaceID,
-		arg.WorkspaceRole,
 		arg.ExpiresAt,
 	)
 	return err
@@ -75,7 +73,7 @@ func (q *Queries) ExtendSession(ctx context.Context, arg ExtendSessionParams) (t
 }
 
 const getSession = `-- name: GetSession :one
-SELECT token, user_id, workspace_id, workspace_role, created_at, expires_at
+SELECT token, user_id, workspace_id, created_at, expires_at
 FROM sessions WHERE token = $1 AND expires_at > NOW()
 `
 
@@ -86,7 +84,6 @@ func (q *Queries) GetSession(ctx context.Context, token string) (Session, error)
 		&i.Token,
 		&i.UserID,
 		&i.WorkspaceID,
-		&i.WorkspaceRole,
 		&i.CreatedAt,
 		&i.ExpiresAt,
 	)

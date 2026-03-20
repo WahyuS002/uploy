@@ -43,6 +43,12 @@ type AuthResponse struct {
 	Workspace Workspace `json:"workspace"`
 }
 
+// CreateSSHKeyRequest defines model for CreateSSHKeyRequest.
+type CreateSSHKeyRequest struct {
+	Name       string `json:"name"`
+	PrivateKey string `json:"private_key"`
+}
+
 // DeployRequest defines model for DeployRequest.
 type DeployRequest struct {
 	ContainerName string `json:"container_name"`
@@ -89,6 +95,13 @@ type LogoutResponse struct {
 	Ok bool `json:"ok"`
 }
 
+// SSHKeyResponse defines model for SSHKeyResponse.
+type SSHKeyResponse struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        string    `json:"id"`
+	Name      string    `json:"name"`
+}
+
 // User defines model for User.
 type User struct {
 	Email        openapi_types.Email `json:"email"`
@@ -112,6 +125,9 @@ type RegisterJSONRequestBody = LoginRequest
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = DeployRequest
 
+// CreateSSHKeyJSONRequestBody defines body for CreateSSHKey for application/json ContentType.
+type CreateSSHKeyJSONRequestBody = CreateSSHKeyRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Login with email and password
@@ -132,6 +148,12 @@ type ServerInterface interface {
 	// Stream deployment logs via SSE
 	// (GET /api/deployments/{id}/logs)
 	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// List stored SSH keys
+	// (GET /api/ssh-keys)
+	ListSSHKeys(w http.ResponseWriter, r *http.Request)
+	// Store an SSH private key
+	// (POST /api/ssh-keys)
+	CreateSSHKey(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -253,6 +275,46 @@ func (siw *ServerInterfaceWrapper) GetDeploymentLogs(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDeploymentLogs(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSSHKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListSSHKeys(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSSHKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSSHKey operation middleware
+func (siw *ServerInterfaceWrapper) CreateSSHKey(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSSHKey(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -388,6 +450,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/auth/register", wrapper.Register)
 	m.HandleFunc("POST "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
 	m.HandleFunc("GET "+options.BaseURL+"/api/deployments/{id}/logs", wrapper.GetDeploymentLogs)
+	m.HandleFunc("GET "+options.BaseURL+"/api/ssh-keys", wrapper.ListSSHKeys)
+	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys", wrapper.CreateSSHKey)
 
 	return m
 }
