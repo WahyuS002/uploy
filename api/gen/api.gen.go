@@ -64,7 +64,7 @@ type DeployRequest struct {
 
 // DeployResponse defines model for DeployResponse.
 type DeployResponse struct {
-	DeploymentId openapi_types.UUID `json:"deployment_id"`
+	DeploymentId string `json:"deployment_id"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -105,15 +105,15 @@ type SSHKeyResponse struct {
 // User defines model for User.
 type User struct {
 	Email        openapi_types.Email `json:"email"`
-	Id           openapi_types.UUID  `json:"id"`
+	Id           string              `json:"id"`
 	PlatformRole string              `json:"platform_role"`
 }
 
 // Workspace defines model for Workspace.
 type Workspace struct {
-	Id   openapi_types.UUID `json:"id"`
-	Name string             `json:"name"`
-	Role *string            `json:"role,omitempty"`
+	Id   string  `json:"id"`
+	Name string  `json:"name"`
+	Role *string `json:"role,omitempty"`
 }
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
@@ -147,7 +147,7 @@ type ServerInterface interface {
 	CreateDeployment(w http.ResponseWriter, r *http.Request)
 	// Stream deployment logs via SSE
 	// (GET /api/deployments/{id}/logs)
-	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id string)
 	// List stored SSH keys
 	// (GET /api/ssh-keys)
 	ListSSHKeys(w http.ResponseWriter, r *http.Request)
@@ -259,9 +259,9 @@ func (siw *ServerInterfaceWrapper) GetDeploymentLogs(w http.ResponseWriter, r *h
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id openapi_types.UUID
+	var id string
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return

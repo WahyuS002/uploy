@@ -12,7 +12,6 @@ import (
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/respond"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -92,12 +91,12 @@ func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
 	auth.SetSessionCookie(w, token)
 	respond.JSON(w, http.StatusCreated, gen.AuthResponse{
 		User: gen.User{
-			Id:           uuid.MustParse(user.ID),
+			Id:           user.ID,
 			Email:        openapi_types.Email(user.Email),
 			PlatformRole: user.PlatformRole,
 		},
 		Workspace: gen.Workspace{
-			Id:   uuid.MustParse(workspace.ID),
+			Id:   workspace.ID,
 			Name: workspace.Name,
 		},
 	})
@@ -165,12 +164,12 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	role := membership.Role
 	respond.JSON(w, http.StatusOK, gen.AuthResponse{
 		User: gen.User{
-			Id:           uuid.MustParse(user.ID),
+			Id:           user.ID,
 			Email:        openapi_types.Email(user.Email),
 			PlatformRole: user.PlatformRole,
 		},
 		Workspace: gen.Workspace{
-			Id:   uuid.MustParse(workspace.ID),
+			Id:   workspace.ID,
 			Name: workspace.Name,
 			Role: &role,
 		},
@@ -211,12 +210,12 @@ func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	respond.JSON(w, http.StatusOK, gen.AuthResponse{
 		User: gen.User{
-			Id:           uuid.MustParse(user.ID),
+			Id:           user.ID,
 			Email:        openapi_types.Email(user.Email),
 			PlatformRole: user.PlatformRole,
 		},
 		Workspace: gen.Workspace{
-			Id:   uuid.MustParse(workspace.ID),
+			Id:   workspace.ID,
 			Name: workspace.Name,
 			Role: &sc.WorkspaceRole,
 		},

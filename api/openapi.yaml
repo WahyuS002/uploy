@@ -199,7 +199,6 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
       responses:
         "200":
           description: SSE log stream
@@ -332,7 +331,6 @@ components:
       properties:
         id:
           type: string
-          format: uuid
         email:
           type: string
           format: email
@@ -347,7 +345,6 @@ components:
       properties:
         id:
           type: string
-          format: uuid
         name:
           type: string
         role:
@@ -410,7 +407,6 @@ components:
       properties:
         deployment_id:
           type: string
-          format: uuid
 
     ErrorResponse:
       type: object
