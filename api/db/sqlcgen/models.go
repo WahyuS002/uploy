@@ -34,6 +34,17 @@ type OauthIdentity struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type Server struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Host        string    `json:"host"`
+	Port        int32     `json:"port"`
+	SshUser     string    `json:"ssh_user"`
+	SshKeyID    string    `json:"ssh_key_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type Session struct {
 	Token       string    `json:"token"`
 	UserID      string    `json:"user_id"`

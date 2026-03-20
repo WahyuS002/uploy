@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	gossh "golang.org/x/crypto/ssh"
 )
@@ -34,9 +35,9 @@ func NewClient(cfg ServerConfig) (*Client, error) {
 		User:            cfg.User,
 		Auth:            []gossh.AuthMethod{gossh.PublicKeys(signer)},
 		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
 
 		// TODO: Replace InsecureIgnoreHostKey with known_hosts or pinned host key verification.
-		// TODO: Add Timeout to ClientConfig to prevent dial from hanging forever.
 		// TODO: Consider restricting SSH algorithms to secure SupportedAlgorithms().
 	}
 
@@ -53,6 +54,37 @@ func NewClient(cfg ServerConfig) (*Client, error) {
 func (c *Client) Close() {
 	// TODO: Consider returning an error from Close() so the caller can handle failures.
 	c.client.Close()
+}
+
+// TestSession opens an SSH session and runs "echo ok" to verify the server
+// can actually execute commands, not just accept the TCP+auth handshake.
+// A 10-second deadline covers session open + command execution, so a stalled
+// remote cannot hang the caller indefinitely.
+func (c *Client) TestSession() error {
+	type result struct{ err error }
+	done := make(chan result, 1)
+
+	go func() {
+		session, err := c.client.NewSession()
+		if err != nil {
+			done <- result{fmt.Errorf("failed to open session: %w", err)}
+			return
+		}
+		defer session.Close()
+
+		if err := session.Run("echo ok"); err != nil {
+			done <- result{fmt.Errorf("failed to run test command: %w", err)}
+			return
+		}
+		done <- result{nil}
+	}()
+
+	select {
+	case r := <-done:
+		return r.err
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("SSH session test timed out after 10s")
+	}
 }
 
 // StreamCommand - run command and return the output line by line via channel

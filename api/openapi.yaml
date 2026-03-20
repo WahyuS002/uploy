@@ -231,6 +231,82 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/servers:
+    post:
+      operationId: createServer
+      summary: Register a new server
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServerRequest"
+      responses:
+        "201":
+          description: Server created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: SSH connection test failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listServers
+      summary: List registered servers
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: List of servers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServerResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/ssh-keys:
     post:
       operationId: createSSHKey
@@ -437,6 +513,53 @@ components:
         id:
           type: string
         name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateServerRequest:
+      type: object
+      required:
+        - name
+        - host
+        - ssh_user
+        - ssh_key_id
+      properties:
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+          default: 22
+        ssh_user:
+          type: string
+        ssh_key_id:
+          type: string
+
+    ServerResponse:
+      type: object
+      required:
+        - id
+        - name
+        - host
+        - port
+        - ssh_user
+        - ssh_key_id
+        - created_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        ssh_user:
+          type: string
+        ssh_key_id:
           type: string
         created_at:
           type: string
