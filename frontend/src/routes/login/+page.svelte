@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { api } from '$lib/api/client';
 
 	let email = $state('');
 	let password = $state('');
@@ -26,15 +27,12 @@
 		loading = true;
 
 		try {
-			const res = await fetch('/api/auth/login', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password })
+			const { data, error: err } = await api.POST('/api/auth/login', {
+				body: {email, password}
 			});
 
-			if (!res.ok) {
-				const data = await res.json();
-				error = data.error || 'Login failed';
+			if (err) {
+				error = err.error || 'Login failed';
 				return;
 			}
 

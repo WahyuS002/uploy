@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { api } from '$lib/api/client';
+
 	let email = $state('');
 	let password = $state('');
 	let confirmPassword = $state('');
@@ -16,15 +18,12 @@
 		loading = true;
 
 		try {
-			const res = await fetch('/api/auth/register', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password })
+			const { data, error: err } = await api.POST('/api/auth/register', {
+				body: { email, password }
 			});
 
-			if (!res.ok) {
-				const data = await res.json();
-				error = data.error || 'Registration failed';
+			if (err) {
+				error = err.error || 'Registration failed';
 				return;
 			}
 

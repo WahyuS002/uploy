@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/respond"
 )
 
@@ -28,14 +29,14 @@ func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(CookieName)
 		if err != nil {
-			respond.JSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			respond.JSON(w, http.StatusUnauthorized, gen.ErrorResponse{Error: "authentication required"})
 			return
 		}
 
 		session, err := db.GetSession(r.Context(), cookie.Value)
 		if err != nil {
 			ClearSessionCookie(w)
-			respond.JSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid or expired session"})
+			respond.JSON(w, http.StatusUnauthorized, gen.ErrorResponse{Error: "invalid or expired session"})
 			return
 		}
 
@@ -62,7 +63,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			sc, ok := GetSessionContext(r)
 			if !ok {
-				respond.JSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+				respond.JSON(w, http.StatusUnauthorized, gen.ErrorResponse{Error: "authentication required"})
 				return
 			}
 
@@ -73,7 +74,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 				}
 			}
 
-			respond.JSON(w, http.StatusForbidden, map[string]string{"error": "insufficient permissions"})
+			respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
 		})
 	}
 }

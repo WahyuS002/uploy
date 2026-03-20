@@ -1,11 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import type { components } from '$lib/api/v1';
 
-	interface LogEntry {
-		order: number;
-		output: string;
-		type: 'stdout' | 'stderr';
-	}
+	type LogEntry = components['schemas']['LogEntry'];
 
 	interface Props {
 		deploymentId: string;

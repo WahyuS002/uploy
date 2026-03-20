@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - name: Install oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.6.0
+      - name: Generate backend types from OpenAPI spec
+        run: oapi-codegen -config oapi-codegen.yaml openapi.yaml
+        working-directory: api
+      - name: Check for oapi-codegen drift
+        run: |
+          if ! git diff --exit-code api/gen/api.gen.go; then
+            echo "::error::Generated backend types are out of date. Run 'make -C api oapi' and commit the result."
+            exit 1
+          fi
+      - run: go build ./...
+        working-directory: api
+      - run: go vet ./...
+        working-directory: api
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm check
+        working-directory: frontend
+
+  openapi-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm generate:api
+        working-directory: frontend
+      - name: Check for OpenAPI type drift
+        run: |
+          if ! git diff --exit-code frontend/src/lib/api/v1.d.ts; then
+            echo "::error::Generated OpenAPI types are out of date. Run 'pnpm generate:api' and commit the result."
+            exit 1
+          fi

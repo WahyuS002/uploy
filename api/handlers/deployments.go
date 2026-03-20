@@ -10,32 +10,31 @@ import (
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/jobs"
+	"github.com/WahyuS002/uploy/respond"
 	"github.com/WahyuS002/uploy/ssh"
+	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func DeployHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 	sc, _ := auth.GetSessionContext(r)
 
-	var req struct {
-		Image         string `json:"image"`
-		ContainerName string `json:"container_name"`
-		Port          int    `json:"port"`
-		Server        struct {
-			Host       string `json:"host"`
-			Port       int    `json:"port"`
-			User       string `json:"user"`
-			PrivateKey string `json:"private_key"`
-		} `json:"server"`
+	if sc.WorkspaceRole != "owner" && sc.WorkspaceRole != "developer" {
+		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
+		return
 	}
+
+	var req gen.DeployRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", 400)
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "invalid request body"})
 		return
 	}
 
 	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create deployment"})
 		return
 	}
 
@@ -52,22 +51,30 @@ func DeployHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"deployment_id": "%s"}`, deployment.ID)
+	respond.JSON(w, http.StatusOK, gen.DeployResponse{
+		DeploymentId: uuid.MustParse(deployment.ID),
+	})
 }
 
-func LogsHandler(w http.ResponseWriter, r *http.Request) {
-	deploymentID := r.PathValue("id")
+func (s *Server) GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	sc, _ := auth.GetSessionContext(r)
+	deploymentID := id.String()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "streaming not supported", 500)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "streaming not supported"})
 		return
 	}
 
 	deployment, err := db.GetDeployment(r.Context(), deploymentID)
 	if err != nil {
-		http.Error(w, "Deployment not found", 404)
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "deployment not found"})
+		return
+	}
+
+	// Return 404 for cross-workspace access to avoid leaking deployment existence
+	if deployment.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "deployment not found"})
 		return
 	}
 

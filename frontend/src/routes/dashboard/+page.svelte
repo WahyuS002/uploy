@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
+	import { api } from '$lib/api/client';
 
 	let deploymentId = $state<string | null>(null);
 
@@ -12,10 +13,8 @@
 	let privateKey = $state('');
 
 	async function startDeploy() {
-		const res = await fetch('/api/deployments', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
+		const { data } = await api.POST('/api/deployments', {
+			body: {
 				image,
 				container_name: containerName,
 				port,
@@ -25,10 +24,11 @@
 					user: serverUser,
 					private_key: privateKey
 				}
-			})
+			}
 		});
-		const data = await res.json();
-		deploymentId = data.deployment_id;
+		if (data) {
+			deploymentId = data.deployment_id;
+		}
 	}
 </script>
 

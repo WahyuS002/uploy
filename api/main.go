@@ -14,7 +14,9 @@ import (
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/config"
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/handlers"
+	"github.com/WahyuS002/uploy/respond"
 	"github.com/joho/godotenv"
 )
 
@@ -35,21 +37,27 @@ func main() {
 		db.Close()
 	}()
 
+	s := &handlers.Server{}
+
 	mux := http.NewServeMux()
 
-	// Public routes
-	mux.HandleFunc("POST /api/auth/register", handlers.RegisterHandler)
-	mux.HandleFunc("POST /api/auth/login", handlers.LoginHandler)
+	// Spec routes — generated wiring handles routing + path param extraction.
+	// Auth middleware checks CookieAuthScopes set by generated wrapper for secured endpoints.
+	gen.HandlerWithOptions(s, gen.StdHTTPServerOptions{
+		BaseRouter: mux,
+		Middlewares: []gen.MiddlewareFunc{
+			specAuthMiddleware,
+		},
+		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: err.Error()})
+		},
+	})
+
+	// OAuth routes — not in spec, manually wired
 	mux.HandleFunc("GET /api/auth/github", handlers.GitHubLoginHandler)
 	mux.HandleFunc("GET /api/auth/github/callback", handlers.GitHubCallbackHandler)
 	mux.HandleFunc("GET /api/auth/google", handlers.GoogleLoginHandler)
 	mux.HandleFunc("GET /api/auth/google/callback", handlers.GoogleCallbackHandler)
-
-	// Protected routes
-	mux.Handle("POST /api/auth/logout", auth.RequireAuth(http.HandlerFunc(handlers.LogoutHandler)))
-	mux.Handle("GET /api/auth/me", auth.RequireAuth(http.HandlerFunc(handlers.MeHandler)))
-	mux.Handle("POST /api/deployments", auth.RequireAuth(auth.RequireRole("owner", "developer")(http.HandlerFunc(handlers.DeployHandler))))
-	mux.Handle("GET /api/deployments/{id}/logs", auth.RequireAuth(http.HandlerFunc(handlers.LogsHandler)))
 
 	srv := &http.Server{Addr: ":8080", Handler: mux}
 
@@ -76,4 +84,17 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Println("Shutdown error:", err)
 	}
+}
+
+// specAuthMiddleware checks if the generated wrapper marked this endpoint as
+// requiring auth (via CookieAuthScopes in context). Public endpoints like
+// Register and Login don't have this set, so they pass through directly.
+func specAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Context().Value(gen.CookieAuthScopes) != nil {
+			auth.RequireAuth(next).ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
