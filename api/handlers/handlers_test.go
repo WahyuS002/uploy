@@ -83,15 +83,14 @@ func TestProtectedRouteWithoutSession_Returns401JSON(t *testing.T) {
 	}
 }
 
-// Test: invalid UUID in logs route returns JSON ErrorResponse 400
-func TestInvalidUUIDInLogsRoute_Returns400JSON(t *testing.T) {
+// Test: invalid deployment ID in logs route returns 401 (auth middleware runs first
+// since the path parameter is a plain string, not format: uuid)
+func TestInvalidIDInLogsRoute_Returns401JSON(t *testing.T) {
 	mux := newTestMux()
 
-	req := httptest.NewRequest("GET", "/api/deployments/not-a-uuid/logs", nil)
+	req := httptest.NewRequest("GET", "/api/deployments/not-a-valid-id/logs", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	// Generated wrapper validates UUID before auth middleware runs,
-	// so this returns 400 with JSON error
-	assertJSONError(t, rec, http.StatusBadRequest)
+	assertJSONError(t, rec, http.StatusUnauthorized)
 }

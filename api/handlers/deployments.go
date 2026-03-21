@@ -17,7 +17,6 @@ import (
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/WahyuS002/uploy/ssh"
 	"github.com/jackc/pgx/v5"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
@@ -72,9 +71,9 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+func (s *Server) GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
-	deploymentID := id.String()
+	deploymentID := id
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {

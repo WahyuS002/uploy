@@ -165,7 +165,7 @@ type ServerInterface interface {
 	CreateDeployment(w http.ResponseWriter, r *http.Request)
 	// Stream deployment logs via SSE
 	// (GET /api/deployments/{id}/logs)
-	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id string)
 	// List registered servers
 	// (GET /api/servers)
 	ListServers(w http.ResponseWriter, r *http.Request)
@@ -283,9 +283,9 @@ func (siw *ServerInterfaceWrapper) GetDeploymentLogs(w http.ResponseWriter, r *h
 	var err error
 
 	// ------------- Path parameter "id" -------------
-	var id openapi_types.UUID
+	var id string
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
 		return
