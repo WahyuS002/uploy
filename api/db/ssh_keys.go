@@ -2,8 +2,10 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/WahyuS002/uploy/crypto"
 	"github.com/WahyuS002/uploy/db/sqlcgen"
 	"github.com/jackc/pgx/v5"
 )
@@ -27,15 +29,22 @@ func sshKeyFromGen(k sqlcgen.SshKey) SSHKey {
 }
 
 func CreateSSHKeyTx(ctx context.Context, tx pgx.Tx, name, privateKey, workspaceID string) (SSHKey, error) {
+	encrypted, err := crypto.Encrypt(privateKey)
+	if err != nil {
+		return SSHKey{}, fmt.Errorf("encrypt private key: %w", err)
+	}
 	k, err := sqlcgen.New(tx).CreateSSHKey(ctx, sqlcgen.CreateSSHKeyParams{
 		Name:        name,
-		PrivateKey:  privateKey,
+		PrivateKey:  encrypted,
 		WorkspaceID: workspaceID,
 	})
 	if err != nil {
 		return SSHKey{}, err
 	}
-	return sshKeyFromGen(k), nil
+	// Return the original plaintext, not the encrypted value from DB
+	result := sshKeyFromGen(k)
+	result.PrivateKey = privateKey
+	return result, nil
 }
 
 func GetSSHKeyByID(ctx context.Context, id string) (SSHKey, error) {
@@ -43,7 +52,12 @@ func GetSSHKeyByID(ctx context.Context, id string) (SSHKey, error) {
 	if err != nil {
 		return SSHKey{}, err
 	}
-	return sshKeyFromGen(k), nil
+	result := sshKeyFromGen(k)
+	result.PrivateKey, err = crypto.Decrypt(result.PrivateKey)
+	if err != nil {
+		return SSHKey{}, fmt.Errorf("decrypt private key: %w", err)
+	}
+	return result, nil
 }
 
 func ListSSHKeysByWorkspace(ctx context.Context, workspaceID string) ([]SSHKey, error) {

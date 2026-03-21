@@ -2,8 +2,10 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/WahyuS002/uploy/crypto"
 	"github.com/WahyuS002/uploy/db/sqlcgen"
 )
 
@@ -76,6 +78,10 @@ func GetServerWithKey(ctx context.Context, id string) (ServerWithKey, error) {
 	if err != nil {
 		return ServerWithKey{}, err
 	}
+	privateKey, err := crypto.Decrypt(row.PrivateKey)
+	if err != nil {
+		return ServerWithKey{}, fmt.Errorf("decrypt private key: %w", err)
+	}
 	return ServerWithKey{
 		AppServer: AppServer{
 			ID:          row.ID,
@@ -87,6 +93,6 @@ func GetServerWithKey(ctx context.Context, id string) (ServerWithKey, error) {
 			WorkspaceID: row.WorkspaceID,
 			CreatedAt:   row.CreatedAt,
 		},
-		PrivateKey: row.PrivateKey,
+		PrivateKey: privateKey,
 	}, nil
 }
