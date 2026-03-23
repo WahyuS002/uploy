@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ type DeployConfig struct {
 	Image         string
 	ContainerName string
 	Port          int
+	EnvVars       []db.EnvPair
 	Server        ssh.ServerConfig
 }
 
@@ -82,19 +84,39 @@ func RunDeploy(cfg DeployConfig) {
 		return
 	}
 
-	// step 2: docker run
-	cmd := fmt.Sprintf("docker run -d --name %s -p %d:80 %s",
-		cfg.ContainerName, cfg.Port, cfg.Image)
-	if !runStep(ctx, client, cfg.DeploymentID, cmd) {
+	// step 2: stop old container (ignore error — mungkin belum ada)
+	stopCmd := fmt.Sprintf("docker stop %s 2>/dev/null || true", cfg.ContainerName)
+	if !runStep(ctx, client, cfg.DeploymentID, stopCmd) {
+		return
+	}
+
+	// step 3: remove old container (ignore error — mungkin belum ada)
+	rmCmd := fmt.Sprintf("docker rm %s 2>/dev/null || true", cfg.ContainerName)
+	if !runStep(ctx, client, cfg.DeploymentID, rmCmd) {
+		return
+	}
+
+	// step 4: docker run dengan env vars
+	if !runStep(ctx, client, cfg.DeploymentID, buildDockerRunCmd(cfg)) {
 		return
 	}
 
 	finishDeploy(cfg.DeploymentID, "success")
 }
 
-func runStep(ctx context.Context, client *ssh.Client, deploymentID, command string) bool {
-	appendLog(ctx, deploymentID, "→ "+command, "stdout")
+func buildDockerRunCmd(cfg DeployConfig) string {
+	args := fmt.Sprintf("docker run -d --name %s -p %d:80", cfg.ContainerName, cfg.Port)
 
+	for _, env := range cfg.EnvVars {
+		escaped := strings.ReplaceAll(env.Value, "'", "'\\''")
+		args += fmt.Sprintf(" --env '%s=%s'", env.Key, escaped)
+	}
+
+	args += " " + cfg.Image
+	return args
+}
+
+func runStep(ctx context.Context, client *ssh.Client, deploymentID, command string) bool {
 	stdoutCh, stderrCh, done := client.StreamCommand(command)
 
 	var wg sync.WaitGroup
@@ -115,7 +137,7 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 	wg.Wait()
 
 	if err := <-done; err != nil {
-		failDeploy(deploymentID, fmt.Sprintf("command failed: %s: %v", command, err))
+		failDeploy(deploymentID, fmt.Sprintf("command failed: %v", err))
 		return false
 	}
 	return true

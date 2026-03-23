@@ -2,139 +2,85 @@
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
+	import type { PageData } from './$types';
 
-	type ServerResponse = components['schemas']['ServerResponse'];
+	type ApplicationResponse = components['schemas']['ApplicationResponse'];
 
+	let { data }: { data: PageData } = $props();
+	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
+
+	let apps = $state<ApplicationResponse[]>([]);
+	let selectedAppId = $state('');
 	let deploymentId = $state<string | null>(null);
-	let servers = $state<ServerResponse[]>([]);
-	let selectedServerId = $state('');
-	let serverLoadError = $state<string | null>(null);
-	let deployError = $state('');
 	let deploying = $state(false);
+	let deployError = $state('');
 
-	let image = $state('nginx:latest');
-	let containerName = $state('nginx-test');
-	let port = $state(8080);
-
-	async function loadServers() {
-		try {
-			const { data, error } = await api.GET('/api/servers');
-			if (error) {
-				serverLoadError = (error as { error: string }).error;
-				return;
+	async function loadApps() {
+		const { data } = await api.GET('/api/applications');
+		if (data) {
+			apps = data;
+			if (apps.length > 0 && !selectedAppId) {
+				selectedAppId = apps[0].id;
 			}
-			if (data) {
-				servers = data;
-				if (servers.length > 0 && !selectedServerId) {
-					selectedServerId = servers[0].id;
-				}
-			}
-		} catch {
-			serverLoadError = 'Network error, please try again';
 		}
 	}
 
-	async function startDeploy() {
+	async function deploy() {
 		deployError = '';
 		deploying = true;
 		try {
 			const { data, error } = await api.POST('/api/deployments', {
-				body: {
-					image,
-					container_name: containerName,
-					port,
-					server_id: selectedServerId
-				}
+				body: { application_id: selectedAppId }
 			});
 			if (error) {
 				deployError = (error as { error: string }).error;
 				return;
 			}
-			if (data) {
-				deploymentId = data.deployment_id;
-			}
+			if (data) deploymentId = data.deployment_id;
 		} catch {
-			deployError = 'Network error, please try again';
+			deployError = 'Network error';
 		} finally {
 			deploying = false;
 		}
 	}
 
-	$effect(() => {
-		loadServers();
-	});
+	$effect(() => { loadApps(); });
 </script>
 
 <section>
-	<h2 class="mb-4 text-xl font-bold">Deploy</h2>
-	<form
-		onsubmit={(e) => {
-			e.preventDefault();
-			startDeploy();
-		}}
-		class="flex max-w-md flex-col gap-2"
-	>
-		<fieldset class="flex flex-col gap-2 rounded border border-gray-300 p-3">
-			<legend class="px-1 text-sm font-bold">Server</legend>
-			{#if serverLoadError}
-				<p class="text-sm text-red-600">{serverLoadError}</p>
-			{:else if servers.length === 0}
-				<p class="text-sm text-gray-500">
-					No servers registered.
-					<a href="/dashboard/servers" class="text-blue-600 underline">Add a server</a> first.
-				</p>
-			{:else}
-				<label class="flex flex-col gap-1 text-sm">
-					Select Server
-					<select bind:value={selectedServerId} required class="rounded border p-1">
-						{#each servers as server}
-							<option value={server.id}>{server.name} ({server.host})</option>
-						{/each}
-					</select>
-				</label>
+	<h2 class="mb-4 text-xl font-bold">Quick Deploy</h2>
+
+	{#if !canEdit}
+		<p class="text-sm text-gray-500">You do not have permission to deploy.</p>
+	{:else if apps.length === 0}
+		<p class="text-sm text-gray-500">
+			No applications.
+			<a href="/dashboard/applications" class="text-blue-600 underline">Create one</a> first.
+		</p>
+	{:else}
+		<form onsubmit={(e) => { e.preventDefault(); deploy(); }} class="flex max-w-md flex-col gap-2">
+			<label class="flex flex-col gap-1 text-sm">
+				Application
+				<select bind:value={selectedAppId} required class="rounded border p-1">
+					{#each apps as app}
+						<option value={app.id}>{app.name} ({app.image})</option>
+					{/each}
+				</select>
+			</label>
+
+			{#if deployError}
+				<p class="text-sm text-red-600">{deployError}</p>
 			{/if}
-		</fieldset>
 
-		<fieldset class="flex flex-col gap-2 rounded border border-gray-300 p-3">
-			<legend class="px-1 text-sm font-bold">Container</legend>
-			<label class="flex flex-col gap-1 text-sm">
-				Image
-				<input
-					type="text"
-					bind:value={image}
-					required
-					class="rounded border p-1"
-					placeholder="nginx:latest"
-				/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				Container Name
-				<input
-					type="text"
-					bind:value={containerName}
-					required
-					class="rounded border p-1"
-					placeholder="nginx-test"
-				/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				Port
-				<input type="number" bind:value={port} required class="rounded border p-1" />
-			</label>
-		</fieldset>
-
-		{#if deployError}
-			<p class="text-sm text-red-600">{deployError}</p>
-		{/if}
-
-		<button
-			type="submit"
-			disabled={servers.length === 0 || !!serverLoadError || deploying}
-			class="cursor-pointer rounded-sm bg-black p-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
-		>
-			{deploying ? 'Deploying...' : 'Deploy'}
-		</button>
-	</form>
+			<button
+				type="submit"
+				disabled={deploying}
+				class="cursor-pointer rounded-sm bg-black p-2 text-white disabled:opacity-50"
+			>
+				{deploying ? 'Deploying...' : 'Deploy'}
+			</button>
+		</form>
+	{/if}
 
 	{#if deploymentId}
 		<DeploymentLogs {deploymentId} />

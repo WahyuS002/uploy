@@ -3,11 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
-
-	"errors"
 
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/broker"
@@ -33,17 +33,26 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverWithKey, err := db.GetServerWithKey(r.Context(), req.ServerId)
+	// Satu query JOIN: application + server + ssh key
+	appWithServer, err := db.GetApplicationWithServer(r.Context(), req.ApplicationId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up server"})
+			log.Printf("GetApplicationWithServer id=%s error: %v", req.ApplicationId, err)
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up application"})
 		}
 		return
 	}
-	if serverWithKey.WorkspaceID != sc.WorkspaceID {
-		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
+	if appWithServer.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+		return
+	}
+
+	// Load env vars untuk di-inject ke docker run
+	envPairs, err := db.GetApplicationEnvPairs(r.Context(), appWithServer.ID)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load environment variables"})
 		return
 	}
 
@@ -55,14 +64,15 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 
 	go jobs.RunDeploy(jobs.DeployConfig{
 		DeploymentID:  deployment.ID,
-		Image:         req.Image,
-		ContainerName: req.ContainerName,
-		Port:          req.Port,
+		Image:         appWithServer.Image,
+		ContainerName: appWithServer.ContainerName,
+		Port:          int(appWithServer.Port),
+		EnvVars:       envPairs,
 		Server: ssh.ServerConfig{
-			Host:       serverWithKey.Host,
-			Port:       int(serverWithKey.Port),
-			User:       serverWithKey.SSHUser,
-			PrivateKey: serverWithKey.PrivateKey,
+			Host:       appWithServer.Host,
+			Port:       int(appWithServer.ServerPort),
+			User:       appWithServer.SSHUser,
+			PrivateKey: appWithServer.PrivateKey,
 		},
 	})
 
