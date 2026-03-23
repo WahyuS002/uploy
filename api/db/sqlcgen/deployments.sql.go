@@ -12,26 +12,84 @@ import (
 )
 
 const createDeployment = `-- name: CreateDeployment :one
-INSERT INTO deployments (status, workspace_id) VALUES ('in_progress', $1)
-RETURNING id, status, workspace_id
+INSERT INTO deployments (status, workspace_id, application_id)
+VALUES ('in_progress', $1, $2)
+RETURNING id, status, workspace_id, application_id, created_at
 `
 
-func (q *Queries) CreateDeployment(ctx context.Context, workspaceID pgtype.Text) (Deployment, error) {
-	row := q.db.QueryRow(ctx, createDeployment, workspaceID)
+type CreateDeploymentParams struct {
+	WorkspaceID   pgtype.Text `json:"workspace_id"`
+	ApplicationID string      `json:"application_id"`
+}
+
+func (q *Queries) CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (Deployment, error) {
+	row := q.db.QueryRow(ctx, createDeployment, arg.WorkspaceID, arg.ApplicationID)
 	var i Deployment
-	err := row.Scan(&i.ID, &i.Status, &i.WorkspaceID)
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.WorkspaceID,
+		&i.ApplicationID,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
 const getDeployment = `-- name: GetDeployment :one
-SELECT id, status, workspace_id FROM deployments WHERE id = $1
+SELECT id, status, workspace_id, application_id, created_at
+FROM deployments WHERE id = $1
 `
 
 func (q *Queries) GetDeployment(ctx context.Context, id string) (Deployment, error) {
 	row := q.db.QueryRow(ctx, getDeployment, id)
 	var i Deployment
-	err := row.Scan(&i.ID, &i.Status, &i.WorkspaceID)
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.WorkspaceID,
+		&i.ApplicationID,
+		&i.CreatedAt,
+	)
 	return i, err
+}
+
+const listDeploymentsByApplication = `-- name: ListDeploymentsByApplication :many
+SELECT id, status, workspace_id, application_id, created_at
+FROM deployments
+WHERE application_id = $1
+ORDER BY created_at DESC
+LIMIT $2
+`
+
+type ListDeploymentsByApplicationParams struct {
+	ApplicationID string `json:"application_id"`
+	Limit         int32  `json:"limit"`
+}
+
+func (q *Queries) ListDeploymentsByApplication(ctx context.Context, arg ListDeploymentsByApplicationParams) ([]Deployment, error) {
+	rows, err := q.db.Query(ctx, listDeploymentsByApplication, arg.ApplicationID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Deployment{}
+	for rows.Next() {
+		var i Deployment
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.WorkspaceID,
+			&i.ApplicationID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setDeploymentStatus = `-- name: SetDeploymentStatus :exec

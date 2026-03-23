@@ -32,9 +32,11 @@ type ApplicationEnv struct {
 }
 
 type Deployment struct {
-	ID          string      `json:"id"`
-	Status      string      `json:"status"`
-	WorkspaceID pgtype.Text `json:"workspace_id"`
+	ID            string      `json:"id"`
+	Status        string      `json:"status"`
+	WorkspaceID   pgtype.Text `json:"workspace_id"`
+	ApplicationID string      `json:"application_id"`
+	CreatedAt     time.Time   `json:"created_at"`
 }
 
 type DeploymentLog struct {

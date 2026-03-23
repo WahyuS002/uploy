@@ -628,6 +628,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/applications/{id}/deployments:
+    get:
+      operationId: listApplicationDeployments
+      summary: List deployment history for an application
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of deployments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeploymentResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Application not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/ssh-keys:
     post:
       operationId: createSSHKey
@@ -781,6 +827,28 @@ components:
       properties:
         deployment_id:
           type: string
+
+    DeploymentResponse:
+      type: object
+      required:
+        - id
+        - status
+        - application_id
+        - created_at
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+            - in_progress
+            - success
+            - failed
+        application_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
 
     ErrorResponse:
       type: object

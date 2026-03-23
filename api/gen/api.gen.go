@@ -19,6 +19,27 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
+// Defines values for DeploymentResponseStatus.
+const (
+	Failed     DeploymentResponseStatus = "failed"
+	InProgress DeploymentResponseStatus = "in_progress"
+	Success    DeploymentResponseStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the DeploymentResponseStatus enum.
+func (e DeploymentResponseStatus) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case InProgress:
+		return true
+	case Success:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogEntryType.
 const (
 	Stderr LogEntryType = "stderr"
@@ -98,6 +119,17 @@ type DeployResponse struct {
 	DeploymentId string `json:"deployment_id"`
 }
 
+// DeploymentResponse defines model for DeploymentResponse.
+type DeploymentResponse struct {
+	ApplicationId string                   `json:"application_id"`
+	CreatedAt     time.Time                `json:"created_at"`
+	Id            string                   `json:"id"`
+	Status        DeploymentResponseStatus `json:"status"`
+}
+
+// DeploymentResponseStatus defines model for DeploymentResponse.Status.
+type DeploymentResponseStatus string
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -173,6 +205,11 @@ type Workspace struct {
 	Role *string `json:"role,omitempty"`
 }
 
+// ListApplicationDeploymentsParams defines parameters for ListApplicationDeployments.
+type ListApplicationDeploymentsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // CreateApplicationJSONRequestBody defines body for CreateApplication for application/json ContentType.
 type CreateApplicationJSONRequestBody = CreateApplicationRequest
 
@@ -214,6 +251,9 @@ type ServerInterface interface {
 	// Update application configuration
 	// (PUT /api/applications/{id})
 	UpdateApplication(w http.ResponseWriter, r *http.Request, id string)
+	// List deployment history for an application
+	// (GET /api/applications/{id}/deployments)
+	ListApplicationDeployments(w http.ResponseWriter, r *http.Request, id string, params ListApplicationDeploymentsParams)
 	// List environment variables for an application
 	// (GET /api/applications/{id}/envs)
 	ListApplicationEnvs(w http.ResponseWriter, r *http.Request, id string)
@@ -388,6 +428,48 @@ func (siw *ServerInterfaceWrapper) UpdateApplication(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateApplication(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListApplicationDeployments operation middleware
+func (siw *ServerInterfaceWrapper) ListApplicationDeployments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListApplicationDeploymentsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListApplicationDeployments(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -823,6 +905,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/applications/{id}", wrapper.DeleteApplication)
 	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}", wrapper.GetApplication)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/applications/{id}", wrapper.UpdateApplication)
+	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/deployments", wrapper.ListApplicationDeployments)
 	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/envs", wrapper.ListApplicationEnvs)
 	m.HandleFunc("POST "+options.BaseURL+"/api/applications/{id}/envs", wrapper.UpsertApplicationEnv)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/applications/{id}/envs/{key}", wrapper.DeleteApplicationEnv)

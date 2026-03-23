@@ -7,6 +7,7 @@
 
 	type ApplicationResponse = components['schemas']['ApplicationResponse'];
 	type ApplicationEnvResponse = components['schemas']['ApplicationEnvResponse'];
+	type DeploymentResponse = components['schemas']['DeploymentResponse'];
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
@@ -18,6 +19,7 @@
 	let deploymentId = $state<string | null>(null);
 	let deploying = $state(false);
 	let deployError = $state('');
+	let deployments = $state<DeploymentResponse[]>([]);
 
 	// Env form
 	let envKey = $state('');
@@ -46,6 +48,13 @@
 		}
 	}
 
+	async function loadDeployments() {
+		const { data } = await api.GET('/api/applications/{id}/deployments', {
+			params: { path: { id: appId }, query: { limit: 10 } }
+		});
+		if (data) deployments = data;
+	}
+
 	async function deploy() {
 		deployError = '';
 		deploying = true;
@@ -59,6 +68,7 @@
 			}
 			if (data) {
 				deploymentId = data.deployment_id;
+				loadDeployments();
 			}
 		} catch {
 			deployError = 'Network error';
@@ -100,6 +110,7 @@
 	$effect(() => {
 		loadApp();
 		loadEnvs();
+		loadDeployments();
 	});
 </script>
 
@@ -133,6 +144,37 @@
 		{#if deploymentId}
 			<DeploymentLogs {deploymentId} />
 		{/if}
+
+		<!-- Deployment History -->
+		<div class="mt-6">
+			<h3 class="mb-2 text-lg font-bold">Deployment History</h3>
+
+			{#if deployments.length === 0}
+				<p class="text-sm text-gray-500">No deployments yet.</p>
+			{:else}
+				<div class="flex flex-col gap-1">
+					{#each deployments as dep}
+						<div class="flex items-center gap-3 rounded border p-2 text-sm">
+							<span class="font-mono text-xs text-gray-400">{dep.id.slice(0, 12)}</span>
+							<span
+								class="rounded px-2 py-0.5 text-xs font-bold"
+								class:bg-green-100={dep.status === 'success'}
+								class:text-green-800={dep.status === 'success'}
+								class:bg-red-100={dep.status === 'failed'}
+								class:text-red-800={dep.status === 'failed'}
+								class:bg-yellow-100={dep.status === 'in_progress'}
+								class:text-yellow-800={dep.status === 'in_progress'}
+							>
+								{dep.status}
+							</span>
+							<span class="text-gray-500">
+								{new Date(dep.created_at).toLocaleString()}
+							</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
 
 		<!-- Environment Variables (only for owner/developer) -->
 		{#if canEdit && envsLoaded}

@@ -16,6 +16,7 @@ import (
 	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/WahyuS002/uploy/ssh"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -56,7 +57,7 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID)
+	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID, appWithServer.ID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create deployment"})
 		return
@@ -208,4 +209,45 @@ drain:
 			}
 		}
 	}
+}
+
+func (s *Server) ListApplicationDeployments(w http.ResponseWriter, r *http.Request, id string, params gen.ListApplicationDeploymentsParams) {
+	sc, _ := auth.GetSessionContext(r)
+
+	app, err := db.GetApplicationByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+		} else {
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get application"})
+		}
+		return
+	}
+	if app.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+		return
+	}
+
+	limit := int32(20)
+	if params.Limit != nil && *params.Limit > 0 {
+		limit = int32(*params.Limit)
+	}
+
+	deployments, err := db.ListDeploymentsByApplication(r.Context(), app.ID, limit)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list deployments"})
+		return
+	}
+
+	resp := make([]gen.DeploymentResponse, len(deployments))
+	for i, d := range deployments {
+		resp[i] = gen.DeploymentResponse{
+			Id:            d.ID,
+			Status:        gen.DeploymentResponseStatus(d.Status),
+			ApplicationId: d.ApplicationID,
+			CreatedAt:     d.CreatedAt,
+		}
+	}
+
+	respond.JSON(w, http.StatusOK, resp)
 }
