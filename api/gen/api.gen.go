@@ -71,6 +71,7 @@ type ApplicationEnvResponse struct {
 type ApplicationResponse struct {
 	ContainerName string    `json:"container_name"`
 	CreatedAt     time.Time `json:"created_at"`
+	Fqdn          *string   `json:"fqdn,omitempty"`
 	Id            string    `json:"id"`
 	Image         string    `json:"image"`
 	Name          string    `json:"name"`
@@ -88,10 +89,13 @@ type AuthResponse struct {
 // CreateApplicationRequest defines model for CreateApplicationRequest.
 type CreateApplicationRequest struct {
 	ContainerName string `json:"container_name"`
-	Image         string `json:"image"`
-	Name          string `json:"name"`
-	Port          int    `json:"port"`
-	ServerId      string `json:"server_id"`
+
+	// Fqdn Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access.
+	Fqdn     *string `json:"fqdn,omitempty"`
+	Image    string  `json:"image"`
+	Name     string  `json:"name"`
+	Port     int     `json:"port"`
+	ServerId string  `json:"server_id"`
 }
 
 // CreateSSHKeyRequest defines model for CreateSSHKeyRequest.
@@ -179,10 +183,13 @@ type ServerResponse struct {
 // UpdateApplicationRequest defines model for UpdateApplicationRequest.
 type UpdateApplicationRequest struct {
 	ContainerName string `json:"container_name"`
-	Image         string `json:"image"`
-	Name          string `json:"name"`
-	Port          int    `json:"port"`
-	ServerId      string `json:"server_id"`
+
+	// Fqdn Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access.
+	Fqdn     *string `json:"fqdn,omitempty"`
+	Image    string  `json:"image"`
+	Name     string  `json:"name"`
+	Port     int     `json:"port"`
+	ServerId string  `json:"server_id"`
 }
 
 // UpsertEnvRequest defines model for UpsertEnvRequest.

@@ -69,6 +69,8 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		ContainerName: appWithServer.ContainerName,
 		Port:          int(appWithServer.Port),
 		EnvVars:       envPairs,
+		FQDN:          derefString(appWithServer.FQDN),
+		ServerID:      appWithServer.ServerID,
 		Server: ssh.ServerConfig{
 			Host:       appWithServer.Host,
 			Port:       int(appWithServer.ServerPort),

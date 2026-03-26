@@ -7,6 +7,7 @@ import (
 
 	"github.com/WahyuS002/uploy/crypto"
 	"github.com/WahyuS002/uploy/db/sqlcgen"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Application struct {
@@ -15,6 +16,7 @@ type Application struct {
 	Image         string    `json:"image"`
 	ContainerName string    `json:"container_name"`
 	Port          int32     `json:"port"`
+	FQDN          *string   `json:"fqdn"`
 	ServerID      string    `json:"server_id"`
 	WorkspaceID   string    `json:"workspace_id"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -24,27 +26,28 @@ type Application struct {
 // ApplicationWithServer — dipakai saat deploy, satu query JOIN dapat semuanya
 type ApplicationWithServer struct {
 	Application
-	Host       string `json:"-"`
-	ServerPort int32  `json:"-"`
-	SSHUser    string `json:"-"`
-	PrivateKey string `json:"-"`
+	Host           string `json:"-"`
+	ServerPort     int32  `json:"-"`
+	SSHUser        string `json:"-"`
+	PrivateKey     string `json:"-"`
+	ProxyInstalled bool   `json:"-"`
 }
 
-func applicationFromGen(a sqlcgen.Application) Application {
-	return Application{
-		ID:            a.ID,
-		Name:          a.Name,
-		Image:         a.Image,
-		ContainerName: a.ContainerName,
-		Port:          a.Port,
-		ServerID:      a.ServerID,
-		WorkspaceID:   a.WorkspaceID,
-		CreatedAt:     a.CreatedAt,
-		UpdatedAt:     a.UpdatedAt,
+func pgTextToStringPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
 	}
+	return &t.String
 }
 
-func CreateApplication(ctx context.Context, name, image, containerName string, port int32, serverID, workspaceID string) (Application, error) {
+func stringPtrToPgText(s *string) pgtype.Text {
+	if s == nil || *s == "" {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+func CreateApplication(ctx context.Context, name, image, containerName string, port int32, serverID, workspaceID string, fqdn *string) (Application, error) {
 	a, err := Queries.CreateApplication(ctx, sqlcgen.CreateApplicationParams{
 		Name:          name,
 		Image:         image,
@@ -52,11 +55,23 @@ func CreateApplication(ctx context.Context, name, image, containerName string, p
 		Port:          port,
 		ServerID:      serverID,
 		WorkspaceID:   workspaceID,
+		Fqdn:          stringPtrToPgText(fqdn),
 	})
 	if err != nil {
 		return Application{}, err
 	}
-	return applicationFromGen(a), nil
+	return Application{
+		ID:            a.ID,
+		Name:          a.Name,
+		Image:         a.Image,
+		ContainerName: a.ContainerName,
+		Port:          a.Port,
+		FQDN:          pgTextToStringPtr(a.Fqdn),
+		ServerID:      a.ServerID,
+		WorkspaceID:   a.WorkspaceID,
+		CreatedAt:     a.CreatedAt,
+		UpdatedAt:     a.UpdatedAt,
+	}, nil
 }
 
 func GetApplicationByID(ctx context.Context, id string) (Application, error) {
@@ -64,7 +79,18 @@ func GetApplicationByID(ctx context.Context, id string) (Application, error) {
 	if err != nil {
 		return Application{}, err
 	}
-	return applicationFromGen(a), nil
+	return Application{
+		ID:            a.ID,
+		Name:          a.Name,
+		Image:         a.Image,
+		ContainerName: a.ContainerName,
+		Port:          a.Port,
+		FQDN:          pgTextToStringPtr(a.Fqdn),
+		ServerID:      a.ServerID,
+		WorkspaceID:   a.WorkspaceID,
+		CreatedAt:     a.CreatedAt,
+		UpdatedAt:     a.UpdatedAt,
+	}, nil
 }
 
 func ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]Application, error) {
@@ -74,12 +100,23 @@ func ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]App
 	}
 	apps := make([]Application, len(rows))
 	for i, r := range rows {
-		apps[i] = applicationFromGen(r)
+		apps[i] = Application{
+			ID:            r.ID,
+			Name:          r.Name,
+			Image:         r.Image,
+			ContainerName: r.ContainerName,
+			Port:          r.Port,
+			FQDN:          pgTextToStringPtr(r.Fqdn),
+			ServerID:      r.ServerID,
+			WorkspaceID:   r.WorkspaceID,
+			CreatedAt:     r.CreatedAt,
+			UpdatedAt:     r.UpdatedAt,
+		}
 	}
 	return apps, nil
 }
 
-func UpdateApplication(ctx context.Context, id, name, image, containerName string, port int32, serverID string) (Application, error) {
+func UpdateApplication(ctx context.Context, id, name, image, containerName string, port int32, serverID string, fqdn *string) (Application, error) {
 	a, err := Queries.UpdateApplication(ctx, sqlcgen.UpdateApplicationParams{
 		ID:            id,
 		Name:          name,
@@ -87,11 +124,23 @@ func UpdateApplication(ctx context.Context, id, name, image, containerName strin
 		ContainerName: containerName,
 		Port:          port,
 		ServerID:      serverID,
+		Fqdn:          stringPtrToPgText(fqdn),
 	})
 	if err != nil {
 		return Application{}, err
 	}
-	return applicationFromGen(a), nil
+	return Application{
+		ID:            a.ID,
+		Name:          a.Name,
+		Image:         a.Image,
+		ContainerName: a.ContainerName,
+		Port:          a.Port,
+		FQDN:          pgTextToStringPtr(a.Fqdn),
+		ServerID:      a.ServerID,
+		WorkspaceID:   a.WorkspaceID,
+		CreatedAt:     a.CreatedAt,
+		UpdatedAt:     a.UpdatedAt,
+	}, nil
 }
 
 func DeleteApplication(ctx context.Context, id string) error {
@@ -114,14 +163,16 @@ func GetApplicationWithServer(ctx context.Context, id string) (ApplicationWithSe
 			Image:         row.Image,
 			ContainerName: row.ContainerName,
 			Port:          row.Port,
+			FQDN:          pgTextToStringPtr(row.Fqdn),
 			ServerID:      row.ServerID,
 			WorkspaceID:   row.WorkspaceID,
 			CreatedAt:     row.CreatedAt,
 			UpdatedAt:     row.UpdatedAt,
 		},
-		Host:       row.Host,
-		ServerPort: row.ServerPort,
-		SSHUser:    row.SshUser,
-		PrivateKey: privateKey,
+		Host:           row.Host,
+		ServerPort:     row.ServerPort,
+		SSHUser:        row.SshUser,
+		PrivateKey:     privateKey,
+		ProxyInstalled: row.ProxyInstalled,
 	}, nil
 }

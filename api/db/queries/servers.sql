@@ -12,6 +12,9 @@ SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, created_at
 FROM servers WHERE workspace_id = $1
 ORDER BY created_at DESC;
 
+-- name: SetServerProxyInstalled :exec
+UPDATE servers SET proxy_installed = $2 WHERE id = $1;
+
 -- name: GetServerWithKey :one
 SELECT s.id, s.name, s.host, s.port, s.ssh_user, s.ssh_key_id, s.workspace_id, s.created_at,
        k.private_key

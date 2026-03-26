@@ -25,7 +25,18 @@ type CreateServerParams struct {
 	WorkspaceID string `json:"workspace_id"`
 }
 
-func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (Server, error) {
+type CreateServerRow struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Host        string    `json:"host"`
+	Port        int32     `json:"port"`
+	SshUser     string    `json:"ssh_user"`
+	SshKeyID    string    `json:"ssh_key_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (CreateServerRow, error) {
 	row := q.db.QueryRow(ctx, createServer,
 		arg.Name,
 		arg.Host,
@@ -34,7 +45,7 @@ func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (Ser
 		arg.SshKeyID,
 		arg.WorkspaceID,
 	)
-	var i Server
+	var i CreateServerRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -53,9 +64,20 @@ SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, created_at
 FROM servers WHERE id = $1
 `
 
-func (q *Queries) GetServerByID(ctx context.Context, id string) (Server, error) {
+type GetServerByIDRow struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Host        string    `json:"host"`
+	Port        int32     `json:"port"`
+	SshUser     string    `json:"ssh_user"`
+	SshKeyID    string    `json:"ssh_key_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetServerByID(ctx context.Context, id string) (GetServerByIDRow, error) {
 	row := q.db.QueryRow(ctx, getServerByID, id)
-	var i Server
+	var i GetServerByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -112,15 +134,26 @@ FROM servers WHERE workspace_id = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string) ([]Server, error) {
+type ListServersByWorkspaceRow struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Host        string    `json:"host"`
+	Port        int32     `json:"port"`
+	SshUser     string    `json:"ssh_user"`
+	SshKeyID    string    `json:"ssh_key_id"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string) ([]ListServersByWorkspaceRow, error) {
 	rows, err := q.db.Query(ctx, listServersByWorkspace, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Server{}
+	items := []ListServersByWorkspaceRow{}
 	for rows.Next() {
-		var i Server
+		var i ListServersByWorkspaceRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -139,4 +172,18 @@ func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string
 		return nil, err
 	}
 	return items, nil
+}
+
+const setServerProxyInstalled = `-- name: SetServerProxyInstalled :exec
+UPDATE servers SET proxy_installed = $2 WHERE id = $1
+`
+
+type SetServerProxyInstalledParams struct {
+	ID             string `json:"id"`
+	ProxyInstalled bool   `json:"proxy_installed"`
+}
+
+func (q *Queries) SetServerProxyInstalled(ctx context.Context, arg SetServerProxyInstalledParams) error {
+	_, err := q.db.Exec(ctx, setServerProxyInstalled, arg.ID, arg.ProxyInstalled)
+	return err
 }

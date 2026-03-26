@@ -21,6 +21,13 @@
 	let deployError = $state('');
 	let deployments = $state<DeploymentResponse[]>([]);
 
+	// Domain form
+	let editingDomain = $state(false);
+	let domainInput = $state('');
+	let domainError = $state('');
+	let domainSaving = $state(false);
+	let needsRedeploy = $state(false);
+
 	// Env form
 	let envKey = $state('');
 	let envValue = $state('');
@@ -58,6 +65,7 @@
 	async function deploy() {
 		deployError = '';
 		deploying = true;
+		needsRedeploy = false;
 		try {
 			const { data, error } = await api.POST('/api/deployments', {
 				body: { application_id: appId }
@@ -74,6 +82,38 @@
 			deployError = 'Network error';
 		} finally {
 			deploying = false;
+		}
+	}
+
+	async function updateDomain() {
+		if (!app) return;
+		domainError = '';
+		domainSaving = true;
+		try {
+			const { data, error } = await api.PUT('/api/applications/{id}', {
+				params: { path: { id: appId } },
+				body: {
+					name: app.name,
+					image: app.image,
+					container_name: app.container_name,
+					port: app.port,
+					server_id: app.server_id,
+					fqdn: domainInput.trim() || ''
+				}
+			});
+			if (error) {
+				domainError = (error as { error: string }).error;
+				return;
+			}
+			if (data) {
+				app = data;
+				editingDomain = false;
+				needsRedeploy = true;
+			}
+		} catch {
+			domainError = 'Network error';
+		} finally {
+			domainSaving = false;
 		}
 	}
 
@@ -122,11 +162,88 @@
 			<p>Image: {app.image}</p>
 			<p>Container: {app.container_name}</p>
 			<p>Port: {app.port}</p>
+			{#if editingDomain}
+				<div class="mt-2 flex items-center gap-2">
+					<span>Domain:</span>
+					<input
+						type="text"
+						bind:value={domainInput}
+						placeholder="myapp.example.com"
+						class="rounded border p-1 text-sm"
+					/>
+					<button
+						onclick={updateDomain}
+						disabled={domainSaving}
+						class="cursor-pointer rounded-sm bg-black px-2 py-1 text-xs text-white disabled:opacity-50"
+					>
+						{domainSaving ? 'Saving...' : 'Save'}
+					</button>
+					<button
+						onclick={() => { editingDomain = false; domainError = ''; }}
+						class="cursor-pointer text-xs text-gray-500 hover:text-gray-700"
+					>
+						Cancel
+					</button>
+				</div>
+				<div class="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-500">
+					<p class="font-medium text-gray-600">DNS setup required before deploying:</p>
+					<ul class="mt-1 list-inside list-disc space-y-0.5">
+						<li>For a subdomain (e.g. <code>app.example.com</code>): create an <strong>A record</strong> with name <code>app</code> pointing to your server IP</li>
+						<li>For a root domain (e.g. <code>example.com</code>): create an <strong>A record</strong> with name <code>@</code> pointing to your server IP</li>
+					</ul>
+				</div>
+				{#if domainError}
+					<p class="mt-1 text-sm text-red-600">{domainError}</p>
+				{/if}
+			{:else if app.fqdn}
+				<p>
+					Domain: <a href="https://{app.fqdn}" target="_blank" class="text-blue-600 underline">{app.fqdn}</a>
+					{#if canEdit}
+						<button
+							onclick={() => { domainInput = app?.fqdn ?? ''; editingDomain = true; }}
+							class="ml-2 cursor-pointer text-xs text-gray-500 hover:text-gray-700"
+						>
+							Edit
+						</button>
+					{/if}
+				</p>
+			{:else}
+				<p class="text-gray-400">
+					No domain configured (direct port access)
+					{#if canEdit}
+						<button
+							onclick={() => { domainInput = ''; editingDomain = true; }}
+							class="ml-2 cursor-pointer text-xs text-blue-600 hover:text-blue-800"
+						>
+							Set domain
+						</button>
+					{/if}
+				</p>
+			{/if}
 		</div>
 
 		{#if canEdit}
 			<!-- Deploy button -->
 			<div class="mb-6">
+				{#if needsRedeploy}
+					<div class="mb-2 rounded border border-yellow-300 bg-yellow-50 p-2 text-sm text-yellow-700">
+						<p>Domain changed. Deploy to apply the new configuration.</p>
+						{#if app?.fqdn}
+							{@const parts = app.fqdn.split('.')}
+							{@const isSubdomain = parts.length > 2}
+							<p class="mt-1 text-xs">
+								Before deploying, ensure a DNS <strong>A record</strong> with name
+								{#if isSubdomain}
+									<code>{parts.slice(0, -2).join('.')}</code>
+								{:else}
+									<code>@</code>
+								{/if}
+								points to your server IP at your domain provider.
+								SSL will be provisioned automatically via Let's Encrypt.
+							</p>
+						{/if}
+					</div>
+				{/if}
 				{#if deployError}
 					<p class="mb-2 text-sm text-red-600">{deployError}</p>
 				{/if}

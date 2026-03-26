@@ -21,9 +21,30 @@ var validContainerName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 // validImage matches Docker image references: alphanumeric with / : . -
 var validImage = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*$`)
 
+// validFQDN matches valid hostnames: labels separated by dots, each 1-63 chars, total ≤ 253
+var validFQDN = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func uniqueViolationMessage(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && strings.Contains(pgErr.ConstraintName, "fqdn") {
+		return "fqdn is already in use by another application"
+	}
+	return "container_name already in use on this server"
+}
+
+func validatePortForMode(port int, fqdn *string) string {
+	if port < 1 || port > 65535 {
+		return "port must be between 1 and 65535"
+	}
+	if fqdn == nil && (port == 80 || port == 443) {
+		return "ports 80 and 443 are reserved for Uploy proxy; use another port or configure a domain"
+	}
+	return ""
 }
 
 func (s *Server) CreateApplication(w http.ResponseWriter, r *http.Request) {
@@ -79,26 +100,33 @@ func (s *Server) CreateApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app, err := db.CreateApplication(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId, sc.WorkspaceID)
+	// Validate FQDN if provided
+	var fqdn *string
+	if req.Fqdn != nil && *req.Fqdn != "" {
+		f := strings.ToLower(strings.TrimSpace(*req.Fqdn))
+		if !validFQDN.MatchString(f) || len(f) > 253 {
+			respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "fqdn must be a valid domain name (e.g. myapp.example.com)"})
+			return
+		}
+		fqdn = &f
+	}
+	if msg := validatePortForMode(req.Port, fqdn); msg != "" {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: msg})
+		return
+	}
+
+	app, err := db.CreateApplication(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId, sc.WorkspaceID, fqdn)
 	if err != nil {
 		if isUniqueViolation(err) {
-			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "container_name already in use on this server"})
+			msg := uniqueViolationMessage(err)
+			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: msg})
 		} else {
 			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create application"})
 		}
 		return
 	}
 
-	respond.JSON(w, http.StatusCreated, gen.ApplicationResponse{
-		Id:            app.ID,
-		Name:          app.Name,
-		Image:         app.Image,
-		ContainerName: app.ContainerName,
-		Port:          int(app.Port),
-		ServerId:      app.ServerID,
-		CreatedAt:     app.CreatedAt,
-		UpdatedAt:     app.UpdatedAt,
-	})
+	respond.JSON(w, http.StatusCreated, applicationToResponse(app))
 }
 
 func (s *Server) ListApplications(w http.ResponseWriter, r *http.Request) {
@@ -112,16 +140,7 @@ func (s *Server) ListApplications(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]gen.ApplicationResponse, len(apps))
 	for i, app := range apps {
-		resp[i] = gen.ApplicationResponse{
-			Id:            app.ID,
-			Name:          app.Name,
-			Image:         app.Image,
-			ContainerName: app.ContainerName,
-			Port:          int(app.Port),
-			ServerId:      app.ServerID,
-			CreatedAt:     app.CreatedAt,
-			UpdatedAt:     app.UpdatedAt,
-		}
+		resp[i] = applicationToResponse(app)
 	}
 
 	respond.JSON(w, http.StatusOK, resp)
@@ -145,16 +164,7 @@ func (s *Server) GetApplication(w http.ResponseWriter, r *http.Request, id strin
 		return
 	}
 
-	respond.JSON(w, http.StatusOK, gen.ApplicationResponse{
-		Id:            app.ID,
-		Name:          app.Name,
-		Image:         app.Image,
-		ContainerName: app.ContainerName,
-		Port:          int(app.Port),
-		ServerId:      app.ServerID,
-		CreatedAt:     app.CreatedAt,
-		UpdatedAt:     app.UpdatedAt,
-	})
+	respond.JSON(w, http.StatusOK, applicationToResponse(app))
 }
 
 func (s *Server) UpdateApplication(w http.ResponseWriter, r *http.Request, id string) {
@@ -221,22 +231,41 @@ func (s *Server) UpdateApplication(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 
-	app, err := db.UpdateApplication(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId)
+	// FQDN update semantics: nil = keep existing, "" = clear, "domain.com" = set
+	fqdn := existing.FQDN // default: keep existing
+	if req.Fqdn != nil {
+		if *req.Fqdn == "" {
+			fqdn = nil // explicitly clear
+		} else {
+			f := strings.ToLower(strings.TrimSpace(*req.Fqdn))
+			if !validFQDN.MatchString(f) || len(f) > 253 {
+				respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "fqdn must be a valid domain name (e.g. myapp.example.com)"})
+				return
+			}
+			fqdn = &f
+		}
+	}
+	if msg := validatePortForMode(req.Port, fqdn); msg != "" {
+		// Backward compatibility: existing direct-mode apps on port 80/443 may still update
+		// other fields as long as they keep the same mode and port.
+		if !(existing.FQDN == nil && fqdn == nil && int(existing.Port) == req.Port && (req.Port == 80 || req.Port == 443)) {
+			respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: msg})
+			return
+		}
+	}
+
+	app, err := db.UpdateApplication(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId, fqdn)
 	if err != nil {
-		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to update application"})
+		if isUniqueViolation(err) {
+			msg := uniqueViolationMessage(err)
+			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: msg})
+		} else {
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to update application"})
+		}
 		return
 	}
 
-	respond.JSON(w, http.StatusOK, gen.ApplicationResponse{
-		Id:            app.ID,
-		Name:          app.Name,
-		Image:         app.Image,
-		ContainerName: app.ContainerName,
-		Port:          int(app.Port),
-		ServerId:      app.ServerID,
-		CreatedAt:     app.CreatedAt,
-		UpdatedAt:     app.UpdatedAt,
-	})
+	respond.JSON(w, http.StatusOK, applicationToResponse(app))
 }
 
 func (s *Server) DeleteApplication(w http.ResponseWriter, r *http.Request, id string) {
@@ -267,4 +296,25 @@ func (s *Server) DeleteApplication(w http.ResponseWriter, r *http.Request, id st
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func applicationToResponse(app db.Application) gen.ApplicationResponse {
+	return gen.ApplicationResponse{
+		Id:            app.ID,
+		Name:          app.Name,
+		Image:         app.Image,
+		ContainerName: app.ContainerName,
+		Port:          int(app.Port),
+		ServerId:      app.ServerID,
+		Fqdn:          app.FQDN,
+		CreatedAt:     app.CreatedAt,
+		UpdatedAt:     app.UpdatedAt,
+	}
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

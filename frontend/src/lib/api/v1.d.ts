@@ -328,6 +328,8 @@ export interface components {
             container_name: string;
             port: number;
             server_id: string;
+            /** @description Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access. */
+            fqdn?: string;
         };
         UpdateApplicationRequest: {
             name: string;
@@ -335,6 +337,8 @@ export interface components {
             container_name: string;
             port: number;
             server_id: string;
+            /** @description Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access. */
+            fqdn?: string;
         };
         ApplicationResponse: {
             id: string;
@@ -343,6 +347,7 @@ export interface components {
             container_name: string;
             port: number;
             server_id: string;
+            fqdn?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

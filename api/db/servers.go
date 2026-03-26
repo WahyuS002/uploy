@@ -25,19 +25,6 @@ type ServerWithKey struct {
 	PrivateKey string `json:"-"`
 }
 
-func serverFromGen(s sqlcgen.Server) AppServer {
-	return AppServer{
-		ID:          s.ID,
-		Name:        s.Name,
-		Host:        s.Host,
-		Port:        s.Port,
-		SSHUser:     s.SshUser,
-		SSHKeyID:    s.SshKeyID,
-		WorkspaceID: s.WorkspaceID,
-		CreatedAt:   s.CreatedAt,
-	}
-}
-
 func CreateServer(ctx context.Context, name, host string, port int32, sshUser, sshKeyID, workspaceID string) (AppServer, error) {
 	s, err := Queries.CreateServer(ctx, sqlcgen.CreateServerParams{
 		Name:        name,
@@ -50,7 +37,16 @@ func CreateServer(ctx context.Context, name, host string, port int32, sshUser, s
 	if err != nil {
 		return AppServer{}, err
 	}
-	return serverFromGen(s), nil
+	return AppServer{
+		ID:          s.ID,
+		Name:        s.Name,
+		Host:        s.Host,
+		Port:        s.Port,
+		SSHUser:     s.SshUser,
+		SSHKeyID:    s.SshKeyID,
+		WorkspaceID: s.WorkspaceID,
+		CreatedAt:   s.CreatedAt,
+	}, nil
 }
 
 func GetServerByID(ctx context.Context, id string) (AppServer, error) {
@@ -58,7 +54,16 @@ func GetServerByID(ctx context.Context, id string) (AppServer, error) {
 	if err != nil {
 		return AppServer{}, err
 	}
-	return serverFromGen(s), nil
+	return AppServer{
+		ID:          s.ID,
+		Name:        s.Name,
+		Host:        s.Host,
+		Port:        s.Port,
+		SSHUser:     s.SshUser,
+		SSHKeyID:    s.SshKeyID,
+		WorkspaceID: s.WorkspaceID,
+		CreatedAt:   s.CreatedAt,
+	}, nil
 }
 
 func ListServersByWorkspace(ctx context.Context, workspaceID string) ([]AppServer, error) {
@@ -68,9 +73,25 @@ func ListServersByWorkspace(ctx context.Context, workspaceID string) ([]AppServe
 	}
 	servers := make([]AppServer, len(rows))
 	for i, r := range rows {
-		servers[i] = serverFromGen(r)
+		servers[i] = AppServer{
+			ID:          r.ID,
+			Name:        r.Name,
+			Host:        r.Host,
+			Port:        r.Port,
+			SSHUser:     r.SshUser,
+			SSHKeyID:    r.SshKeyID,
+			WorkspaceID: r.WorkspaceID,
+			CreatedAt:   r.CreatedAt,
+		}
 	}
 	return servers, nil
+}
+
+func SetServerProxyInstalled(ctx context.Context, serverID string, installed bool) error {
+	return Queries.SetServerProxyInstalled(ctx, sqlcgen.SetServerProxyInstalledParams{
+		ID:             serverID,
+		ProxyInstalled: installed,
+	})
 }
 
 func GetServerWithKey(ctx context.Context, id string) (ServerWithKey, error) {

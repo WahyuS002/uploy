@@ -11,15 +11,16 @@ import (
 )
 
 type Application struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Image         string    `json:"image"`
-	ContainerName string    `json:"container_name"`
-	Port          int32     `json:"port"`
-	ServerID      string    `json:"server_id"`
-	WorkspaceID   string    `json:"workspace_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	Port          int32       `json:"port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	Fqdn          pgtype.Text `json:"fqdn"`
 }
 
 type ApplicationEnv struct {
@@ -58,14 +59,15 @@ type OauthIdentity struct {
 }
 
 type Server struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Host        string    `json:"host"`
-	Port        int32     `json:"port"`
-	SshUser     string    `json:"ssh_user"`
-	SshKeyID    string    `json:"ssh_key_id"`
-	WorkspaceID string    `json:"workspace_id"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Host           string    `json:"host"`
+	Port           int32     `json:"port"`
+	SshUser        string    `json:"ssh_user"`
+	SshKeyID       string    `json:"ssh_key_id"`
+	WorkspaceID    string    `json:"workspace_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	ProxyInstalled bool      `json:"proxy_installed"`
 }
 
 type Session struct {

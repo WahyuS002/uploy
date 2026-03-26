@@ -975,6 +975,9 @@ components:
           type: integer
         server_id:
           type: string
+        fqdn:
+          type: string
+          description: "Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access."
 
     UpdateApplicationRequest:
       type: object
@@ -995,6 +998,9 @@ components:
           type: integer
         server_id:
           type: string
+        fqdn:
+          type: string
+          description: "Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access."
 
     ApplicationResponse:
       type: object
@@ -1019,6 +1025,8 @@ components:
         port:
           type: integer
         server_id:
+          type: string
+        fqdn:
           type: string
         created_at:
           type: string

@@ -11,8 +11,11 @@ import (
 
 	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/proxy"
 	"github.com/WahyuS002/uploy/ssh"
 )
+
+const proxyContainerName = "uploy-proxy"
 
 type DeployConfig struct {
 	DeploymentID  string
@@ -20,6 +23,8 @@ type DeployConfig struct {
 	ContainerName string
 	Port          int
 	EnvVars       []db.EnvPair
+	FQDN          string
+	ServerID      string
 	Server        ssh.ServerConfig
 }
 
@@ -84,16 +89,39 @@ func RunDeploy(cfg DeployConfig) {
 		return
 	}
 
-	// step 2: stop old container (ignore error — mungkin belum ada)
-	stopCmd := fmt.Sprintf("docker stop %s 2>/dev/null || true", cfg.ContainerName)
-	if !runStep(ctx, client, cfg.DeploymentID, stopCmd) {
-		return
+	currentContainerRemoved := false
+
+	// step 2: if app has a domain, ensure proxy is running
+	if cfg.FQDN != "" {
+		releaseCurrent, err := checkProxyPortConflicts(client, cfg.ContainerName)
+		if err != nil {
+			failDeploy(cfg.DeploymentID, "Proxy setup failed: "+err.Error())
+			return
+		}
+		if releaseCurrent {
+			appendLog(ctx, cfg.DeploymentID, "releasing current container from reserved proxy ports...", "stdout")
+			if !stopAndRemoveContainer(ctx, client, cfg.DeploymentID, cfg.ContainerName) {
+				return
+			}
+			currentContainerRemoved = true
+		}
+
+		appendLog(ctx, cfg.DeploymentID, "ensuring reverse proxy (Traefik)...", "stdout")
+		if err := proxy.EnsureProxy(client); err != nil {
+			failDeploy(cfg.DeploymentID, "Proxy setup failed: "+err.Error())
+			return
+		}
+		if err := db.SetServerProxyInstalled(ctx, cfg.ServerID, true); err != nil {
+			log.Printf("SetServerProxyInstalled error: %v", err)
+		}
+		appendLog(ctx, cfg.DeploymentID, "proxy ready", "stdout")
 	}
 
-	// step 3: remove old container (ignore error — mungkin belum ada)
-	rmCmd := fmt.Sprintf("docker rm %s 2>/dev/null || true", cfg.ContainerName)
-	if !runStep(ctx, client, cfg.DeploymentID, rmCmd) {
-		return
+	// step 3: stop/remove old container unless already removed during proxy migration
+	if !currentContainerRemoved {
+		if !stopAndRemoveContainer(ctx, client, cfg.DeploymentID, cfg.ContainerName) {
+			return
+		}
 	}
 
 	// step 4: docker run dengan env vars
@@ -105,7 +133,24 @@ func RunDeploy(cfg DeployConfig) {
 }
 
 func buildDockerRunCmd(cfg DeployConfig) string {
-	args := fmt.Sprintf("docker run -d --name %s -p %d:80", cfg.ContainerName, cfg.Port)
+	var args string
+
+	if cfg.FQDN != "" {
+		// Proxy mode: container on "uploy" network, no host port mapping.
+		// Traefik forwards to the container's internal port (80).
+		args = fmt.Sprintf("docker run -d --name %s --network uploy", cfg.ContainerName)
+
+		routerName := strings.ReplaceAll(cfg.ContainerName, ".", "-")
+		args += " --label traefik.enable=true"
+		args += fmt.Sprintf(" --label 'traefik.http.routers.%s.rule=Host(`%s`)'", routerName, cfg.FQDN)
+		args += fmt.Sprintf(" --label traefik.http.routers.%s.entrypoints=https", routerName)
+		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls=true", routerName)
+		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls.certresolver=letsencrypt", routerName)
+		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=80", routerName)
+	} else {
+		// Direct mode: map host port to container port 80
+		args = fmt.Sprintf("docker run -d --name %s -p %d:80", cfg.ContainerName, cfg.Port)
+	}
 
 	for _, env := range cfg.EnvVars {
 		escaped := strings.ReplaceAll(env.Value, "'", "'\\''")
@@ -141,4 +186,106 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 		return false
 	}
 	return true
+}
+
+func stopAndRemoveContainer(ctx context.Context, client *ssh.Client, deploymentID, containerName string) bool {
+	stopCmd := fmt.Sprintf("docker stop %s 2>/dev/null || true", containerName)
+	if !runStep(ctx, client, deploymentID, stopCmd) {
+		return false
+	}
+
+	rmCmd := fmt.Sprintf("docker rm %s 2>/dev/null || true", containerName)
+	if !runStep(ctx, client, deploymentID, rmCmd) {
+		return false
+	}
+
+	return true
+}
+
+func checkProxyPortConflicts(client *ssh.Client, currentContainer string) (bool, error) {
+	releaseCurrent := false
+
+	for _, port := range []int{80, 443} {
+		owner, err := publishedPortOwner(client, port)
+		if err != nil {
+			return false, fmt.Errorf("check port %d owner: %w", port, err)
+		}
+
+		busy, err := isHostPortBusy(client, port)
+		if err != nil {
+			return false, fmt.Errorf("check port %d usage: %w", port, err)
+		}
+
+		switch {
+		case owner == currentContainer:
+			releaseCurrent = true
+		case owner != "" && owner != proxyContainerName:
+			return false, fmt.Errorf("port %d is already used by container %s; Traefik needs exclusive access to ports 80 and 443", port, owner)
+		case owner == "" && busy:
+			return false, fmt.Errorf("port %d is already in use by a non-Docker process; Traefik needs exclusive access to ports 80 and 443", port)
+		}
+	}
+
+	return releaseCurrent, nil
+}
+
+func publishedPortOwner(client *ssh.Client, port int) (string, error) {
+	lines, err := captureStdoutLines(client, fmt.Sprintf("docker ps --filter publish=%d --format '{{.Names}}'", port))
+	if err != nil {
+		return "", err
+	}
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line, nil
+		}
+	}
+	return "", nil
+}
+
+func isHostPortBusy(client *ssh.Client, port int) (bool, error) {
+	lines, err := captureStdoutLines(client, fmt.Sprintf("ss -ltnH '( sport = :%d )' 2>/dev/null || true", port))
+	if err != nil {
+		return false, err
+	}
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func captureStdoutLines(client *ssh.Client, command string) ([]string, error) {
+	stdoutCh, stderrCh, done := client.StreamCommand(command)
+
+	var stdoutLines []string
+	var stderrLines []string
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for line := range stdoutCh {
+			stdoutLines = append(stdoutLines, line)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for line := range stderrCh {
+			stderrLines = append(stderrLines, line)
+		}
+	}()
+
+	wg.Wait()
+
+	if err := <-done; err != nil {
+		if len(stderrLines) > 0 {
+			return nil, fmt.Errorf("%w: %s", err, strings.Join(stderrLines, "; "))
+		}
+		return nil, err
+	}
+
+	return stdoutLines, nil
 }
