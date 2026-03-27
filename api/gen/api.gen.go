@@ -58,6 +58,51 @@ func (e LogEntryType) Valid() bool {
 	}
 }
 
+// Defines values for ServerResponseProxyMode.
+const (
+	Managed ServerResponseProxyMode = "managed"
+	None    ServerResponseProxyMode = "none"
+)
+
+// Valid indicates whether the value is a known member of the ServerResponseProxyMode enum.
+func (e ServerResponseProxyMode) Valid() bool {
+	switch e {
+	case Managed:
+		return true
+	case None:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServerResponseProxyStatus.
+const (
+	Degraded      ServerResponseProxyStatus = "degraded"
+	NotConfigured ServerResponseProxyStatus = "not_configured"
+	PortConflict  ServerResponseProxyStatus = "port_conflict"
+	Ready         ServerResponseProxyStatus = "ready"
+	TlsPending    ServerResponseProxyStatus = "tls_pending"
+)
+
+// Valid indicates whether the value is a known member of the ServerResponseProxyStatus enum.
+func (e ServerResponseProxyStatus) Valid() bool {
+	switch e {
+	case Degraded:
+		return true
+	case NotConfigured:
+		return true
+	case PortConflict:
+		return true
+	case Ready:
+		return true
+	case TlsPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // ApplicationEnvResponse defines model for ApplicationEnvResponse.
 type ApplicationEnvResponse struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -171,14 +216,24 @@ type SSHKeyResponse struct {
 
 // ServerResponse defines model for ServerResponse.
 type ServerResponse struct {
-	CreatedAt time.Time `json:"created_at"`
-	Host      string    `json:"host"`
-	Id        string    `json:"id"`
-	Name      string    `json:"name"`
-	Port      int       `json:"port"`
-	SshKeyId  string    `json:"ssh_key_id"`
-	SshUser   string    `json:"ssh_user"`
+	CreatedAt          time.Time                 `json:"created_at"`
+	Host               string                    `json:"host"`
+	Id                 string                    `json:"id"`
+	Name               string                    `json:"name"`
+	Port               int                       `json:"port"`
+	ProxyLastCheckedAt *time.Time                `json:"proxy_last_checked_at,omitempty"`
+	ProxyLastError     *string                   `json:"proxy_last_error,omitempty"`
+	ProxyMode          ServerResponseProxyMode   `json:"proxy_mode"`
+	ProxyStatus        ServerResponseProxyStatus `json:"proxy_status"`
+	SshKeyId           string                    `json:"ssh_key_id"`
+	SshUser            string                    `json:"ssh_user"`
 }
+
+// ServerResponseProxyMode defines model for ServerResponse.ProxyMode.
+type ServerResponseProxyMode string
+
+// ServerResponseProxyStatus defines model for ServerResponse.ProxyStatus.
+type ServerResponseProxyStatus string
 
 // UpdateApplicationRequest defines model for UpdateApplicationRequest.
 type UpdateApplicationRequest struct {

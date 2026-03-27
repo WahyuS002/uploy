@@ -25,7 +25,7 @@ SELECT
     a.id, a.name, a.image, a.container_name, a.port, a.fqdn,
     a.server_id, a.workspace_id, a.created_at, a.updated_at,
     s.host, s.port AS server_port, s.ssh_user,
-    s.proxy_installed,
+    s.proxy_status, s.proxy_mode,
     k.private_key
 FROM applications a
 JOIN servers s ON s.id = a.server_id

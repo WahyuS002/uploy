@@ -90,15 +90,7 @@ func (s *Server) CreateServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respond.JSON(w, http.StatusCreated, gen.ServerResponse{
-		Id:        srv.ID,
-		Name:      srv.Name,
-		Host:      srv.Host,
-		Port:      int(srv.Port),
-		SshUser:   srv.SSHUser,
-		SshKeyId:  srv.SSHKeyID,
-		CreatedAt: srv.CreatedAt,
-	})
+	respond.JSON(w, http.StatusCreated, serverToResponse(srv))
 }
 
 func (s *Server) ListServers(w http.ResponseWriter, r *http.Request) {
@@ -112,16 +104,24 @@ func (s *Server) ListServers(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]gen.ServerResponse, len(servers))
 	for i, srv := range servers {
-		resp[i] = gen.ServerResponse{
-			Id:        srv.ID,
-			Name:      srv.Name,
-			Host:      srv.Host,
-			Port:      int(srv.Port),
-			SshUser:   srv.SSHUser,
-			SshKeyId:  srv.SSHKeyID,
-			CreatedAt: srv.CreatedAt,
-		}
+		resp[i] = serverToResponse(srv)
 	}
 
 	respond.JSON(w, http.StatusOK, resp)
+}
+
+func serverToResponse(srv db.AppServer) gen.ServerResponse {
+	return gen.ServerResponse{
+		Id:                 srv.ID,
+		Name:               srv.Name,
+		Host:               srv.Host,
+		Port:               int(srv.Port),
+		SshUser:            srv.SSHUser,
+		SshKeyId:           srv.SSHKeyID,
+		ProxyStatus:        gen.ServerResponseProxyStatus(srv.ProxyStatus),
+		ProxyMode:          gen.ServerResponseProxyMode(srv.ProxyMode),
+		ProxyLastCheckedAt: srv.ProxyLastCheckedAt,
+		ProxyLastError:     srv.ProxyLastError,
+		CreatedAt:          srv.CreatedAt,
+	}
 }

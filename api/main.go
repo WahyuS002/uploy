@@ -16,6 +16,7 @@ import (
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/handlers"
+	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/joho/godotenv"
 )
@@ -58,6 +59,8 @@ func main() {
 	mux.HandleFunc("GET /api/auth/github/callback", handlers.GitHubCallbackHandler)
 	mux.HandleFunc("GET /api/auth/google", handlers.GoogleLoginHandler)
 	mux.HandleFunc("GET /api/auth/google/callback", handlers.GoogleCallbackHandler)
+
+	go jobs.StartTLSReconciler(ctx)
 
 	srv := &http.Server{Addr: ":8080", Handler: mux}
 

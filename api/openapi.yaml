@@ -913,6 +913,8 @@ components:
         - port
         - ssh_user
         - ssh_key_id
+        - proxy_status
+        - proxy_mode
         - created_at
       properties:
         id:
@@ -926,6 +928,24 @@ components:
         ssh_user:
           type: string
         ssh_key_id:
+          type: string
+        proxy_status:
+          type: string
+          enum:
+            - not_configured
+            - ready
+            - port_conflict
+            - degraded
+            - tls_pending
+        proxy_mode:
+          type: string
+          enum:
+            - none
+            - managed
+        proxy_last_checked_at:
+          type: string
+          format: date-time
+        proxy_last_error:
           type: string
         created_at:
           type: string

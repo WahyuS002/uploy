@@ -95,7 +95,11 @@ func RunDeploy(cfg DeployConfig) {
 	if cfg.FQDN != "" {
 		releaseCurrent, err := checkProxyPortConflicts(client, cfg.ContainerName)
 		if err != nil {
-			failDeploy(cfg.DeploymentID, "Proxy setup failed: "+err.Error())
+			errMsg := err.Error()
+			if updateErr := db.SetServerProxyError(ctx, cfg.ServerID, "port_conflict", errMsg); updateErr != nil {
+				log.Printf("SetServerProxyError error: %v", updateErr)
+			}
+			failDeploy(cfg.DeploymentID, "Proxy setup failed: "+errMsg)
 			return
 		}
 		if releaseCurrent {
@@ -108,13 +112,14 @@ func RunDeploy(cfg DeployConfig) {
 
 		appendLog(ctx, cfg.DeploymentID, "ensuring reverse proxy (Traefik)...", "stdout")
 		if err := proxy.EnsureProxy(client); err != nil {
-			failDeploy(cfg.DeploymentID, "Proxy setup failed: "+err.Error())
+			errMsg := err.Error()
+			if updateErr := db.SetServerProxyError(ctx, cfg.ServerID, "degraded", errMsg); updateErr != nil {
+				log.Printf("SetServerProxyError error: %v", updateErr)
+			}
+			failDeploy(cfg.DeploymentID, "Proxy setup failed: "+errMsg)
 			return
 		}
-		if err := db.SetServerProxyInstalled(ctx, cfg.ServerID, true); err != nil {
-			log.Printf("SetServerProxyInstalled error: %v", err)
-		}
-		appendLog(ctx, cfg.DeploymentID, "proxy ready", "stdout")
+		appendLog(ctx, cfg.DeploymentID, "proxy running", "stdout")
 	}
 
 	// step 3: stop/remove old container unless already removed during proxy migration
@@ -127,6 +132,32 @@ func RunDeploy(cfg DeployConfig) {
 	// step 4: docker run dengan env vars
 	if !runStep(ctx, client, cfg.DeploymentID, buildDockerRunCmd(cfg)) {
 		return
+	}
+
+	// step 5: after app container is running, reconcile proxy status.
+	// Poll for ACME certificate issuance (typically 10-30s after router becomes available).
+	if cfg.FQDN != "" {
+		newStatus := "tls_pending"
+		if proxy.HasCertificates(client) {
+			newStatus = "ready"
+		} else {
+			appendLog(ctx, cfg.DeploymentID, "waiting for TLS certificate...", "stdout")
+			for i := 0; i < 6; i++ {
+				time.Sleep(10 * time.Second)
+				if proxy.HasCertificates(client) {
+					newStatus = "ready"
+					break
+				}
+			}
+		}
+		if err := db.SetServerProxyReady(ctx, cfg.ServerID, newStatus); err != nil {
+			log.Printf("SetServerProxyReady error: %v", err)
+		}
+		if newStatus == "tls_pending" {
+			appendLog(ctx, cfg.DeploymentID, "TLS certificate not yet available; status will update on next deploy", "stdout")
+		} else {
+			appendLog(ctx, cfg.DeploymentID, "TLS certificate ready", "stdout")
+		}
 	}
 
 	finishDeploy(cfg.DeploymentID, "success")
@@ -244,9 +275,21 @@ func publishedPortOwner(client *ssh.Client, port int) (string, error) {
 }
 
 func isHostPortBusy(client *ssh.Client, port int) (bool, error) {
-	lines, err := captureStdoutLines(client, fmt.Sprintf("ss -ltnH '( sport = :%d )' 2>/dev/null || true", port))
+	// Try ss first; fall back to netstat if ss is unavailable.
+	ssCmd := fmt.Sprintf("ss -ltnH '( sport = :%d )'", port)
+	lines, err := captureStdoutLines(client, ssCmd)
 	if err != nil {
-		return false, err
+		// ss unavailable — verify netstat exists, then use it.
+		// "command -v netstat" fails if netstat is not installed.
+		if _, checkErr := captureStdoutLines(client, "command -v netstat"); checkErr != nil {
+			return false, fmt.Errorf("cannot check port %d: neither ss nor netstat available", port)
+		}
+		// netstat exists; grep may exit 1 on no match, so wrap with || true.
+		netstatCmd := fmt.Sprintf("netstat -ltn 2>/dev/null | { grep ':%d ' || true; }", port)
+		lines, err = captureStdoutLines(client, netstatCmd)
+		if err != nil {
+			return false, fmt.Errorf("cannot check port %d: netstat failed: %w", port, err)
+		}
 	}
 	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {

@@ -309,6 +309,13 @@ export interface components {
             port: number;
             ssh_user: string;
             ssh_key_id: string;
+            /** @enum {string} */
+            proxy_status: "not_configured" | "ready" | "port_conflict" | "degraded" | "tls_pending";
+            /** @enum {string} */
+            proxy_mode: "none" | "managed";
+            /** Format: date-time */
+            proxy_last_checked_at?: string;
+            proxy_last_error?: string;
             /** Format: date-time */
             created_at: string;
         };

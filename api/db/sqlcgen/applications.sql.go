@@ -117,7 +117,7 @@ SELECT
     a.id, a.name, a.image, a.container_name, a.port, a.fqdn,
     a.server_id, a.workspace_id, a.created_at, a.updated_at,
     s.host, s.port AS server_port, s.ssh_user,
-    s.proxy_installed,
+    s.proxy_status, s.proxy_mode,
     k.private_key
 FROM applications a
 JOIN servers s ON s.id = a.server_id
@@ -126,21 +126,22 @@ WHERE a.id = $1
 `
 
 type GetApplicationWithServerRow struct {
-	ID             string      `json:"id"`
-	Name           string      `json:"name"`
-	Image          string      `json:"image"`
-	ContainerName  string      `json:"container_name"`
-	Port           int32       `json:"port"`
-	Fqdn           pgtype.Text `json:"fqdn"`
-	ServerID       string      `json:"server_id"`
-	WorkspaceID    string      `json:"workspace_id"`
-	CreatedAt      time.Time   `json:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
-	Host           string      `json:"host"`
-	ServerPort     int32       `json:"server_port"`
-	SshUser        string      `json:"ssh_user"`
-	ProxyInstalled bool        `json:"proxy_installed"`
-	PrivateKey     string      `json:"private_key"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	Port          int32       `json:"port"`
+	Fqdn          pgtype.Text `json:"fqdn"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	Host          string      `json:"host"`
+	ServerPort    int32       `json:"server_port"`
+	SshUser       string      `json:"ssh_user"`
+	ProxyStatus   string      `json:"proxy_status"`
+	ProxyMode     string      `json:"proxy_mode"`
+	PrivateKey    string      `json:"private_key"`
 }
 
 func (q *Queries) GetApplicationWithServer(ctx context.Context, id string) (GetApplicationWithServerRow, error) {
@@ -160,7 +161,8 @@ func (q *Queries) GetApplicationWithServer(ctx context.Context, id string) (GetA
 		&i.Host,
 		&i.ServerPort,
 		&i.SshUser,
-		&i.ProxyInstalled,
+		&i.ProxyStatus,
+		&i.ProxyMode,
 		&i.PrivateKey,
 	)
 	return i, err

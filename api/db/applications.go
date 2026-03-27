@@ -26,11 +26,11 @@ type Application struct {
 // ApplicationWithServer — dipakai saat deploy, satu query JOIN dapat semuanya
 type ApplicationWithServer struct {
 	Application
-	Host           string `json:"-"`
-	ServerPort     int32  `json:"-"`
-	SSHUser        string `json:"-"`
-	PrivateKey     string `json:"-"`
-	ProxyInstalled bool   `json:"-"`
+	Host        string `json:"-"`
+	ServerPort  int32  `json:"-"`
+	SSHUser     string `json:"-"`
+	PrivateKey  string `json:"-"`
+	ProxyStatus string `json:"-"`
 }
 
 func pgTextToStringPtr(t pgtype.Text) *string {
@@ -169,10 +169,10 @@ func GetApplicationWithServer(ctx context.Context, id string) (ApplicationWithSe
 			CreatedAt:     row.CreatedAt,
 			UpdatedAt:     row.UpdatedAt,
 		},
-		Host:           row.Host,
-		ServerPort:     row.ServerPort,
-		SSHUser:        row.SshUser,
-		PrivateKey:     privateKey,
-		ProxyInstalled: row.ProxyInstalled,
+		Host:        row.Host,
+		ServerPort:  row.ServerPort,
+		SSHUser:     row.SshUser,
+		PrivateKey:  privateKey,
+		ProxyStatus: row.ProxyStatus,
 	}, nil
 }
