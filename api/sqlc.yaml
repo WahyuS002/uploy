@@ -13,9 +13,6 @@ sql:
         overrides:
           - db_type: "timestamptz"
             go_type: "time.Time"
-          - db_type: "timestamptz"
-            go_type: "time.Time"
-            nullable: true
           - column: "deployment_logs.order"
             go_type: "int32"
           - column: "deployments.status"

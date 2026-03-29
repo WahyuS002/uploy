@@ -131,6 +131,19 @@ type AuthResponse struct {
 	Workspace Workspace `json:"workspace"`
 }
 
+// CheckConnectionRequest defines model for CheckConnectionRequest.
+type CheckConnectionRequest struct {
+	Host     string `json:"host"`
+	Port     *int   `json:"port,omitempty"`
+	SshKeyId string `json:"ssh_key_id"`
+	SshUser  string `json:"ssh_user"`
+}
+
+// CheckConnectionResponse defines model for CheckConnectionResponse.
+type CheckConnectionResponse struct {
+	Ok bool `json:"ok"`
+}
+
 // CreateApplicationRequest defines model for CreateApplicationRequest.
 type CreateApplicationRequest struct {
 	ContainerName string `json:"container_name"`
@@ -184,6 +197,11 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// GenerateSSHKeyRequest defines model for GenerateSSHKeyRequest.
+type GenerateSSHKeyRequest struct {
+	Name string `json:"name"`
+}
+
 // LogEntry defines model for LogEntry.
 type LogEntry struct {
 	CreatedAt time.Time    `json:"created_at"`
@@ -212,6 +230,9 @@ type SSHKeyResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 	Id        string    `json:"id"`
 	Name      string    `json:"name"`
+
+	// PublicKey OpenSSH authorized_keys format public key derived from the stored private key
+	PublicKey string `json:"public_key"`
 }
 
 // ServerResponse defines model for ServerResponse.
@@ -293,8 +314,14 @@ type CreateDeploymentJSONRequestBody = DeployRequest
 // CreateServerJSONRequestBody defines body for CreateServer for application/json ContentType.
 type CreateServerJSONRequestBody = CreateServerRequest
 
+// CheckConnectionJSONRequestBody defines body for CheckConnection for application/json ContentType.
+type CheckConnectionJSONRequestBody = CheckConnectionRequest
+
 // CreateSSHKeyJSONRequestBody defines body for CreateSSHKey for application/json ContentType.
 type CreateSSHKeyJSONRequestBody = CreateSSHKeyRequest
+
+// GenerateSSHKeyJSONRequestBody defines body for GenerateSSHKey for application/json ContentType.
+type GenerateSSHKeyJSONRequestBody = GenerateSSHKeyRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -349,12 +376,18 @@ type ServerInterface interface {
 	// Register a new server
 	// (POST /api/servers)
 	CreateServer(w http.ResponseWriter, r *http.Request)
+	// Test SSH connectivity to a server
+	// (POST /api/servers/check-connection)
+	CheckConnection(w http.ResponseWriter, r *http.Request)
 	// List stored SSH keys
 	// (GET /api/ssh-keys)
 	ListSSHKeys(w http.ResponseWriter, r *http.Request)
 	// Store an SSH private key
 	// (POST /api/ssh-keys)
 	CreateSSHKey(w http.ResponseWriter, r *http.Request)
+	// Generate a new Ed25519 SSH keypair
+	// (POST /api/ssh-keys/generate)
+	GenerateSSHKey(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -802,6 +835,26 @@ func (siw *ServerInterfaceWrapper) CreateServer(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// CheckConnection operation middleware
+func (siw *ServerInterfaceWrapper) CheckConnection(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckConnection(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSSHKeys operation middleware
 func (siw *ServerInterfaceWrapper) ListSSHKeys(w http.ResponseWriter, r *http.Request) {
 
@@ -833,6 +886,26 @@ func (siw *ServerInterfaceWrapper) CreateSSHKey(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateSSHKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GenerateSSHKey operation middleware
+func (siw *ServerInterfaceWrapper) GenerateSSHKey(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GenerateSSHKey(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -979,8 +1052,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/deployments/{id}/logs", wrapper.GetDeploymentLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers", wrapper.ListServers)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers", wrapper.CreateServer)
+	m.HandleFunc("POST "+options.BaseURL+"/api/servers/check-connection", wrapper.CheckConnection)
 	m.HandleFunc("GET "+options.BaseURL+"/api/ssh-keys", wrapper.ListSSHKeys)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys", wrapper.CreateSSHKey)
+	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys/generate", wrapper.GenerateSSHKey)
 
 	return m
 }

@@ -11,7 +11,52 @@ import (
 )
 
 type Client struct {
-	client *gossh.Client
+	client    *gossh.Client
+	user      string
+	dockerBin string // detected by DetectDocker: "docker" or "sudo -n docker"
+}
+
+// DockerBin returns the detected docker command prefix.
+// Must call DetectDocker first; defaults to "docker" if not called.
+func (c *Client) DockerBin() string {
+	if c.dockerBin == "" {
+		return "docker"
+	}
+	return c.dockerBin
+}
+
+// IsRoot reports whether the SSH user is root.
+func (c *Client) IsRoot() bool {
+	return c.user == "root"
+}
+
+// DetectDocker probes whether docker is accessible directly or via sudo -n.
+// Returns an error if neither works.
+func (c *Client) DetectDocker() error {
+	// Try direct access first (root, docker group, rootless)
+	if err := c.runProbe("docker info >/dev/null 2>&1"); err == nil {
+		c.dockerBin = "docker"
+		return nil
+	}
+
+	// Try sudo -n (non-interactive, fails fast if password required)
+	if c.user != "root" {
+		if err := c.runProbe("sudo -n docker info >/dev/null 2>&1"); err == nil {
+			c.dockerBin = "sudo -n docker"
+			return nil
+		}
+	}
+
+	return fmt.Errorf("docker is not accessible for user %q: tried direct and sudo -n", c.user)
+}
+
+func (c *Client) runProbe(cmd string) error {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	return session.Run(cmd)
 }
 
 type ServerConfig struct {
@@ -48,7 +93,7 @@ func NewClient(cfg ServerConfig) (*Client, error) {
 	}
 
 	// TODO: Return nil explicitly for clarity.
-	return &Client{client: client}, err
+	return &Client{client: client, user: cfg.User}, err
 }
 
 func (c *Client) Close() {

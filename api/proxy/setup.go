@@ -16,26 +16,28 @@ const traefikImage = "traefik:v3.6"
 
 // EnsureProxy ensures Traefik compose file exists and the service is running.
 func EnsureProxy(client *ssh.Client) error {
+	docker := client.DockerBin()
+
 	// 1. docker compose must be available
-	if err := runSimple(client, "docker compose version >/dev/null 2>&1"); err != nil {
+	if err := runSimple(client, docker+" compose version >/dev/null 2>&1"); err != nil {
 		return fmt.Errorf("docker compose not available: %w", err)
 	}
 
 	// 2. Create Docker network
 	if err := runIgnoreError(client, fmt.Sprintf(
-		"docker network create %s 2>/dev/null || true", networkName,
+		"%s network create %s 2>/dev/null || true", docker, networkName,
 	)); err != nil {
 		return fmt.Errorf("create network: %w", err)
 	}
 
-	// 3. Setup directory + acme.json
+	// 3. Setup directory + acme.json (each command retries with sudo -n on failure)
 	setupCmds := []string{
 		fmt.Sprintf("mkdir -p %s", proxyBaseDir),
 		fmt.Sprintf("touch %s/acme.json", proxyBaseDir),
 		fmt.Sprintf("chmod 600 %s/acme.json", proxyBaseDir),
 	}
 	for _, cmd := range setupCmds {
-		if err := runSimple(client, cmd); err != nil {
+		if err := runElevated(client, cmd); err != nil {
 			return fmt.Errorf("setup dirs: %w", err)
 		}
 	}
@@ -71,13 +73,19 @@ networks:
     external: true
 `, traefikImage, proxyContainerName, networkName, proxyBaseDir, networkName, networkName)
 
-	writeCmd := fmt.Sprintf("cat <<'EOF' > %s\n%s\nEOF", composeFilePath, composeContent)
+	writeCmd := fmt.Sprintf("cat <<'EOF' | tee %s >/dev/null\n%s\nEOF", composeFilePath, composeContent)
+	writeCmdSudo := fmt.Sprintf("cat <<'EOF' | sudo -n tee %s >/dev/null\n%s\nEOF", composeFilePath, composeContent)
 	if err := runSimple(client, writeCmd); err != nil {
-		return fmt.Errorf("write compose file: %w", err)
+		if client.IsRoot() {
+			return fmt.Errorf("write compose file: %w", err)
+		}
+		if err := runSimple(client, writeCmdSudo); err != nil {
+			return fmt.Errorf("write compose file: %w", err)
+		}
 	}
 
 	// 5. Start / reconcile Traefik via Compose
-	upCmd := fmt.Sprintf("docker compose -f %s up -d", composeFilePath)
+	upCmd := fmt.Sprintf("%s compose -f %s up -d", docker, composeFilePath)
 	if err := runSimple(client, upCmd); err != nil {
 		return fmt.Errorf("compose up: %w", err)
 	}
@@ -96,7 +104,7 @@ networks:
 
 func isContainerRunning(client *ssh.Client, name string) (bool, error) {
 	stdoutCh, _, done := client.StreamCommand(
-		fmt.Sprintf("docker inspect -f '{{.State.Running}}' %s 2>/dev/null || echo false", name),
+		fmt.Sprintf("%s inspect -f '{{.State.Running}}' %s 2>/dev/null || echo false", client.DockerBin(), name),
 	)
 
 	var output string
@@ -116,6 +124,17 @@ func drainBoth(stdoutCh, stderrCh <-chan string) {
 	go func() { defer wg.Done(); for range stdoutCh {} }()
 	go func() { defer wg.Done(); for range stderrCh {} }()
 	wg.Wait()
+}
+
+// runElevated tries cmd directly; for non-root users, retries with sudo -n on failure.
+func runElevated(client *ssh.Client, cmd string) error {
+	if err := runSimple(client, cmd); err == nil {
+		return nil
+	}
+	if client.IsRoot() {
+		return runSimple(client, cmd)
+	}
+	return runSimple(client, "sudo -n "+cmd)
 }
 
 func runSimple(client *ssh.Client, cmd string) error {

@@ -222,6 +222,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/servers/check-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test SSH connectivity to a server */
+        post: operations["checkConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ssh-keys": {
         parameters: {
             query?: never;
@@ -234,6 +251,23 @@ export interface paths {
         put?: never;
         /** Store an SSH private key */
         post: operations["createSSHKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ssh-keys/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate a new Ed25519 SSH keypair */
+        post: operations["generateSSHKey"];
         delete?: never;
         options?: never;
         head?: never;
@@ -288,9 +322,24 @@ export interface components {
             name: string;
             private_key: string;
         };
+        GenerateSSHKeyRequest: {
+            name: string;
+        };
+        CheckConnectionRequest: {
+            host: string;
+            /** @default 22 */
+            port: number;
+            ssh_user: string;
+            ssh_key_id: string;
+        };
+        CheckConnectionResponse: {
+            ok: boolean;
+        };
         SSHKeyResponse: {
             id: string;
             name: string;
+            /** @description OpenSSH authorized_keys format public key derived from the stored private key */
+            public_key: string;
             /** Format: date-time */
             created_at: string;
         };
@@ -1270,6 +1319,75 @@ export interface operations {
             };
         };
     };
+    checkConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Connection successful */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckConnectionResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description SSH connection test failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listSSHKeys: {
         parameters: {
             query?: never;
@@ -1331,6 +1449,66 @@ export interface operations {
                 };
             };
             /** @description Invalid request or key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    generateSSHKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateSSHKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description SSH keypair generated */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHKeyResponse"];
+                };
+            };
+            /** @description Invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;

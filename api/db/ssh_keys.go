@@ -60,8 +60,32 @@ func GetSSHKeyByID(ctx context.Context, id string) (SSHKey, error) {
 	return result, nil
 }
 
+// ListSSHKeysByWorkspace fetches keys with decrypted private keys (for owner flows that derive public keys).
 func ListSSHKeysByWorkspace(ctx context.Context, workspaceID string) ([]SSHKey, error) {
 	rows, err := Queries.ListSSHKeysByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]SSHKey, len(rows))
+	for i, r := range rows {
+		decrypted, err := crypto.Decrypt(r.PrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt private key for %s: %w", r.ID, err)
+		}
+		keys[i] = SSHKey{
+			ID:          r.ID,
+			Name:        r.Name,
+			PrivateKey:  decrypted,
+			WorkspaceID: r.WorkspaceID,
+			CreatedAt:   r.CreatedAt,
+		}
+	}
+	return keys, nil
+}
+
+// ListSSHKeyMetadataByWorkspace fetches keys without private key material (for non-owner listing).
+func ListSSHKeyMetadataByWorkspace(ctx context.Context, workspaceID string) ([]SSHKey, error) {
+	rows, err := Queries.ListSSHKeyMetadataByWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, err
 	}

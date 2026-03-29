@@ -674,6 +674,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/servers/check-connection:
+    post:
+      operationId: checkConnection
+      summary: Test SSH connectivity to a server
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckConnectionRequest"
+      responses:
+        "200":
+          description: Connection successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckConnectionResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: SSH connection test failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/ssh-keys:
     post:
       operationId: createSSHKey
@@ -733,6 +783,50 @@ paths:
                   $ref: "#/components/schemas/SSHKeyResponse"
         "401":
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/ssh-keys/generate:
+    post:
+      operationId: generateSSHKey
+      summary: Generate a new Ed25519 SSH keypair
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateSSHKeyRequest"
+      responses:
+        "201":
+          description: SSH keypair generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SSHKeyResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
           content:
             application/json:
               schema:
@@ -869,17 +963,54 @@ components:
         private_key:
           type: string
 
+    GenerateSSHKeyRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    CheckConnectionRequest:
+      type: object
+      required:
+        - host
+        - ssh_user
+        - ssh_key_id
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          default: 22
+        ssh_user:
+          type: string
+        ssh_key_id:
+          type: string
+
+    CheckConnectionResponse:
+      type: object
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+
     SSHKeyResponse:
       type: object
       required:
         - id
         - name
+        - public_key
         - created_at
       properties:
         id:
           type: string
         name:
           type: string
+        public_key:
+          type: string
+          description: "OpenSSH authorized_keys format public key derived from the stored private key"
         created_at:
           type: string
           format: date-time

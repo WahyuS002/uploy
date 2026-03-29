@@ -7,6 +7,11 @@ SELECT id, name, private_key, workspace_id, created_at
 FROM ssh_keys WHERE id = $1;
 
 -- name: ListSSHKeysByWorkspace :many
+SELECT id, name, private_key, workspace_id, created_at
+FROM ssh_keys WHERE workspace_id = $1
+ORDER BY created_at DESC;
+
+-- name: ListSSHKeyMetadataByWorkspace :many
 SELECT id, name, workspace_id, created_at
 FROM ssh_keys WHERE workspace_id = $1
 ORDER BY created_at DESC;

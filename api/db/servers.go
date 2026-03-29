@@ -30,11 +30,11 @@ type ServerWithKey struct {
 	PrivateKey string `json:"-"`
 }
 
-func timeToPtr(t time.Time) *time.Time {
-	if t.IsZero() {
+func timestamptzToPtr(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
 		return nil
 	}
-	return &t
+	return &t.Time
 }
 
 func CreateServer(ctx context.Context, name, host string, port int32, sshUser, sshKeyID, workspaceID string) (AppServer, error) {
@@ -59,7 +59,7 @@ func CreateServer(ctx context.Context, name, host string, port int32, sshUser, s
 		WorkspaceID:        s.WorkspaceID,
 		ProxyStatus:        s.ProxyStatus,
 		ProxyMode:          s.ProxyMode,
-		ProxyLastCheckedAt: timeToPtr(s.ProxyLastCheckedAt),
+		ProxyLastCheckedAt: timestamptzToPtr(s.ProxyLastCheckedAt),
 		ProxyLastError:     pgTextToStringPtr(s.ProxyLastError),
 		CreatedAt:          s.CreatedAt,
 	}, nil
@@ -80,7 +80,7 @@ func GetServerByID(ctx context.Context, id string) (AppServer, error) {
 		WorkspaceID:        s.WorkspaceID,
 		ProxyStatus:        s.ProxyStatus,
 		ProxyMode:          s.ProxyMode,
-		ProxyLastCheckedAt: timeToPtr(s.ProxyLastCheckedAt),
+		ProxyLastCheckedAt: timestamptzToPtr(s.ProxyLastCheckedAt),
 		ProxyLastError:     pgTextToStringPtr(s.ProxyLastError),
 		CreatedAt:          s.CreatedAt,
 	}, nil
@@ -103,7 +103,7 @@ func ListServersByWorkspace(ctx context.Context, workspaceID string) ([]AppServe
 			WorkspaceID:        r.WorkspaceID,
 			ProxyStatus:        r.ProxyStatus,
 			ProxyMode:          r.ProxyMode,
-			ProxyLastCheckedAt: timeToPtr(r.ProxyLastCheckedAt),
+			ProxyLastCheckedAt: timestamptzToPtr(r.ProxyLastCheckedAt),
 			ProxyLastError:     pgTextToStringPtr(r.ProxyLastError),
 			CreatedAt:          r.CreatedAt,
 		}

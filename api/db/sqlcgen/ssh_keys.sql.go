@@ -52,31 +52,63 @@ func (q *Queries) GetSSHKeyByID(ctx context.Context, id string) (SshKey, error) 
 	return i, err
 }
 
-const listSSHKeysByWorkspace = `-- name: ListSSHKeysByWorkspace :many
+const listSSHKeyMetadataByWorkspace = `-- name: ListSSHKeyMetadataByWorkspace :many
 SELECT id, name, workspace_id, created_at
 FROM ssh_keys WHERE workspace_id = $1
 ORDER BY created_at DESC
 `
 
-type ListSSHKeysByWorkspaceRow struct {
+type ListSSHKeyMetadataByWorkspaceRow struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	WorkspaceID string    `json:"workspace_id"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func (q *Queries) ListSSHKeysByWorkspace(ctx context.Context, workspaceID string) ([]ListSSHKeysByWorkspaceRow, error) {
+func (q *Queries) ListSSHKeyMetadataByWorkspace(ctx context.Context, workspaceID string) ([]ListSSHKeyMetadataByWorkspaceRow, error) {
+	rows, err := q.db.Query(ctx, listSSHKeyMetadataByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSSHKeyMetadataByWorkspaceRow{}
+	for rows.Next() {
+		var i ListSSHKeyMetadataByWorkspaceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.WorkspaceID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSSHKeysByWorkspace = `-- name: ListSSHKeysByWorkspace :many
+SELECT id, name, private_key, workspace_id, created_at
+FROM ssh_keys WHERE workspace_id = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListSSHKeysByWorkspace(ctx context.Context, workspaceID string) ([]SshKey, error) {
 	rows, err := q.db.Query(ctx, listSSHKeysByWorkspace, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListSSHKeysByWorkspaceRow{}
+	items := []SshKey{}
 	for rows.Next() {
-		var i ListSSHKeysByWorkspaceRow
+		var i SshKey
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
+			&i.PrivateKey,
 			&i.WorkspaceID,
 			&i.CreatedAt,
 		); err != nil {

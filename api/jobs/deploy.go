@@ -84,8 +84,15 @@ func RunDeploy(cfg DeployConfig) {
 	}
 	defer client.Close()
 
+	if err := client.DetectDocker(); err != nil {
+		failDeploy(cfg.DeploymentID, err.Error())
+		return
+	}
+
+	docker := client.DockerBin()
+
 	// step 1: docker pull
-	if !runStep(ctx, client, cfg.DeploymentID, "docker pull "+cfg.Image) {
+	if !runStep(ctx, client, cfg.DeploymentID, docker+" pull "+cfg.Image) {
 		return
 	}
 
@@ -130,7 +137,7 @@ func RunDeploy(cfg DeployConfig) {
 	}
 
 	// step 4: docker run dengan env vars
-	if !runStep(ctx, client, cfg.DeploymentID, buildDockerRunCmd(cfg)) {
+	if !runStep(ctx, client, cfg.DeploymentID, buildDockerRunCmd(docker, cfg)) {
 		return
 	}
 
@@ -163,13 +170,13 @@ func RunDeploy(cfg DeployConfig) {
 	finishDeploy(cfg.DeploymentID, "success")
 }
 
-func buildDockerRunCmd(cfg DeployConfig) string {
+func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 	var args string
 
 	if cfg.FQDN != "" {
 		// Proxy mode: container on "uploy" network, no host port mapping.
 		// Traefik forwards to the container's internal port (80).
-		args = fmt.Sprintf("docker run -d --name %s --network uploy", cfg.ContainerName)
+		args = fmt.Sprintf("%s run -d --name %s --network uploy", docker, cfg.ContainerName)
 
 		routerName := strings.ReplaceAll(cfg.ContainerName, ".", "-")
 		args += " --label traefik.enable=true"
@@ -180,7 +187,7 @@ func buildDockerRunCmd(cfg DeployConfig) string {
 		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=80", routerName)
 	} else {
 		// Direct mode: map host port to container port 80
-		args = fmt.Sprintf("docker run -d --name %s -p %d:80", cfg.ContainerName, cfg.Port)
+		args = fmt.Sprintf("%s run -d --name %s -p %d:80", docker, cfg.ContainerName, cfg.Port)
 	}
 
 	for _, env := range cfg.EnvVars {
@@ -220,12 +227,14 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 }
 
 func stopAndRemoveContainer(ctx context.Context, client *ssh.Client, deploymentID, containerName string) bool {
-	stopCmd := fmt.Sprintf("docker stop %s 2>/dev/null || true", containerName)
+	docker := client.DockerBin()
+
+	stopCmd := fmt.Sprintf("%s stop %s 2>/dev/null || true", docker, containerName)
 	if !runStep(ctx, client, deploymentID, stopCmd) {
 		return false
 	}
 
-	rmCmd := fmt.Sprintf("docker rm %s 2>/dev/null || true", containerName)
+	rmCmd := fmt.Sprintf("%s rm %s 2>/dev/null || true", docker, containerName)
 	if !runStep(ctx, client, deploymentID, rmCmd) {
 		return false
 	}
@@ -261,7 +270,7 @@ func checkProxyPortConflicts(client *ssh.Client, currentContainer string) (bool,
 }
 
 func publishedPortOwner(client *ssh.Client, port int) (string, error) {
-	lines, err := captureStdoutLines(client, fmt.Sprintf("docker ps --filter publish=%d --format '{{.Names}}'", port))
+	lines, err := captureStdoutLines(client, fmt.Sprintf("%s ps --filter publish=%d --format '{{.Names}}'", client.DockerBin(), port))
 	if err != nil {
 		return "", err
 	}

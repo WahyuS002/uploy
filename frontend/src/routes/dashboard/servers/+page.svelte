@@ -15,10 +15,52 @@
 	let sshKeyId = $state('');
 	let error = $state('');
 	let loading = $state(false);
+	let copied = $state(false);
+
+	// Check connection state
+	let checking = $state(false);
+	let verified = $state<{ host: string; port: number; sshUser: string; sshKeyId: string } | null>(
+		null
+	);
+
+	let selectedKeyPublicKey = $derived(keys.find((k) => k.id === sshKeyId)?.public_key ?? '');
+
+	let isVerified = $derived(
+		verified !== null &&
+			verified.host === host &&
+			verified.port === port &&
+			verified.sshUser === sshUser &&
+			verified.sshKeyId === sshKeyId
+	);
+
+	let canCheckConnection = $derived(
+		host.trim() !== '' && sshUser.trim() !== '' && sshKeyId !== '' && !checking
+	);
 
 	const api = createApiClient();
 
+	async function checkConnection() {
+		error = '';
+		checking = true;
+		verified = null;
+		try {
+			const { error: err } = await api.POST('/api/servers/check-connection', {
+				body: { host, port, ssh_user: sshUser, ssh_key_id: sshKeyId }
+			});
+			if (err) {
+				error = (err as { error: string }).error;
+				return;
+			}
+			verified = { host, port, sshUser, sshKeyId };
+		} catch {
+			error = 'Network error, please try again';
+		} finally {
+			checking = false;
+		}
+	}
+
 	async function createServer() {
+		if (!isVerified) return;
 		error = '';
 		loading = true;
 		try {
@@ -34,12 +76,19 @@
 			port = 22;
 			sshUser = 'root';
 			sshKeyId = '';
+			verified = null;
 			await invalidateAll();
 		} catch {
 			error = 'Network error, please try again';
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function copyPublicKey(text: string) {
+		await navigator.clipboard.writeText(text);
+		copied = true;
+		setTimeout(() => (copied = false), 2000);
 	}
 </script>
 
@@ -105,17 +154,53 @@
 				</select>
 			</label>
 
+			{#if selectedKeyPublicKey}
+				<div class="rounded border border-blue-200 bg-blue-50 p-3">
+					<p class="mb-1 text-xs font-medium text-blue-800">
+						Public key (add to <code class="rounded bg-blue-100 px-1">~/.ssh/authorized_keys</code>
+						on remote server):
+					</p>
+					<div class="flex items-start gap-2">
+						<pre
+							class="flex-1 overflow-x-auto rounded bg-white p-2 font-mono text-xs break-all whitespace-pre-wrap">{selectedKeyPublicKey}</pre>
+						<button
+							type="button"
+							class="shrink-0 cursor-pointer rounded border px-2 py-1 text-xs hover:bg-gray-50"
+							onclick={() => copyPublicKey(selectedKeyPublicKey)}
+						>
+							{copied ? 'Copied!' : 'Copy'}
+						</button>
+					</div>
+				</div>
+			{/if}
+
 			{#if error}
 				<p class="text-sm text-red-600">{error}</p>
 			{/if}
 
-			<button
-				type="submit"
-				disabled={loading}
-				class="cursor-pointer rounded-sm bg-black p-2 text-white disabled:opacity-50"
-			>
-				{loading ? 'Testing & saving...' : 'Add Server'}
-			</button>
+			<div class="flex gap-2">
+				<button
+					type="button"
+					disabled={!canCheckConnection}
+					class="cursor-pointer rounded-sm border border-black px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+					onclick={checkConnection}
+				>
+					{#if checking}
+						Checking...
+					{:else if isVerified}
+						Connected
+					{:else}
+						Check Connection
+					{/if}
+				</button>
+				<button
+					type="submit"
+					disabled={loading || !isVerified}
+					class="cursor-pointer rounded-sm bg-black px-3 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					{loading ? 'Saving...' : 'Add Server'}
+				</button>
+			</div>
 		</form>
 	{/if}
 
@@ -146,10 +231,14 @@
 									class="rounded px-2 py-0.5 text-xs font-medium"
 									class:bg-green-100={server.proxy_status === 'ready'}
 									class:text-green-700={server.proxy_status === 'ready'}
-									class:bg-red-100={server.proxy_status === 'port_conflict' || server.proxy_status === 'degraded'}
-									class:text-red-700={server.proxy_status === 'port_conflict' || server.proxy_status === 'degraded'}
-									class:bg-yellow-100={server.proxy_status === 'tls_pending' || server.proxy_status === 'not_configured'}
-									class:text-yellow-700={server.proxy_status === 'tls_pending' || server.proxy_status === 'not_configured'}
+									class:bg-red-100={server.proxy_status === 'port_conflict' ||
+										server.proxy_status === 'degraded'}
+									class:text-red-700={server.proxy_status === 'port_conflict' ||
+										server.proxy_status === 'degraded'}
+									class:bg-yellow-100={server.proxy_status === 'tls_pending' ||
+										server.proxy_status === 'not_configured'}
+									class:text-yellow-700={server.proxy_status === 'tls_pending' ||
+										server.proxy_status === 'not_configured'}
 								>
 									{server.proxy_status.replace('_', ' ')}
 								</span>
@@ -162,9 +251,7 @@
 								{/if}
 							{/if}
 						</td>
-						<td class="py-2 text-gray-500"
-							>{new Date(server.created_at).toLocaleDateString()}</td
-						>
+						<td class="py-2 text-gray-500">{new Date(server.created_at).toLocaleDateString()}</td>
 					</tr>
 				{/each}
 			</tbody>

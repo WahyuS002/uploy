@@ -59,18 +59,18 @@ type OauthIdentity struct {
 }
 
 type Server struct {
-	ID                 string      `json:"id"`
-	Name               string      `json:"name"`
-	Host               string      `json:"host"`
-	Port               int32       `json:"port"`
-	SshUser            string      `json:"ssh_user"`
-	SshKeyID           string      `json:"ssh_key_id"`
-	WorkspaceID        string      `json:"workspace_id"`
-	CreatedAt          time.Time   `json:"created_at"`
-	ProxyStatus        string      `json:"proxy_status"`
-	ProxyLastCheckedAt time.Time   `json:"proxy_last_checked_at"`
-	ProxyLastError     pgtype.Text `json:"proxy_last_error"`
-	ProxyMode          string      `json:"proxy_mode"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	Host               string             `json:"host"`
+	Port               int32              `json:"port"`
+	SshUser            string             `json:"ssh_user"`
+	SshKeyID           string             `json:"ssh_key_id"`
+	WorkspaceID        string             `json:"workspace_id"`
+	CreatedAt          time.Time          `json:"created_at"`
+	ProxyStatus        string             `json:"proxy_status"`
+	ProxyLastCheckedAt pgtype.Timestamptz `json:"proxy_last_checked_at"`
+	ProxyLastError     pgtype.Text        `json:"proxy_last_error"`
+	ProxyMode          string             `json:"proxy_mode"`
 }
 
 type Session struct {
