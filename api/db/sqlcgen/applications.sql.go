@@ -8,40 +8,24 @@ package sqlcgen
 import (
 	"context"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createApplication = `-- name: CreateApplication :one
-INSERT INTO applications (name, image, container_name, port, server_id, workspace_id, fqdn)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, image, container_name, port, fqdn, server_id, workspace_id, created_at, updated_at
+INSERT INTO applications (name, image, container_name, port, server_id, workspace_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, name, image, container_name, port, server_id, workspace_id, created_at, updated_at
 `
 
 type CreateApplicationParams struct {
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	ServerID      string      `json:"server_id"`
-	WorkspaceID   string      `json:"workspace_id"`
-	Fqdn          pgtype.Text `json:"fqdn"`
+	Name          string `json:"name"`
+	Image         string `json:"image"`
+	ContainerName string `json:"container_name"`
+	Port          int32  `json:"port"`
+	ServerID      string `json:"server_id"`
+	WorkspaceID   string `json:"workspace_id"`
 }
 
-type CreateApplicationRow struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	Fqdn          pgtype.Text `json:"fqdn"`
-	ServerID      string      `json:"server_id"`
-	WorkspaceID   string      `json:"workspace_id"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-}
-
-func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationParams) (CreateApplicationRow, error) {
+func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationParams) (Application, error) {
 	row := q.db.QueryRow(ctx, createApplication,
 		arg.Name,
 		arg.Image,
@@ -49,16 +33,14 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		arg.Port,
 		arg.ServerID,
 		arg.WorkspaceID,
-		arg.Fqdn,
 	)
-	var i CreateApplicationRow
+	var i Application
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Image,
 		&i.ContainerName,
 		&i.Port,
-		&i.Fqdn,
 		&i.ServerID,
 		&i.WorkspaceID,
 		&i.CreatedAt,
@@ -77,33 +59,19 @@ func (q *Queries) DeleteApplication(ctx context.Context, id string) error {
 }
 
 const getApplicationByID = `-- name: GetApplicationByID :one
-SELECT id, name, image, container_name, port, fqdn, server_id, workspace_id, created_at, updated_at
+SELECT id, name, image, container_name, port, server_id, workspace_id, created_at, updated_at
 FROM applications WHERE id = $1
 `
 
-type GetApplicationByIDRow struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	Fqdn          pgtype.Text `json:"fqdn"`
-	ServerID      string      `json:"server_id"`
-	WorkspaceID   string      `json:"workspace_id"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-}
-
-func (q *Queries) GetApplicationByID(ctx context.Context, id string) (GetApplicationByIDRow, error) {
+func (q *Queries) GetApplicationByID(ctx context.Context, id string) (Application, error) {
 	row := q.db.QueryRow(ctx, getApplicationByID, id)
-	var i GetApplicationByIDRow
+	var i Application
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Image,
 		&i.ContainerName,
 		&i.Port,
-		&i.Fqdn,
 		&i.ServerID,
 		&i.WorkspaceID,
 		&i.CreatedAt,
@@ -114,10 +82,10 @@ func (q *Queries) GetApplicationByID(ctx context.Context, id string) (GetApplica
 
 const getApplicationWithServer = `-- name: GetApplicationWithServer :one
 SELECT
-    a.id, a.name, a.image, a.container_name, a.port, a.fqdn,
+    a.id, a.name, a.image, a.container_name, a.port,
     a.server_id, a.workspace_id, a.created_at, a.updated_at,
     s.host, s.port AS server_port, s.ssh_user,
-    s.proxy_status, s.proxy_mode,
+    s.proxy_status,
     k.private_key
 FROM applications a
 JOIN servers s ON s.id = a.server_id
@@ -126,22 +94,20 @@ WHERE a.id = $1
 `
 
 type GetApplicationWithServerRow struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	Fqdn          pgtype.Text `json:"fqdn"`
-	ServerID      string      `json:"server_id"`
-	WorkspaceID   string      `json:"workspace_id"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-	Host          string      `json:"host"`
-	ServerPort    int32       `json:"server_port"`
-	SshUser       string      `json:"ssh_user"`
-	ProxyStatus   string      `json:"proxy_status"`
-	ProxyMode     string      `json:"proxy_mode"`
-	PrivateKey    string      `json:"private_key"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Image         string    `json:"image"`
+	ContainerName string    `json:"container_name"`
+	Port          int32     `json:"port"`
+	ServerID      string    `json:"server_id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Host          string    `json:"host"`
+	ServerPort    int32     `json:"server_port"`
+	SshUser       string    `json:"ssh_user"`
+	ProxyStatus   string    `json:"proxy_status"`
+	PrivateKey    string    `json:"private_key"`
 }
 
 func (q *Queries) GetApplicationWithServer(ctx context.Context, id string) (GetApplicationWithServerRow, error) {
@@ -153,7 +119,6 @@ func (q *Queries) GetApplicationWithServer(ctx context.Context, id string) (GetA
 		&i.Image,
 		&i.ContainerName,
 		&i.Port,
-		&i.Fqdn,
 		&i.ServerID,
 		&i.WorkspaceID,
 		&i.CreatedAt,
@@ -162,46 +127,31 @@ func (q *Queries) GetApplicationWithServer(ctx context.Context, id string) (GetA
 		&i.ServerPort,
 		&i.SshUser,
 		&i.ProxyStatus,
-		&i.ProxyMode,
 		&i.PrivateKey,
 	)
 	return i, err
 }
 
 const listApplicationsByWorkspace = `-- name: ListApplicationsByWorkspace :many
-SELECT id, name, image, container_name, port, fqdn, server_id, workspace_id, created_at, updated_at
+SELECT id, name, image, container_name, port, server_id, workspace_id, created_at, updated_at
 FROM applications WHERE workspace_id = $1 ORDER BY created_at DESC
 `
 
-type ListApplicationsByWorkspaceRow struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	Fqdn          pgtype.Text `json:"fqdn"`
-	ServerID      string      `json:"server_id"`
-	WorkspaceID   string      `json:"workspace_id"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-}
-
-func (q *Queries) ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]ListApplicationsByWorkspaceRow, error) {
+func (q *Queries) ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]Application, error) {
 	rows, err := q.db.Query(ctx, listApplicationsByWorkspace, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListApplicationsByWorkspaceRow{}
+	items := []Application{}
 	for rows.Next() {
-		var i ListApplicationsByWorkspaceRow
+		var i Application
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.Image,
 			&i.ContainerName,
 			&i.Port,
-			&i.Fqdn,
 			&i.ServerID,
 			&i.WorkspaceID,
 			&i.CreatedAt,
@@ -219,35 +169,21 @@ func (q *Queries) ListApplicationsByWorkspace(ctx context.Context, workspaceID s
 
 const updateApplication = `-- name: UpdateApplication :one
 UPDATE applications
-SET name = $2, image = $3, container_name = $4, port = $5, server_id = $6, fqdn = $7, updated_at = NOW()
+SET name = $2, image = $3, container_name = $4, port = $5, server_id = $6, updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, image, container_name, port, fqdn, server_id, workspace_id, created_at, updated_at
+RETURNING id, name, image, container_name, port, server_id, workspace_id, created_at, updated_at
 `
 
 type UpdateApplicationParams struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	ServerID      string      `json:"server_id"`
-	Fqdn          pgtype.Text `json:"fqdn"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Image         string `json:"image"`
+	ContainerName string `json:"container_name"`
+	Port          int32  `json:"port"`
+	ServerID      string `json:"server_id"`
 }
 
-type UpdateApplicationRow struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	Fqdn          pgtype.Text `json:"fqdn"`
-	ServerID      string      `json:"server_id"`
-	WorkspaceID   string      `json:"workspace_id"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-}
-
-func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationParams) (UpdateApplicationRow, error) {
+func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationParams) (Application, error) {
 	row := q.db.QueryRow(ctx, updateApplication,
 		arg.ID,
 		arg.Name,
@@ -255,16 +191,14 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 		arg.ContainerName,
 		arg.Port,
 		arg.ServerID,
-		arg.Fqdn,
 	)
-	var i UpdateApplicationRow
+	var i Application
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Image,
 		&i.ContainerName,
 		&i.Port,
-		&i.Fqdn,
 		&i.ServerID,
 		&i.WorkspaceID,
 		&i.CreatedAt,

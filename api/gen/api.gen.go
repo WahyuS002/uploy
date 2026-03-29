@@ -19,6 +19,27 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
+// Defines values for ApplicationDomainResponseStatus.
+const (
+	ApplicationDomainResponseStatusError   ApplicationDomainResponseStatus = "error"
+	ApplicationDomainResponseStatusPending ApplicationDomainResponseStatus = "pending"
+	ApplicationDomainResponseStatusReady   ApplicationDomainResponseStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ApplicationDomainResponseStatus enum.
+func (e ApplicationDomainResponseStatus) Valid() bool {
+	switch e {
+	case ApplicationDomainResponseStatusError:
+		return true
+	case ApplicationDomainResponseStatusPending:
+		return true
+	case ApplicationDomainResponseStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeploymentResponseStatus.
 const (
 	Failed     DeploymentResponseStatus = "failed"
@@ -58,50 +79,45 @@ func (e LogEntryType) Valid() bool {
 	}
 }
 
-// Defines values for ServerResponseProxyMode.
-const (
-	Managed ServerResponseProxyMode = "managed"
-	None    ServerResponseProxyMode = "none"
-)
-
-// Valid indicates whether the value is a known member of the ServerResponseProxyMode enum.
-func (e ServerResponseProxyMode) Valid() bool {
-	switch e {
-	case Managed:
-		return true
-	case None:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ServerResponseProxyStatus.
 const (
-	Degraded      ServerResponseProxyStatus = "degraded"
-	NotConfigured ServerResponseProxyStatus = "not_configured"
-	PortConflict  ServerResponseProxyStatus = "port_conflict"
-	Ready         ServerResponseProxyStatus = "ready"
-	TlsPending    ServerResponseProxyStatus = "tls_pending"
+	ServerResponseProxyStatusDegraded      ServerResponseProxyStatus = "degraded"
+	ServerResponseProxyStatusNotConfigured ServerResponseProxyStatus = "not_configured"
+	ServerResponseProxyStatusPortConflict  ServerResponseProxyStatus = "port_conflict"
+	ServerResponseProxyStatusReady         ServerResponseProxyStatus = "ready"
 )
 
 // Valid indicates whether the value is a known member of the ServerResponseProxyStatus enum.
 func (e ServerResponseProxyStatus) Valid() bool {
 	switch e {
-	case Degraded:
+	case ServerResponseProxyStatusDegraded:
 		return true
-	case NotConfigured:
+	case ServerResponseProxyStatusNotConfigured:
 		return true
-	case PortConflict:
+	case ServerResponseProxyStatusPortConflict:
 		return true
-	case Ready:
-		return true
-	case TlsPending:
+	case ServerResponseProxyStatusReady:
 		return true
 	default:
 		return false
 	}
 }
+
+// ApplicationDomainResponse defines model for ApplicationDomainResponse.
+type ApplicationDomainResponse struct {
+	CreatedAt        time.Time                       `json:"created_at"`
+	Domain           string                          `json:"domain"`
+	Id               string                          `json:"id"`
+	IsPrimary        bool                            `json:"is_primary"`
+	LastError        *string                         `json:"last_error,omitempty"`
+	LastReconciledAt *time.Time                      `json:"last_reconciled_at,omitempty"`
+	ReadyAt          *time.Time                      `json:"ready_at,omitempty"`
+	Status           ApplicationDomainResponseStatus `json:"status"`
+	UpdatedAt        time.Time                       `json:"updated_at"`
+}
+
+// ApplicationDomainResponseStatus defines model for ApplicationDomainResponse.Status.
+type ApplicationDomainResponseStatus string
 
 // ApplicationEnvResponse defines model for ApplicationEnvResponse.
 type ApplicationEnvResponse struct {
@@ -116,7 +132,6 @@ type ApplicationEnvResponse struct {
 type ApplicationResponse struct {
 	ContainerName string    `json:"container_name"`
 	CreatedAt     time.Time `json:"created_at"`
-	Fqdn          *string   `json:"fqdn,omitempty"`
 	Id            string    `json:"id"`
 	Image         string    `json:"image"`
 	Name          string    `json:"name"`
@@ -147,13 +162,15 @@ type CheckConnectionResponse struct {
 // CreateApplicationRequest defines model for CreateApplicationRequest.
 type CreateApplicationRequest struct {
 	ContainerName string `json:"container_name"`
+	Image         string `json:"image"`
+	Name          string `json:"name"`
+	Port          int    `json:"port"`
+	ServerId      string `json:"server_id"`
+}
 
-	// Fqdn Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access.
-	Fqdn     *string `json:"fqdn,omitempty"`
-	Image    string  `json:"image"`
-	Name     string  `json:"name"`
-	Port     int     `json:"port"`
-	ServerId string  `json:"server_id"`
+// CreateDomainRequest defines model for CreateDomainRequest.
+type CreateDomainRequest struct {
+	Domain string `json:"domain"`
 }
 
 // CreateSSHKeyRequest defines model for CreateSSHKeyRequest.
@@ -237,21 +254,17 @@ type SSHKeyResponse struct {
 
 // ServerResponse defines model for ServerResponse.
 type ServerResponse struct {
-	CreatedAt          time.Time                 `json:"created_at"`
-	Host               string                    `json:"host"`
-	Id                 string                    `json:"id"`
-	Name               string                    `json:"name"`
-	Port               int                       `json:"port"`
-	ProxyLastCheckedAt *time.Time                `json:"proxy_last_checked_at,omitempty"`
-	ProxyLastError     *string                   `json:"proxy_last_error,omitempty"`
-	ProxyMode          ServerResponseProxyMode   `json:"proxy_mode"`
-	ProxyStatus        ServerResponseProxyStatus `json:"proxy_status"`
-	SshKeyId           string                    `json:"ssh_key_id"`
-	SshUser            string                    `json:"ssh_user"`
+	CreatedAt             time.Time                 `json:"created_at"`
+	Host                  string                    `json:"host"`
+	Id                    string                    `json:"id"`
+	Name                  string                    `json:"name"`
+	Port                  int                       `json:"port"`
+	ProxyLastError        *string                   `json:"proxy_last_error,omitempty"`
+	ProxyLastReconciledAt *time.Time                `json:"proxy_last_reconciled_at,omitempty"`
+	ProxyStatus           ServerResponseProxyStatus `json:"proxy_status"`
+	SshKeyId              string                    `json:"ssh_key_id"`
+	SshUser               string                    `json:"ssh_user"`
 }
-
-// ServerResponseProxyMode defines model for ServerResponse.ProxyMode.
-type ServerResponseProxyMode string
 
 // ServerResponseProxyStatus defines model for ServerResponse.ProxyStatus.
 type ServerResponseProxyStatus string
@@ -259,13 +272,15 @@ type ServerResponseProxyStatus string
 // UpdateApplicationRequest defines model for UpdateApplicationRequest.
 type UpdateApplicationRequest struct {
 	ContainerName string `json:"container_name"`
+	Image         string `json:"image"`
+	Name          string `json:"name"`
+	Port          int    `json:"port"`
+	ServerId      string `json:"server_id"`
+}
 
-	// Fqdn Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access.
-	Fqdn     *string `json:"fqdn,omitempty"`
-	Image    string  `json:"image"`
-	Name     string  `json:"name"`
-	Port     int     `json:"port"`
-	ServerId string  `json:"server_id"`
+// UpdateDomainRequest defines model for UpdateDomainRequest.
+type UpdateDomainRequest struct {
+	IsPrimary bool `json:"is_primary"`
 }
 
 // UpsertEnvRequest defines model for UpsertEnvRequest.
@@ -298,6 +313,12 @@ type CreateApplicationJSONRequestBody = CreateApplicationRequest
 
 // UpdateApplicationJSONRequestBody defines body for UpdateApplication for application/json ContentType.
 type UpdateApplicationJSONRequestBody = UpdateApplicationRequest
+
+// CreateApplicationDomainJSONRequestBody defines body for CreateApplicationDomain for application/json ContentType.
+type CreateApplicationDomainJSONRequestBody = CreateDomainRequest
+
+// UpdateApplicationDomainJSONRequestBody defines body for UpdateApplicationDomain for application/json ContentType.
+type UpdateApplicationDomainJSONRequestBody = UpdateDomainRequest
 
 // UpsertApplicationEnvJSONRequestBody defines body for UpsertApplicationEnv for application/json ContentType.
 type UpsertApplicationEnvJSONRequestBody = UpsertEnvRequest
@@ -343,6 +364,18 @@ type ServerInterface interface {
 	// List deployment history for an application
 	// (GET /api/applications/{id}/deployments)
 	ListApplicationDeployments(w http.ResponseWriter, r *http.Request, id string, params ListApplicationDeploymentsParams)
+	// List domains for an application
+	// (GET /api/applications/{id}/domains)
+	ListApplicationDomains(w http.ResponseWriter, r *http.Request, id string)
+	// Add a domain to an application
+	// (POST /api/applications/{id}/domains)
+	CreateApplicationDomain(w http.ResponseWriter, r *http.Request, id string)
+	// Remove a domain from an application
+	// (DELETE /api/applications/{id}/domains/{domainId})
+	DeleteApplicationDomain(w http.ResponseWriter, r *http.Request, id string, domainId string)
+	// Update domain settings
+	// (PUT /api/applications/{id}/domains/{domainId})
+	UpdateApplicationDomain(w http.ResponseWriter, r *http.Request, id string, domainId string)
 	// List environment variables for an application
 	// (GET /api/applications/{id}/envs)
 	ListApplicationEnvs(w http.ResponseWriter, r *http.Request, id string)
@@ -565,6 +598,148 @@ func (siw *ServerInterfaceWrapper) ListApplicationDeployments(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListApplicationDeployments(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListApplicationDomains operation middleware
+func (siw *ServerInterfaceWrapper) ListApplicationDomains(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListApplicationDomains(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateApplicationDomain operation middleware
+func (siw *ServerInterfaceWrapper) CreateApplicationDomain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateApplicationDomain(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteApplicationDomain operation middleware
+func (siw *ServerInterfaceWrapper) DeleteApplicationDomain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "domainId" -------------
+	var domainId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "domainId", r.PathValue("domainId"), &domainId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domainId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteApplicationDomain(w, r, id, domainId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateApplicationDomain operation middleware
+func (siw *ServerInterfaceWrapper) UpdateApplicationDomain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "domainId" -------------
+	var domainId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "domainId", r.PathValue("domainId"), &domainId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domainId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateApplicationDomain(w, r, id, domainId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1041,6 +1216,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}", wrapper.GetApplication)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/applications/{id}", wrapper.UpdateApplication)
 	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/deployments", wrapper.ListApplicationDeployments)
+	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/domains", wrapper.ListApplicationDomains)
+	m.HandleFunc("POST "+options.BaseURL+"/api/applications/{id}/domains", wrapper.CreateApplicationDomain)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/applications/{id}/domains/{domainId}", wrapper.DeleteApplicationDomain)
+	m.HandleFunc("PUT "+options.BaseURL+"/api/applications/{id}/domains/{domainId}", wrapper.UpdateApplicationDomain)
 	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/envs", wrapper.ListApplicationEnvs)
 	m.HandleFunc("POST "+options.BaseURL+"/api/applications/{id}/envs", wrapper.UpsertApplicationEnv)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/applications/{id}/envs/{key}", wrapper.DeleteApplicationEnv)

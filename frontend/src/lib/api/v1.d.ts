@@ -222,6 +222,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/applications/{id}/domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List domains for an application */
+        get: operations["listApplicationDomains"];
+        put?: never;
+        /** Add a domain to an application */
+        post: operations["createApplicationDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/applications/{id}/domains/{domainId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update domain settings */
+        put: operations["updateApplicationDomain"];
+        post?: never;
+        /** Remove a domain from an application */
+        delete: operations["deleteApplicationDomain"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/servers/check-connection": {
         parameters: {
             query?: never;
@@ -359,11 +395,9 @@ export interface components {
             ssh_user: string;
             ssh_key_id: string;
             /** @enum {string} */
-            proxy_status: "not_configured" | "ready" | "port_conflict" | "degraded" | "tls_pending";
-            /** @enum {string} */
-            proxy_mode: "none" | "managed";
+            proxy_status: "not_configured" | "ready" | "port_conflict" | "degraded";
             /** Format: date-time */
-            proxy_last_checked_at?: string;
+            proxy_last_reconciled_at?: string;
             proxy_last_error?: string;
             /** Format: date-time */
             created_at: string;
@@ -384,8 +418,6 @@ export interface components {
             container_name: string;
             port: number;
             server_id: string;
-            /** @description Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access. */
-            fqdn?: string;
         };
         UpdateApplicationRequest: {
             name: string;
@@ -393,8 +425,6 @@ export interface components {
             container_name: string;
             port: number;
             server_id: string;
-            /** @description Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access. */
-            fqdn?: string;
         };
         ApplicationResponse: {
             id: string;
@@ -403,7 +433,28 @@ export interface components {
             container_name: string;
             port: number;
             server_id: string;
-            fqdn?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateDomainRequest: {
+            domain: string;
+        };
+        UpdateDomainRequest: {
+            is_primary: boolean;
+        };
+        ApplicationDomainResponse: {
+            id: string;
+            domain: string;
+            is_primary: boolean;
+            /** @enum {string} */
+            status: "pending" | "ready" | "error";
+            last_error?: string;
+            /** Format: date-time */
+            last_reconciled_at?: string;
+            /** Format: date-time */
+            ready_at?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -1310,6 +1361,228 @@ export interface operations {
             };
             /** @description Internal server error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listApplicationDomains: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of domains */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDomainResponse"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Application not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createApplicationDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDomainRequest"];
+            };
+        };
+        responses: {
+            /** @description Domain added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDomainResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Application not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Domain already in use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateApplicationDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                domainId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDomainRequest"];
+            };
+        };
+        responses: {
+            /** @description Domain updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplicationDomainResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Domain not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteApplicationDomain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                domainId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Domain deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Domain not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

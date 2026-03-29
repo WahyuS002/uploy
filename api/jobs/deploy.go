@@ -19,11 +19,12 @@ const proxyContainerName = "uploy-proxy"
 
 type DeployConfig struct {
 	DeploymentID  string
+	ApplicationID string
 	Image         string
 	ContainerName string
 	Port          int
 	EnvVars       []db.EnvPair
-	FQDN          string
+	Domains       []string
 	ServerID      string
 	Server        ssh.ServerConfig
 }
@@ -75,6 +76,8 @@ func RunDeploy(cfg DeployConfig) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
+	hasDomains := len(cfg.Domains) > 0
+
 	appendLog(ctx, cfg.DeploymentID, "connecting to server...", "stdout")
 
 	client, err := ssh.NewClient(cfg.Server)
@@ -98,8 +101,8 @@ func RunDeploy(cfg DeployConfig) {
 
 	currentContainerRemoved := false
 
-	// step 2: if app has a domain, ensure proxy is running
-	if cfg.FQDN != "" {
+	// step 2: if app has domains, ensure proxy is running
+	if hasDomains {
 		releaseCurrent, err := checkProxyPortConflicts(client, cfg.ContainerName)
 		if err != nil {
 			errMsg := err.Error()
@@ -136,34 +139,58 @@ func RunDeploy(cfg DeployConfig) {
 		}
 	}
 
-	// step 4: docker run dengan env vars
+	// step 4: docker run with env vars
 	if !runStep(ctx, client, cfg.DeploymentID, buildDockerRunCmd(docker, cfg)) {
 		return
 	}
 
-	// step 5: after app container is running, reconcile proxy status.
-	// Poll for ACME certificate issuance (typically 10-30s after router becomes available).
-	if cfg.FQDN != "" {
-		newStatus := "tls_pending"
-		if proxy.HasCertificates(client) {
-			newStatus = "ready"
-		} else {
-			appendLog(ctx, cfg.DeploymentID, "waiting for TLS certificate...", "stdout")
-			for i := 0; i < 6; i++ {
-				time.Sleep(10 * time.Second)
-				if proxy.HasCertificates(client) {
-					newStatus = "ready"
-					break
-				}
-			}
-		}
-		if err := db.SetServerProxyReady(ctx, cfg.ServerID, newStatus); err != nil {
+	// step 5: after app container is running, reconcile proxy and domain status.
+	if hasDomains {
+		// Mark server proxy infra as ready
+		if err := db.SetServerProxyReady(ctx, cfg.ServerID, "ready"); err != nil {
 			log.Printf("SetServerProxyReady error: %v", err)
 		}
-		if newStatus == "tls_pending" {
-			appendLog(ctx, cfg.DeploymentID, "TLS certificate not yet available; status will update on next deploy", "stdout")
-		} else {
-			appendLog(ctx, cfg.DeploymentID, "TLS certificate ready", "stdout")
+
+		// Only poll domains that are not yet ready (pending or error).
+		// Domains already marked ready keep their status — certs persist across redeploys.
+		domainList, err := db.ListDomainsByApplication(ctx, cfg.ApplicationID)
+		if err != nil {
+			log.Printf("ListDomainsByApplication error: %v", err)
+		}
+
+		unresolvedDomains := make(map[string]string) // domain -> domainID
+		for _, d := range domainList {
+			if d.Status != "ready" {
+				unresolvedDomains[d.Domain] = d.ID
+			}
+		}
+
+		if len(unresolvedDomains) > 0 {
+			appendLog(ctx, cfg.DeploymentID, "waiting for TLS certificates...", "stdout")
+
+			for i := 0; i < 6 && len(unresolvedDomains) > 0; i++ {
+				if i > 0 {
+					time.Sleep(10 * time.Second)
+				}
+				for domain, domainID := range unresolvedDomains {
+					if proxy.HasCertificateForHostname(client, domain) {
+						if err := db.SetDomainReady(ctx, domainID); err != nil {
+							log.Printf("SetDomainReady %s error: %v", domain, err)
+						} else {
+							appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS ready for %s", domain), "stdout")
+						}
+						delete(unresolvedDomains, domain)
+					}
+				}
+			}
+
+			if len(unresolvedDomains) > 0 {
+				names := make([]string, 0, len(unresolvedDomains))
+				for domain := range unresolvedDomains {
+					names = append(names, domain)
+				}
+				appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS pending for: %s; will retry in background", strings.Join(names, ", ")), "stdout")
+			}
 		}
 	}
 
@@ -173,14 +200,22 @@ func RunDeploy(cfg DeployConfig) {
 func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 	var args string
 
-	if cfg.FQDN != "" {
+	if len(cfg.Domains) > 0 {
 		// Proxy mode: container on "uploy" network, no host port mapping.
 		// Traefik forwards to the container's internal port (80).
 		args = fmt.Sprintf("%s run -d --name %s --network uploy", docker, cfg.ContainerName)
 
 		routerName := strings.ReplaceAll(cfg.ContainerName, ".", "-")
+
+		// Build Host rule for all domains
+		hostRules := make([]string, len(cfg.Domains))
+		for i, domain := range cfg.Domains {
+			hostRules[i] = fmt.Sprintf("Host(`%s`)", domain)
+		}
+		hostRule := strings.Join(hostRules, " || ")
+
 		args += " --label traefik.enable=true"
-		args += fmt.Sprintf(" --label 'traefik.http.routers.%s.rule=Host(`%s`)'", routerName, cfg.FQDN)
+		args += fmt.Sprintf(" --label 'traefik.http.routers.%s.rule=%s'", routerName, hostRule)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.entrypoints=https", routerName)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls=true", routerName)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls.certresolver=letsencrypt", routerName)

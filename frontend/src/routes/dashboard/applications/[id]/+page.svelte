@@ -6,6 +6,7 @@
 	import type { PageData } from './$types';
 
 	type ApplicationResponse = components['schemas']['ApplicationResponse'];
+	type ApplicationDomainResponse = components['schemas']['ApplicationDomainResponse'];
 	type ApplicationEnvResponse = components['schemas']['ApplicationEnvResponse'];
 	type DeploymentResponse = components['schemas']['DeploymentResponse'];
 
@@ -14,6 +15,7 @@
 	let isOwner = $derived(data.workspace?.role === 'owner');
 
 	let app = $state<ApplicationResponse | null>(null);
+	let domains = $state<ApplicationDomainResponse[]>([]);
 	let envs = $state<ApplicationEnvResponse[]>([]);
 	let envsLoaded = $state(false);
 	let deploymentId = $state<string | null>(null);
@@ -22,10 +24,9 @@
 	let deployments = $state<DeploymentResponse[]>([]);
 
 	// Domain form
-	let editingDomain = $state(false);
 	let domainInput = $state('');
 	let domainError = $state('');
-	let domainSaving = $state(false);
+	let domainAdding = $state(false);
 	let needsRedeploy = $state(false);
 
 	// Env form
@@ -42,6 +43,13 @@
 		if (data) app = data;
 	}
 
+	async function loadDomains() {
+		const { data } = await api.GET('/api/applications/{id}/domains', {
+			params: { path: { id: appId } }
+		});
+		if (data) domains = data;
+	}
+
 	async function loadEnvs() {
 		const { data, error } = await api.GET('/api/applications/{id}/envs', {
 			params: { path: { id: appId } }
@@ -50,7 +58,6 @@
 			envs = data;
 			envsLoaded = true;
 		} else if (error) {
-			// 403 for viewers — env section will not render
 			envsLoaded = false;
 		}
 	}
@@ -85,36 +92,36 @@
 		}
 	}
 
-	async function updateDomain() {
-		if (!app) return;
+	async function addDomain() {
 		domainError = '';
-		domainSaving = true;
+		domainAdding = true;
 		try {
-			const { data, error } = await api.PUT('/api/applications/{id}', {
+			const { data, error } = await api.POST('/api/applications/{id}/domains', {
 				params: { path: { id: appId } },
-				body: {
-					name: app.name,
-					image: app.image,
-					container_name: app.container_name,
-					port: app.port,
-					server_id: app.server_id,
-					fqdn: domainInput.trim() || ''
-				}
+				body: { domain: domainInput.trim() }
 			});
 			if (error) {
 				domainError = (error as { error: string }).error;
 				return;
 			}
 			if (data) {
-				app = data;
-				editingDomain = false;
+				domains = [...domains, data];
+				domainInput = '';
 				needsRedeploy = true;
 			}
 		} catch {
 			domainError = 'Network error';
 		} finally {
-			domainSaving = false;
+			domainAdding = false;
 		}
+	}
+
+	async function deleteDomain(domainId: string) {
+		await api.DELETE('/api/applications/{id}/domains/{domainId}', {
+			params: { path: { id: appId, domainId } }
+		});
+		domains = domains.filter((d) => d.id !== domainId);
+		needsRedeploy = true;
 	}
 
 	async function addEnv() {
@@ -149,6 +156,7 @@
 
 	$effect(() => {
 		loadApp();
+		loadDomains();
 		loadEnvs();
 		loadDeployments();
 	});
@@ -162,29 +170,81 @@
 			<p>Image: {app.image}</p>
 			<p>Container: {app.container_name}</p>
 			<p>Port: {app.port}</p>
-			{#if editingDomain}
-				<div class="mt-2 flex items-center gap-2">
-					<span>Domain:</span>
-					<input
-						type="text"
-						bind:value={domainInput}
-						placeholder="myapp.example.com"
-						class="rounded border p-1 text-sm"
-					/>
-					<button
-						onclick={updateDomain}
-						disabled={domainSaving}
-						class="cursor-pointer rounded-sm bg-black px-2 py-1 text-xs text-white disabled:opacity-50"
-					>
-						{domainSaving ? 'Saving...' : 'Save'}
-					</button>
-					<button
-						onclick={() => { editingDomain = false; domainError = ''; }}
-						class="cursor-pointer text-xs text-gray-500 hover:text-gray-700"
-					>
-						Cancel
-					</button>
+		</div>
+
+		<!-- Domains Section -->
+		<div class="mb-6">
+			<h3 class="mb-2 text-lg font-bold">Domains</h3>
+
+			{#if domains.length === 0}
+				<p class="mb-2 text-sm text-gray-400">No domains attached</p>
+			{:else}
+				<div class="mb-3 flex flex-col gap-1">
+					{#each domains as domain}
+						<div class="flex items-center gap-3 rounded border p-2 text-sm">
+							<a href="https://{domain.domain}" target="_blank" class="font-medium text-blue-600 underline">
+								{domain.domain}
+							</a>
+							{#if domain.is_primary}
+								<span class="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-700">primary</span>
+							{/if}
+							<span
+								class="rounded px-2 py-0.5 text-xs font-medium"
+								class:bg-green-100={domain.status === 'ready'}
+								class:text-green-700={domain.status === 'ready'}
+								class:bg-yellow-100={domain.status === 'pending'}
+								class:text-yellow-700={domain.status === 'pending'}
+								class:bg-red-100={domain.status === 'error'}
+								class:text-red-700={domain.status === 'error'}
+							>
+								{domain.status}
+							</span>
+							{#if domain.last_error}
+								<span class="text-xs text-red-500" title={domain.last_error}>
+									{domain.last_error.length > 40
+										? domain.last_error.slice(0, 40) + '...'
+										: domain.last_error}
+								</span>
+							{/if}
+							{#if canEdit}
+								<button
+									onclick={() => deleteDomain(domain.id)}
+									class="ml-auto cursor-pointer text-red-500 hover:text-red-700"
+								>
+									&times;
+								</button>
+							{/if}
+						</div>
+					{/each}
 				</div>
+			{/if}
+
+			{#if canEdit}
+				<form
+					onsubmit={(e) => { e.preventDefault(); addDomain(); }}
+					class="flex items-end gap-2"
+				>
+					<label class="flex flex-col gap-1 text-sm">
+						<span>Add domain</span>
+						<input
+							type="text"
+							bind:value={domainInput}
+							placeholder="myapp.example.com"
+							required
+							class="rounded border p-1 text-sm"
+						/>
+					</label>
+					<button
+						type="submit"
+						disabled={domainAdding}
+						class="cursor-pointer rounded-sm bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
+					>
+						{domainAdding ? 'Adding...' : 'Add'}
+					</button>
+				</form>
+				{#if domainError}
+					<p class="mt-1 text-sm text-red-600">{domainError}</p>
+				{/if}
 				<div class="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-500">
 					<p class="font-medium text-gray-600">DNS setup required before deploying:</p>
 					<ul class="mt-1 list-inside list-disc space-y-0.5">
@@ -192,33 +252,6 @@
 						<li>For a root domain (e.g. <code>example.com</code>): create an <strong>A record</strong> with name <code>@</code> pointing to your server IP</li>
 					</ul>
 				</div>
-				{#if domainError}
-					<p class="mt-1 text-sm text-red-600">{domainError}</p>
-				{/if}
-			{:else if app.fqdn}
-				<p>
-					Domain: <a href="https://{app.fqdn}" target="_blank" class="text-blue-600 underline">{app.fqdn}</a>
-					{#if canEdit}
-						<button
-							onclick={() => { domainInput = app?.fqdn ?? ''; editingDomain = true; }}
-							class="ml-2 cursor-pointer text-xs text-gray-500 hover:text-gray-700"
-						>
-							Edit
-						</button>
-					{/if}
-				</p>
-			{:else}
-				<p class="text-gray-400">
-					No domain configured (direct port access)
-					{#if canEdit}
-						<button
-							onclick={() => { domainInput = ''; editingDomain = true; }}
-							class="ml-2 cursor-pointer text-xs text-blue-600 hover:text-blue-800"
-						>
-							Set domain
-						</button>
-					{/if}
-				</p>
 			{/if}
 		</div>
 
@@ -227,21 +260,7 @@
 			<div class="mb-6">
 				{#if needsRedeploy}
 					<div class="mb-2 rounded border border-yellow-300 bg-yellow-50 p-2 text-sm text-yellow-700">
-						<p>Domain changed. Deploy to apply the new configuration.</p>
-						{#if app?.fqdn}
-							{@const parts = app.fqdn.split('.')}
-							{@const isSubdomain = parts.length > 2}
-							<p class="mt-1 text-xs">
-								Before deploying, ensure a DNS <strong>A record</strong> with name
-								{#if isSubdomain}
-									<code>{parts.slice(0, -2).join('.')}</code>
-								{:else}
-									<code>@</code>
-								{/if}
-								points to your server IP at your domain provider.
-								SSL will be provisioned automatically via Let's Encrypt.
-							</p>
-						{/if}
+						Domain configuration changed. Deploy to apply the new routing.
 					</div>
 				{/if}
 				{#if deployError}
@@ -341,7 +360,7 @@
 									onclick={() => deleteEnv(env.key)}
 									class="cursor-pointer text-red-500 hover:text-red-700"
 								>
-									×
+									&times;
 								</button>
 							</div>
 						{/each}

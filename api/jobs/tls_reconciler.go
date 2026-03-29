@@ -11,10 +11,9 @@ import (
 	"github.com/WahyuS002/uploy/ssh"
 )
 
-// StartTLSReconciler runs a background loop that promotes servers stuck in
-// tls_pending to ready once ACME certificates appear. This covers cases where
-// certificate issuance takes longer than the 60s deploy-time poll window.
-func StartTLSReconciler(ctx context.Context) {
+// StartDomainReconciler runs a background loop that checks pending
+// application_domains for TLS certificate readiness per exact hostname.
+func StartDomainReconciler(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
@@ -23,48 +22,76 @@ func StartTLSReconciler(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			reconcileTLSPending(ctx)
+			reconcilePendingDomains(ctx)
 		}
 	}
 }
 
-func reconcileTLSPending(parent context.Context) {
+func reconcilePendingDomains(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
-	servers, err := db.ListTLSPendingServers(ctx)
+	domains, err := db.ListUnresolvedDomains(ctx)
 	if err != nil {
-		log.Printf("TLS reconciler: list pending servers: %v", err)
+		log.Printf("Domain reconciler: list unresolved domains: %v", err)
 		return
 	}
 
-	for _, s := range servers {
+	// Group domains by server to reuse SSH connections.
+	type serverKey struct {
+		Host       string
+		Port       int32
+		SSHUser    string
+		PrivateKey string
+	}
+	byServer := make(map[string][]db.PendingDomain) // keyed by serverID
+	serverConns := make(map[string]serverKey)
+
+	for _, d := range domains {
+		byServer[d.ServerID] = append(byServer[d.ServerID], d)
+		if _, ok := serverConns[d.ServerID]; !ok {
+			pk, err := crypto.Decrypt(d.EncryptedKey)
+			if err != nil {
+				log.Printf("Domain reconciler: decrypt key for server %s: %v", d.ServerID, err)
+				continue
+			}
+			serverConns[d.ServerID] = serverKey{
+				Host:       d.Host,
+				Port:       d.ServerPort,
+				SSHUser:    d.SSHUser,
+				PrivateKey: pk,
+			}
+		}
+	}
+
+	for serverID, serverDomains := range byServer {
 		if ctx.Err() != nil {
 			return
 		}
 
-		pk, err := crypto.Decrypt(s.EncryptedKey)
-		if err != nil {
-			log.Printf("TLS reconciler: decrypt key for server %s: %v", s.ID, err)
-			continue
+		sk, ok := serverConns[serverID]
+		if !ok {
+			continue // key decryption failed earlier
 		}
 
 		client, err := ssh.NewClient(ssh.ServerConfig{
-			Host:       s.Host,
-			Port:       int(s.Port),
-			User:       s.SSHUser,
-			PrivateKey: pk,
+			Host:       sk.Host,
+			Port:       int(sk.Port),
+			User:       sk.SSHUser,
+			PrivateKey: sk.PrivateKey,
 		})
 		if err != nil {
-			log.Printf("TLS reconciler: SSH to %s failed: %v", s.ID, err)
+			log.Printf("Domain reconciler: SSH to server %s failed: %v", serverID, err)
 			continue
 		}
 
-		if proxy.HasCertificates(client) {
-			if err := db.SetServerProxyReady(ctx, s.ID, "ready"); err != nil {
-				log.Printf("TLS reconciler: promote %s failed: %v", s.ID, err)
-			} else {
-				log.Printf("TLS reconciler: promoted server %s to ready", s.ID)
+		for _, d := range serverDomains {
+			if proxy.HasCertificateForHostname(client, d.Domain) {
+				if err := db.SetDomainReady(ctx, d.ID); err != nil {
+					log.Printf("Domain reconciler: promote domain %s (%s) failed: %v", d.ID, d.Domain, err)
+				} else {
+					log.Printf("Domain reconciler: domain %s (%s) is ready", d.ID, d.Domain)
+				}
 			}
 		}
 

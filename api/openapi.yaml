@@ -674,6 +674,186 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/applications/{id}/domains:
+    post:
+      operationId: createApplicationDomain
+      summary: Add a domain to an application
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDomainRequest"
+      responses:
+        "201":
+          description: Domain added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDomainResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Application not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Domain already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listApplicationDomains
+      summary: List domains for an application
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of domains
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApplicationDomainResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Application not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/applications/{id}/domains/{domainId}:
+    put:
+      operationId: updateApplicationDomain
+      summary: Update domain settings
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDomainRequest"
+      responses:
+        "200":
+          description: Domain updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDomainResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Domain not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteApplicationDomain
+      summary: Remove a domain from an application
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Domain deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Domain not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/servers/check-connection:
     post:
       operationId: checkConnection
@@ -1045,7 +1225,6 @@ components:
         - ssh_user
         - ssh_key_id
         - proxy_status
-        - proxy_mode
         - created_at
       properties:
         id:
@@ -1067,13 +1246,7 @@ components:
             - ready
             - port_conflict
             - degraded
-            - tls_pending
-        proxy_mode:
-          type: string
-          enum:
-            - none
-            - managed
-        proxy_last_checked_at:
+        proxy_last_reconciled_at:
           type: string
           format: date-time
         proxy_last_error:
@@ -1126,9 +1299,6 @@ components:
           type: integer
         server_id:
           type: string
-        fqdn:
-          type: string
-          description: "Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access."
 
     UpdateApplicationRequest:
       type: object
@@ -1149,9 +1319,6 @@ components:
           type: integer
         server_id:
           type: string
-        fqdn:
-          type: string
-          description: "Domain for proxy routing (e.g. myapp.example.com). Leave empty for direct port access."
 
     ApplicationResponse:
       type: object
@@ -1177,8 +1344,59 @@ components:
           type: integer
         server_id:
           type: string
-        fqdn:
+        created_at:
           type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateDomainRequest:
+      type: object
+      required:
+        - domain
+      properties:
+        domain:
+          type: string
+
+    UpdateDomainRequest:
+      type: object
+      required:
+        - is_primary
+      properties:
+        is_primary:
+          type: boolean
+
+    ApplicationDomainResponse:
+      type: object
+      required:
+        - id
+        - domain
+        - is_primary
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        domain:
+          type: string
+        is_primary:
+          type: boolean
+        status:
+          type: string
+          enum:
+            - pending
+            - ready
+            - error
+        last_error:
+          type: string
+        last_reconciled_at:
+          type: string
+          format: date-time
+        ready_at:
+          type: string
+          format: date-time
         created_at:
           type: string
           format: date-time

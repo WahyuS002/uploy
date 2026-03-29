@@ -11,16 +11,28 @@ import (
 )
 
 type Application struct {
-	ID            string      `json:"id"`
-	Name          string      `json:"name"`
-	Image         string      `json:"image"`
-	ContainerName string      `json:"container_name"`
-	Port          int32       `json:"port"`
-	ServerID      string      `json:"server_id"`
-	WorkspaceID   string      `json:"workspace_id"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-	Fqdn          pgtype.Text `json:"fqdn"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Image         string    `json:"image"`
+	ContainerName string    `json:"container_name"`
+	Port          int32     `json:"port"`
+	ServerID      string    `json:"server_id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type ApplicationDomain struct {
+	ID               string             `json:"id"`
+	ApplicationID    string             `json:"application_id"`
+	Domain           string             `json:"domain"`
+	IsPrimary        bool               `json:"is_primary"`
+	Status           string             `json:"status"`
+	LastError        pgtype.Text        `json:"last_error"`
+	LastReconciledAt pgtype.Timestamptz `json:"last_reconciled_at"`
+	ReadyAt          pgtype.Timestamptz `json:"ready_at"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 type ApplicationEnv struct {
@@ -59,18 +71,17 @@ type OauthIdentity struct {
 }
 
 type Server struct {
-	ID                 string             `json:"id"`
-	Name               string             `json:"name"`
-	Host               string             `json:"host"`
-	Port               int32              `json:"port"`
-	SshUser            string             `json:"ssh_user"`
-	SshKeyID           string             `json:"ssh_key_id"`
-	WorkspaceID        string             `json:"workspace_id"`
-	CreatedAt          time.Time          `json:"created_at"`
-	ProxyStatus        string             `json:"proxy_status"`
-	ProxyLastCheckedAt pgtype.Timestamptz `json:"proxy_last_checked_at"`
-	ProxyLastError     pgtype.Text        `json:"proxy_last_error"`
-	ProxyMode          string             `json:"proxy_mode"`
+	ID                    string             `json:"id"`
+	Name                  string             `json:"name"`
+	Host                  string             `json:"host"`
+	Port                  int32              `json:"port"`
+	SshUser               string             `json:"ssh_user"`
+	SshKeyID              string             `json:"ssh_key_id"`
+	WorkspaceID           string             `json:"workspace_id"`
+	CreatedAt             time.Time          `json:"created_at"`
+	ProxyStatus           string             `json:"proxy_status"`
+	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
+	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
 }
 
 type Session struct {

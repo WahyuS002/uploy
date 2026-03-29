@@ -20,8 +20,6 @@
 	let containerName = $state('');
 	let port = $state(80);
 	let selectedServerId = $state('');
-	let fqdn = $state('');
-
 	async function load() {
 		const [appsRes, serversRes] = await Promise.all([
 			api.GET('/api/applications'),
@@ -46,8 +44,7 @@
 					image,
 					container_name: containerName,
 					port,
-					server_id: selectedServerId,
-					...(fqdn.trim() ? { fqdn: fqdn.trim() } : {})
+					server_id: selectedServerId
 				}
 			});
 			if (err) {
@@ -58,7 +55,6 @@
 				apps = [data, ...apps];
 				name = '';
 				containerName = '';
-				fqdn = '';
 			}
 		} catch {
 			error = 'Network error';
@@ -96,18 +92,6 @@
 			<label class="flex flex-col gap-1 text-sm">
 				Port
 				<input type="number" bind:value={port} required class="rounded border p-1" />
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				Domain (optional)
-				<input
-					type="text"
-					bind:value={fqdn}
-					class="rounded border p-1"
-					placeholder="myapp.example.com"
-				/>
-				<span class="text-xs text-gray-400">
-					Leave empty for direct IP:port access. Set domain for HTTPS proxy routing.
-				</span>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				Server

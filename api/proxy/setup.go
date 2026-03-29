@@ -161,19 +161,19 @@ func runSimple(client *ssh.Client, cmd string) error {
 	return nil
 }
 
-// HasCertificates checks if acme.json has certificate data (file size > 2 bytes).
-// An empty acme.json is "{}" (2 bytes) or literally empty; certificates make it larger.
-func HasCertificates(client *ssh.Client) bool {
-	// stat -c %s gives file size in bytes on Linux
-	cmd := fmt.Sprintf("stat -c %%s %s/acme.json 2>/dev/null || echo 0", proxyBaseDir)
-	stdoutCh, _, done := client.StreamCommand(cmd)
-	var output string
-	for line := range stdoutCh {
-		output = strings.TrimSpace(line)
-	}
-	<-done
-	// "{}" = 2 bytes, empty = 0 bytes; anything larger means certs exist
-	return output != "" && output != "0" && output != "2"
+// HasCertificateForHostname checks if acme.json contains a certificate covering
+// the given hostname — either as the "main" domain or in the "sans" array.
+// Grepping for the quoted hostname is sufficient: base64-encoded cert/key data
+// cannot contain a quoted FQDN, so false positives are not possible.
+func HasCertificateForHostname(client *ssh.Client, hostname string) bool {
+	cmd := fmt.Sprintf(
+		`grep -q '"%s"' %s/acme.json 2>/dev/null`,
+		hostname, proxyBaseDir,
+	)
+	stdoutCh, stderrCh, done := client.StreamCommand(cmd)
+	drainBoth(stdoutCh, stderrCh)
+	err := <-done
+	return err == nil
 }
 
 func runIgnoreError(client *ssh.Client, cmd string) error {

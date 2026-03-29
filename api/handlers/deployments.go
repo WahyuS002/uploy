@@ -50,11 +50,21 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load env vars untuk di-inject ke docker run
+	// Load env vars and domains
 	envPairs, err := db.GetApplicationEnvPairs(r.Context(), appWithServer.ID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load environment variables"})
 		return
+	}
+
+	appDomains, err := db.ListDomainsByApplication(r.Context(), appWithServer.ID)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load domains"})
+		return
+	}
+	domainNames := make([]string, len(appDomains))
+	for i, d := range appDomains {
+		domainNames[i] = d.Domain
 	}
 
 	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID, appWithServer.ID)
@@ -65,11 +75,12 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 
 	go jobs.RunDeploy(jobs.DeployConfig{
 		DeploymentID:  deployment.ID,
+		ApplicationID: appWithServer.ID,
 		Image:         appWithServer.Image,
 		ContainerName: appWithServer.ContainerName,
 		Port:          int(appWithServer.Port),
 		EnvVars:       envPairs,
-		FQDN:          derefString(appWithServer.FQDN),
+		Domains:       domainNames,
 		ServerID:      appWithServer.ServerID,
 		Server: ssh.ServerConfig{
 			Host:       appWithServer.Host,

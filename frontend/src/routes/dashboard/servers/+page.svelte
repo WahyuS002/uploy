@@ -222,33 +222,25 @@
 						<td class="py-2 font-mono text-xs text-gray-500">{server.host}:{server.port}</td>
 						<td class="py-2 text-gray-500">{server.ssh_user}</td>
 						<td class="py-2">
-							{#if server.proxy_status === 'not_configured' && server.proxy_mode === 'none'}
-								<span class="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-									direct only
-								</span>
-							{:else}
-								<span
-									class="rounded px-2 py-0.5 text-xs font-medium"
-									class:bg-green-100={server.proxy_status === 'ready'}
-									class:text-green-700={server.proxy_status === 'ready'}
-									class:bg-red-100={server.proxy_status === 'port_conflict' ||
-										server.proxy_status === 'degraded'}
-									class:text-red-700={server.proxy_status === 'port_conflict' ||
-										server.proxy_status === 'degraded'}
-									class:bg-yellow-100={server.proxy_status === 'tls_pending' ||
-										server.proxy_status === 'not_configured'}
-									class:text-yellow-700={server.proxy_status === 'tls_pending' ||
-										server.proxy_status === 'not_configured'}
-								>
-									{server.proxy_status.replace('_', ' ')}
-								</span>
-								{#if server.proxy_last_error}
-									<p class="mt-0.5 text-xs text-red-500" title={server.proxy_last_error}>
-										{server.proxy_last_error.length > 50
-											? server.proxy_last_error.slice(0, 50) + '...'
-											: server.proxy_last_error}
-									</p>
-								{/if}
+							<span
+								class="rounded px-2 py-0.5 text-xs font-medium"
+								class:bg-green-100={server.proxy_status === 'ready'}
+								class:text-green-700={server.proxy_status === 'ready'}
+								class:bg-red-100={server.proxy_status === 'port_conflict' ||
+									server.proxy_status === 'degraded'}
+								class:text-red-700={server.proxy_status === 'port_conflict' ||
+									server.proxy_status === 'degraded'}
+								class:bg-yellow-100={server.proxy_status === 'not_configured'}
+								class:text-yellow-700={server.proxy_status === 'not_configured'}
+							>
+								{server.proxy_status.replace('_', ' ')}
+							</span>
+							{#if server.proxy_last_error}
+								<p class="mt-0.5 text-xs text-red-500" title={server.proxy_last_error}>
+									{server.proxy_last_error.length > 50
+										? server.proxy_last_error.slice(0, 50) + '...'
+										: server.proxy_last_error}
+								</p>
 							{/if}
 						</td>
 						<td class="py-2 text-gray-500">{new Date(server.created_at).toLocaleDateString()}</td>

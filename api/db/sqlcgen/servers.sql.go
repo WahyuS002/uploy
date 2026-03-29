@@ -15,7 +15,7 @@ import (
 const createServer = `-- name: CreateServer :one
 INSERT INTO servers (name, host, port, ssh_user, ssh_key_id, workspace_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_mode, proxy_last_checked_at, proxy_last_error, created_at
+RETURNING id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at
 `
 
 type CreateServerParams struct {
@@ -28,18 +28,17 @@ type CreateServerParams struct {
 }
 
 type CreateServerRow struct {
-	ID                 string             `json:"id"`
-	Name               string             `json:"name"`
-	Host               string             `json:"host"`
-	Port               int32              `json:"port"`
-	SshUser            string             `json:"ssh_user"`
-	SshKeyID           string             `json:"ssh_key_id"`
-	WorkspaceID        string             `json:"workspace_id"`
-	ProxyStatus        string             `json:"proxy_status"`
-	ProxyMode          string             `json:"proxy_mode"`
-	ProxyLastCheckedAt pgtype.Timestamptz `json:"proxy_last_checked_at"`
-	ProxyLastError     pgtype.Text        `json:"proxy_last_error"`
-	CreatedAt          time.Time          `json:"created_at"`
+	ID                    string             `json:"id"`
+	Name                  string             `json:"name"`
+	Host                  string             `json:"host"`
+	Port                  int32              `json:"port"`
+	SshUser               string             `json:"ssh_user"`
+	SshKeyID              string             `json:"ssh_key_id"`
+	WorkspaceID           string             `json:"workspace_id"`
+	ProxyStatus           string             `json:"proxy_status"`
+	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
+	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
+	CreatedAt             time.Time          `json:"created_at"`
 }
 
 func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (CreateServerRow, error) {
@@ -61,8 +60,7 @@ func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (Cre
 		&i.SshKeyID,
 		&i.WorkspaceID,
 		&i.ProxyStatus,
-		&i.ProxyMode,
-		&i.ProxyLastCheckedAt,
+		&i.ProxyLastReconciledAt,
 		&i.ProxyLastError,
 		&i.CreatedAt,
 	)
@@ -70,23 +68,22 @@ func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (Cre
 }
 
 const getServerByID = `-- name: GetServerByID :one
-SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_mode, proxy_last_checked_at, proxy_last_error, created_at
+SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at
 FROM servers WHERE id = $1
 `
 
 type GetServerByIDRow struct {
-	ID                 string             `json:"id"`
-	Name               string             `json:"name"`
-	Host               string             `json:"host"`
-	Port               int32              `json:"port"`
-	SshUser            string             `json:"ssh_user"`
-	SshKeyID           string             `json:"ssh_key_id"`
-	WorkspaceID        string             `json:"workspace_id"`
-	ProxyStatus        string             `json:"proxy_status"`
-	ProxyMode          string             `json:"proxy_mode"`
-	ProxyLastCheckedAt pgtype.Timestamptz `json:"proxy_last_checked_at"`
-	ProxyLastError     pgtype.Text        `json:"proxy_last_error"`
-	CreatedAt          time.Time          `json:"created_at"`
+	ID                    string             `json:"id"`
+	Name                  string             `json:"name"`
+	Host                  string             `json:"host"`
+	Port                  int32              `json:"port"`
+	SshUser               string             `json:"ssh_user"`
+	SshKeyID              string             `json:"ssh_key_id"`
+	WorkspaceID           string             `json:"workspace_id"`
+	ProxyStatus           string             `json:"proxy_status"`
+	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
+	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
+	CreatedAt             time.Time          `json:"created_at"`
 }
 
 func (q *Queries) GetServerByID(ctx context.Context, id string) (GetServerByIDRow, error) {
@@ -101,8 +98,7 @@ func (q *Queries) GetServerByID(ctx context.Context, id string) (GetServerByIDRo
 		&i.SshKeyID,
 		&i.WorkspaceID,
 		&i.ProxyStatus,
-		&i.ProxyMode,
-		&i.ProxyLastCheckedAt,
+		&i.ProxyLastReconciledAt,
 		&i.ProxyLastError,
 		&i.CreatedAt,
 	)
@@ -147,24 +143,23 @@ func (q *Queries) GetServerWithKey(ctx context.Context, id string) (GetServerWit
 }
 
 const listServersByWorkspace = `-- name: ListServersByWorkspace :many
-SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_mode, proxy_last_checked_at, proxy_last_error, created_at
+SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at
 FROM servers WHERE workspace_id = $1
 ORDER BY created_at DESC
 `
 
 type ListServersByWorkspaceRow struct {
-	ID                 string             `json:"id"`
-	Name               string             `json:"name"`
-	Host               string             `json:"host"`
-	Port               int32              `json:"port"`
-	SshUser            string             `json:"ssh_user"`
-	SshKeyID           string             `json:"ssh_key_id"`
-	WorkspaceID        string             `json:"workspace_id"`
-	ProxyStatus        string             `json:"proxy_status"`
-	ProxyMode          string             `json:"proxy_mode"`
-	ProxyLastCheckedAt pgtype.Timestamptz `json:"proxy_last_checked_at"`
-	ProxyLastError     pgtype.Text        `json:"proxy_last_error"`
-	CreatedAt          time.Time          `json:"created_at"`
+	ID                    string             `json:"id"`
+	Name                  string             `json:"name"`
+	Host                  string             `json:"host"`
+	Port                  int32              `json:"port"`
+	SshUser               string             `json:"ssh_user"`
+	SshKeyID              string             `json:"ssh_key_id"`
+	WorkspaceID           string             `json:"workspace_id"`
+	ProxyStatus           string             `json:"proxy_status"`
+	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
+	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
+	CreatedAt             time.Time          `json:"created_at"`
 }
 
 func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string) ([]ListServersByWorkspaceRow, error) {
@@ -185,8 +180,7 @@ func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string
 			&i.SshKeyID,
 			&i.WorkspaceID,
 			&i.ProxyStatus,
-			&i.ProxyMode,
-			&i.ProxyLastCheckedAt,
+			&i.ProxyLastReconciledAt,
 			&i.ProxyLastError,
 			&i.CreatedAt,
 		); err != nil {
@@ -200,50 +194,9 @@ func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string
 	return items, nil
 }
 
-const listTLSPendingServers = `-- name: ListTLSPendingServers :many
-SELECT s.id, s.host, s.port, s.ssh_user, k.private_key
-FROM servers s
-JOIN ssh_keys k ON k.id = s.ssh_key_id
-WHERE s.proxy_status = 'tls_pending'
-`
-
-type ListTLSPendingServersRow struct {
-	ID         string `json:"id"`
-	Host       string `json:"host"`
-	Port       int32  `json:"port"`
-	SshUser    string `json:"ssh_user"`
-	PrivateKey string `json:"private_key"`
-}
-
-func (q *Queries) ListTLSPendingServers(ctx context.Context) ([]ListTLSPendingServersRow, error) {
-	rows, err := q.db.Query(ctx, listTLSPendingServers)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListTLSPendingServersRow{}
-	for rows.Next() {
-		var i ListTLSPendingServersRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Host,
-			&i.Port,
-			&i.SshUser,
-			&i.PrivateKey,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const setServerProxyError = `-- name: SetServerProxyError :exec
 UPDATE servers
-SET proxy_status = $2, proxy_last_checked_at = NOW(), proxy_last_error = $3
+SET proxy_status = $2, proxy_last_reconciled_at = NOW(), proxy_last_error = $3
 WHERE id = $1
 `
 
@@ -260,7 +213,7 @@ func (q *Queries) SetServerProxyError(ctx context.Context, arg SetServerProxyErr
 
 const setServerProxyReady = `-- name: SetServerProxyReady :exec
 UPDATE servers
-SET proxy_status = $2, proxy_mode = 'managed', proxy_last_checked_at = NOW(), proxy_last_error = NULL
+SET proxy_status = $2, proxy_last_reconciled_at = NOW(), proxy_last_error = NULL
 WHERE id = $1
 `
 

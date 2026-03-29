@@ -14,13 +14,6 @@ func stringPtrFromPgText(t pgtype.Text) *string {
 	return &v
 }
 
-func pgTextFromStringPtr(s *string) pgtype.Text {
-	if s == nil || *s == "" {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: *s, Valid: true}
-}
-
 func timePtrFromPgTimestamptz(t pgtype.Timestamptz) *time.Time {
 	if !t.Valid {
 		return nil

@@ -15,14 +15,13 @@ type Application struct {
 	Image         string    `json:"image"`
 	ContainerName string    `json:"container_name"`
 	Port          int32     `json:"port"`
-	FQDN          *string   `json:"fqdn"`
 	ServerID      string    `json:"server_id"`
 	WorkspaceID   string    `json:"workspace_id"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-// ApplicationWithServer — dipakai saat deploy, satu query JOIN dapat semuanya
+// ApplicationWithServer is used during deploy — one JOIN query gets everything.
 type ApplicationWithServer struct {
 	Application
 	Host        string `json:"-"`
@@ -32,7 +31,7 @@ type ApplicationWithServer struct {
 	ProxyStatus string `json:"-"`
 }
 
-func CreateApplication(ctx context.Context, name, image, containerName string, port int32, serverID, workspaceID string, fqdn *string) (Application, error) {
+func CreateApplication(ctx context.Context, name, image, containerName string, port int32, serverID, workspaceID string) (Application, error) {
 	a, err := Queries.CreateApplication(ctx, sqlcgen.CreateApplicationParams{
 		Name:          name,
 		Image:         image,
@@ -40,7 +39,6 @@ func CreateApplication(ctx context.Context, name, image, containerName string, p
 		Port:          port,
 		ServerID:      serverID,
 		WorkspaceID:   workspaceID,
-		Fqdn:          pgTextFromStringPtr(fqdn),
 	})
 	if err != nil {
 		return Application{}, err
@@ -51,7 +49,6 @@ func CreateApplication(ctx context.Context, name, image, containerName string, p
 		Image:         a.Image,
 		ContainerName: a.ContainerName,
 		Port:          a.Port,
-		FQDN:          stringPtrFromPgText(a.Fqdn),
 		ServerID:      a.ServerID,
 		WorkspaceID:   a.WorkspaceID,
 		CreatedAt:     a.CreatedAt,
@@ -70,7 +67,6 @@ func GetApplicationByID(ctx context.Context, id string) (Application, error) {
 		Image:         a.Image,
 		ContainerName: a.ContainerName,
 		Port:          a.Port,
-		FQDN:          stringPtrFromPgText(a.Fqdn),
 		ServerID:      a.ServerID,
 		WorkspaceID:   a.WorkspaceID,
 		CreatedAt:     a.CreatedAt,
@@ -91,7 +87,6 @@ func ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]App
 			Image:         r.Image,
 			ContainerName: r.ContainerName,
 			Port:          r.Port,
-			FQDN:          stringPtrFromPgText(r.Fqdn),
 			ServerID:      r.ServerID,
 			WorkspaceID:   r.WorkspaceID,
 			CreatedAt:     r.CreatedAt,
@@ -101,7 +96,7 @@ func ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]App
 	return apps, nil
 }
 
-func UpdateApplication(ctx context.Context, id, name, image, containerName string, port int32, serverID string, fqdn *string) (Application, error) {
+func UpdateApplication(ctx context.Context, id, name, image, containerName string, port int32, serverID string) (Application, error) {
 	a, err := Queries.UpdateApplication(ctx, sqlcgen.UpdateApplicationParams{
 		ID:            id,
 		Name:          name,
@@ -109,7 +104,6 @@ func UpdateApplication(ctx context.Context, id, name, image, containerName strin
 		ContainerName: containerName,
 		Port:          port,
 		ServerID:      serverID,
-		Fqdn:          pgTextFromStringPtr(fqdn),
 	})
 	if err != nil {
 		return Application{}, err
@@ -120,7 +114,6 @@ func UpdateApplication(ctx context.Context, id, name, image, containerName strin
 		Image:         a.Image,
 		ContainerName: a.ContainerName,
 		Port:          a.Port,
-		FQDN:          stringPtrFromPgText(a.Fqdn),
 		ServerID:      a.ServerID,
 		WorkspaceID:   a.WorkspaceID,
 		CreatedAt:     a.CreatedAt,
@@ -148,7 +141,6 @@ func GetApplicationWithServer(ctx context.Context, id string) (ApplicationWithSe
 			Image:         row.Image,
 			ContainerName: row.ContainerName,
 			Port:          row.Port,
-			FQDN:          stringPtrFromPgText(row.Fqdn),
 			ServerID:      row.ServerID,
 			WorkspaceID:   row.WorkspaceID,
 			CreatedAt:     row.CreatedAt,

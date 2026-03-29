@@ -190,16 +190,15 @@ func (s *Server) CheckConnection(w http.ResponseWriter, r *http.Request) {
 
 func serverToResponse(srv db.AppServer) gen.ServerResponse {
 	return gen.ServerResponse{
-		Id:                 srv.ID,
-		Name:               srv.Name,
-		Host:               srv.Host,
-		Port:               int(srv.Port),
-		SshUser:            srv.SSHUser,
-		SshKeyId:           srv.SSHKeyID,
-		ProxyStatus:        gen.ServerResponseProxyStatus(srv.ProxyStatus),
-		ProxyMode:          gen.ServerResponseProxyMode(srv.ProxyMode),
-		ProxyLastCheckedAt: srv.ProxyLastCheckedAt,
-		ProxyLastError:     srv.ProxyLastError,
-		CreatedAt:          srv.CreatedAt,
+		Id:                    srv.ID,
+		Name:                  srv.Name,
+		Host:                  srv.Host,
+		Port:                  int(srv.Port),
+		SshUser:               srv.SSHUser,
+		SshKeyId:              srv.SSHKeyID,
+		ProxyStatus:           gen.ServerResponseProxyStatus(srv.ProxyStatus),
+		ProxyLastReconciledAt: srv.ProxyLastReconciledAt,
+		ProxyLastError:        srv.ProxyLastError,
+		CreatedAt:             srv.CreatedAt,
 	}
 }
