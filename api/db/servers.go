@@ -30,13 +30,6 @@ type ServerWithKey struct {
 	PrivateKey string `json:"-"`
 }
 
-func timestamptzToPtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
-}
-
 func CreateServer(ctx context.Context, name, host string, port int32, sshUser, sshKeyID, workspaceID string) (AppServer, error) {
 	s, err := Queries.CreateServer(ctx, sqlcgen.CreateServerParams{
 		Name:        name,
@@ -59,8 +52,8 @@ func CreateServer(ctx context.Context, name, host string, port int32, sshUser, s
 		WorkspaceID:        s.WorkspaceID,
 		ProxyStatus:        s.ProxyStatus,
 		ProxyMode:          s.ProxyMode,
-		ProxyLastCheckedAt: timestamptzToPtr(s.ProxyLastCheckedAt),
-		ProxyLastError:     pgTextToStringPtr(s.ProxyLastError),
+		ProxyLastCheckedAt: timePtrFromPgTimestamptz(s.ProxyLastCheckedAt),
+		ProxyLastError:     stringPtrFromPgText(s.ProxyLastError),
 		CreatedAt:          s.CreatedAt,
 	}, nil
 }
@@ -80,8 +73,8 @@ func GetServerByID(ctx context.Context, id string) (AppServer, error) {
 		WorkspaceID:        s.WorkspaceID,
 		ProxyStatus:        s.ProxyStatus,
 		ProxyMode:          s.ProxyMode,
-		ProxyLastCheckedAt: timestamptzToPtr(s.ProxyLastCheckedAt),
-		ProxyLastError:     pgTextToStringPtr(s.ProxyLastError),
+		ProxyLastCheckedAt: timePtrFromPgTimestamptz(s.ProxyLastCheckedAt),
+		ProxyLastError:     stringPtrFromPgText(s.ProxyLastError),
 		CreatedAt:          s.CreatedAt,
 	}, nil
 }
@@ -103,8 +96,8 @@ func ListServersByWorkspace(ctx context.Context, workspaceID string) ([]AppServe
 			WorkspaceID:        r.WorkspaceID,
 			ProxyStatus:        r.ProxyStatus,
 			ProxyMode:          r.ProxyMode,
-			ProxyLastCheckedAt: timestamptzToPtr(r.ProxyLastCheckedAt),
-			ProxyLastError:     pgTextToStringPtr(r.ProxyLastError),
+			ProxyLastCheckedAt: timePtrFromPgTimestamptz(r.ProxyLastCheckedAt),
+			ProxyLastError:     stringPtrFromPgText(r.ProxyLastError),
 			CreatedAt:          r.CreatedAt,
 		}
 	}
@@ -129,11 +122,11 @@ func SetServerProxyError(ctx context.Context, serverID, status string, lastError
 }
 
 type TLSPendingServer struct {
-	ID            string
-	Host          string
-	Port          int32
-	SSHUser       string
-	EncryptedKey  string
+	ID           string
+	Host         string
+	Port         int32
+	SSHUser      string
+	EncryptedKey string
 }
 
 func ListTLSPendingServers(ctx context.Context) ([]TLSPendingServer, error) {
