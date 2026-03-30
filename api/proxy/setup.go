@@ -14,16 +14,26 @@ const composeFilePath = proxyBaseDir + "/docker-compose.yaml"
 const proxyContainerName = "uploy-proxy"
 const traefikImage = "traefik:v3.6"
 
+// ProgressFunc is a callback for reporting proxy setup progress.
+type ProgressFunc func(msg string)
+
 // EnsureProxy ensures Traefik compose file exists and the service is running.
-func EnsureProxy(client *ssh.Client) error {
+// The optional progress callback receives curated sub-step messages.
+func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
+	if progress == nil {
+		progress = func(string) {}
+	}
+
 	docker := client.DockerBin()
 
 	// 1. docker compose must be available
+	progress("checking docker compose availability...")
 	if err := runSimple(client, docker+" compose version >/dev/null 2>&1"); err != nil {
 		return fmt.Errorf("docker compose not available: %w", err)
 	}
 
 	// 2. Create Docker network
+	progress("creating uploy network...")
 	if err := runIgnoreError(client, fmt.Sprintf(
 		"%s network create %s 2>/dev/null || true", docker, networkName,
 	)); err != nil {
@@ -31,6 +41,7 @@ func EnsureProxy(client *ssh.Client) error {
 	}
 
 	// 3. Setup directory + acme.json (each command retries with sudo -n on failure)
+	progress("preparing Traefik state...")
 	setupCmds := []string{
 		fmt.Sprintf("mkdir -p %s", proxyBaseDir),
 		fmt.Sprintf("touch %s/acme.json", proxyBaseDir),
@@ -43,6 +54,7 @@ func EnsureProxy(client *ssh.Client) error {
 	}
 
 	// 4. Write docker-compose.yaml
+	progress("writing Traefik compose file...")
 	composeContent := fmt.Sprintf(`services:
   traefik:
     image: %s
@@ -85,12 +97,14 @@ networks:
 	}
 
 	// 5. Start / reconcile Traefik via Compose
+	progress("starting Traefik with docker compose...")
 	upCmd := fmt.Sprintf("%s compose -f %s up -d", docker, composeFilePath)
 	if err := runSimple(client, upCmd); err != nil {
 		return fmt.Errorf("compose up: %w", err)
 	}
 
 	// 6. Verify proxy container is running
+	progress("verifying Traefik container...")
 	running, err := isContainerRunning(client, proxyContainerName)
 	if err != nil {
 		return fmt.Errorf("check proxy: %w", err)
@@ -99,6 +113,7 @@ networks:
 		return fmt.Errorf("proxy container %s is not running", proxyContainerName)
 	}
 
+	progress("reverse proxy ready")
 	return nil
 }
 

@@ -182,7 +182,7 @@ drain:
 			if event.Order <= afterOrder {
 				continue // already sent from DB catch-up
 			}
-			sendLog(db.LogEntry{ID: event.ID, Order: event.Order, CreatedAt: event.CreatedAt, Output: event.Output, Type: event.LogType})
+			sendLog(db.LogEntry{ID: event.ID, Order: event.Order, CreatedAt: event.CreatedAt, Output: event.Output, Type: event.LogType, Phase: event.Phase})
 			afterOrder = event.Order
 			flusher.Flush()
 		default:
@@ -213,7 +213,7 @@ drain:
 			}
 			switch event.Type {
 			case broker.Log:
-				sendLog(db.LogEntry{ID: event.ID, Order: event.Order, CreatedAt: event.CreatedAt, Output: event.Output, Type: event.LogType})
+				sendLog(db.LogEntry{ID: event.ID, Order: event.Order, CreatedAt: event.CreatedAt, Output: event.Output, Type: event.LogType, Phase: event.Phase})
 				flusher.Flush()
 			case broker.Done:
 				fmt.Fprintf(w, "event: done\ndata: %s\n\n", event.Status)

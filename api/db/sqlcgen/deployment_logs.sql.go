@@ -11,7 +11,7 @@ import (
 )
 
 const getLogsAfter = `-- name: GetLogsAfter :many
-SELECT id, "order", created_at, output, type
+SELECT id, "order", created_at, output, type, phase
 FROM deployment_logs
 WHERE deployment_id = $1 AND "order" > $2
 ORDER BY "order" ASC
@@ -28,6 +28,7 @@ type GetLogsAfterRow struct {
 	CreatedAt time.Time `json:"created_at"`
 	Output    string    `json:"output"`
 	Type      string    `json:"type"`
+	Phase     string    `json:"phase"`
 }
 
 func (q *Queries) GetLogsAfter(ctx context.Context, arg GetLogsAfterParams) ([]GetLogsAfterRow, error) {
@@ -45,6 +46,7 @@ func (q *Queries) GetLogsAfter(ctx context.Context, arg GetLogsAfterParams) ([]G
 			&i.CreatedAt,
 			&i.Output,
 			&i.Type,
+			&i.Phase,
 		); err != nil {
 			return nil, err
 		}
@@ -57,8 +59,8 @@ func (q *Queries) GetLogsAfter(ctx context.Context, arg GetLogsAfterParams) ([]G
 }
 
 const insertDeploymentLog = `-- name: InsertDeploymentLog :one
-INSERT INTO deployment_logs (deployment_id, "order", output, type)
-VALUES ($1, (SELECT COALESCE(MAX("order"), 0) + 1 FROM deployment_logs WHERE deployment_id = $1), $2, $3)
+INSERT INTO deployment_logs (deployment_id, "order", output, type, phase)
+VALUES ($1, (SELECT COALESCE(MAX("order"), 0) + 1 FROM deployment_logs WHERE deployment_id = $1), $2, $3, $4)
 RETURNING id, "order", created_at
 `
 
@@ -66,6 +68,7 @@ type InsertDeploymentLogParams struct {
 	DeploymentID string `json:"deployment_id"`
 	Output       string `json:"output"`
 	Type         string `json:"type"`
+	Phase        string `json:"phase"`
 }
 
 type InsertDeploymentLogRow struct {
@@ -75,7 +78,12 @@ type InsertDeploymentLogRow struct {
 }
 
 func (q *Queries) InsertDeploymentLog(ctx context.Context, arg InsertDeploymentLogParams) (InsertDeploymentLogRow, error) {
-	row := q.db.QueryRow(ctx, insertDeploymentLog, arg.DeploymentID, arg.Output, arg.Type)
+	row := q.db.QueryRow(ctx, insertDeploymentLog,
+		arg.DeploymentID,
+		arg.Output,
+		arg.Type,
+		arg.Phase,
+	)
 	var i InsertDeploymentLogRow
 	err := row.Scan(&i.ID, &i.Order, &i.CreatedAt)
 	return i, err

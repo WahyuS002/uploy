@@ -71,16 +71,17 @@ func GetDeployment(ctx context.Context, deploymentID string) (Deployment, error)
 	return deploymentFromGen(row), err
 }
 
-func AppendLog(ctx context.Context, deploymentID, output, logType string) error {
+func AppendLog(ctx context.Context, deploymentID, output, logType, phase string) error {
 	row, err := Queries.InsertDeploymentLog(ctx, sqlcgen.InsertDeploymentLogParams{
 		DeploymentID: deploymentID,
 		Output:       output,
 		Type:         logType,
+		Phase:        phase,
 	})
 	if err != nil {
 		return err
 	}
-	broker.PublishLog(deploymentID, row.ID, int(row.Order), row.CreatedAt, output, logType)
+	broker.PublishLog(deploymentID, row.ID, int(row.Order), row.CreatedAt, output, logType, phase)
 	return nil
 }
 
@@ -90,6 +91,7 @@ type LogEntry struct {
 	CreatedAt time.Time `json:"created_at"`
 	Output    string    `json:"output"`
 	Type      string    `json:"type"`
+	Phase     string    `json:"phase"`
 }
 
 func GetLogsAfter(ctx context.Context, deploymentID string, afterOrder int) ([]LogEntry, error) {
@@ -108,6 +110,7 @@ func GetLogsAfter(ctx context.Context, deploymentID string, afterOrder int) ([]L
 			CreatedAt: r.CreatedAt,
 			Output:    r.Output,
 			Type:      r.Type,
+			Phase:     r.Phase,
 		}
 	}
 	return logs, nil

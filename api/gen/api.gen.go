@@ -221,11 +221,14 @@ type GenerateSSHKeyRequest struct {
 
 // LogEntry defines model for LogEntry.
 type LogEntry struct {
-	CreatedAt time.Time    `json:"created_at"`
-	Id        int64        `json:"id"`
-	Order     int          `json:"order"`
-	Output    string       `json:"output"`
-	Type      LogEntryType `json:"type"`
+	CreatedAt time.Time `json:"created_at"`
+	Id        int64     `json:"id"`
+	Order     int       `json:"order"`
+	Output    string    `json:"output"`
+
+	// Phase Structured deploy phase identifier. Empty string for raw command output.
+	Phase string       `json:"phase"`
+	Type  LogEntryType `json:"type"`
 }
 
 // LogEntryType defines model for LogEntry.Type.

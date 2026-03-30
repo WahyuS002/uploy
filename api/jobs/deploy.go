@@ -29,8 +29,8 @@ type DeployConfig struct {
 	Server        ssh.ServerConfig
 }
 
-func appendLog(ctx context.Context, deploymentID, msg, logType string) {
-	if err := db.AppendLog(ctx, deploymentID, msg, logType); err != nil {
+func appendLog(ctx context.Context, deploymentID, msg, logType, phase string) {
+	if err := db.AppendLog(ctx, deploymentID, msg, logType, phase); err != nil {
 		log.Printf("AppendLog deploymentID=%s error: %v", deploymentID, err)
 	}
 }
@@ -41,14 +41,13 @@ func failDeploy(deploymentID, msg string) {
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	appendLog(cleanupCtx, deploymentID, msg, "stderr")
-
+	appendLog(cleanupCtx, deploymentID, msg, "stderr", "")
 	if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, "failed"); err != nil {
 		log.Printf("SetDeploymentStatus deploymentID=%s error: %v", deploymentID, err)
 		return
 	}
 
-	appendLog(cleanupCtx, deploymentID, "deployment failed", "stderr")
+	appendLog(cleanupCtx, deploymentID, "deployment failed", "stderr", "failed")
 	broker.PublishDone(deploymentID, "failed")
 }
 
@@ -61,7 +60,7 @@ func finishDeploy(deploymentID, status string) {
 		return
 	}
 
-	appendLog(cleanupCtx, deploymentID, fmt.Sprintf("deployment %s", status), "stdout")
+	appendLog(cleanupCtx, deploymentID, fmt.Sprintf("deployment %s", status), "stdout", "complete")
 	broker.PublishDone(deploymentID, status)
 }
 
@@ -78,7 +77,7 @@ func RunDeploy(cfg DeployConfig) {
 
 	hasDomains := len(cfg.Domains) > 0
 
-	appendLog(ctx, cfg.DeploymentID, "connecting to server...", "stdout")
+	appendLog(ctx, cfg.DeploymentID, "connecting to server...", "stdout", "connect")
 
 	client, err := ssh.NewClient(cfg.Server)
 	if err != nil {
@@ -95,6 +94,7 @@ func RunDeploy(cfg DeployConfig) {
 	docker := client.DockerBin()
 
 	// step 1: docker pull
+	appendLog(ctx, cfg.DeploymentID, "pulling image...", "stdout", "pull_image")
 	if !runStep(ctx, client, cfg.DeploymentID, docker+" pull "+cfg.Image) {
 		return
 	}
@@ -103,6 +103,7 @@ func RunDeploy(cfg DeployConfig) {
 
 	// step 2: if app has domains, ensure proxy is running
 	if hasDomains {
+		appendLog(ctx, cfg.DeploymentID, "checking proxy ports...", "stdout", "proxy_setup")
 		releaseCurrent, err := checkProxyPortConflicts(client, cfg.ContainerName)
 		if err != nil {
 			errMsg := err.Error()
@@ -113,15 +114,18 @@ func RunDeploy(cfg DeployConfig) {
 			return
 		}
 		if releaseCurrent {
-			appendLog(ctx, cfg.DeploymentID, "releasing current container from reserved proxy ports...", "stdout")
+			appendLog(ctx, cfg.DeploymentID, "releasing current container from reserved proxy ports...", "stdout", "proxy_setup")
 			if !stopAndRemoveContainer(ctx, client, cfg.DeploymentID, cfg.ContainerName) {
 				return
 			}
 			currentContainerRemoved = true
 		}
 
-		appendLog(ctx, cfg.DeploymentID, "ensuring reverse proxy (Traefik)...", "stdout")
-		if err := proxy.EnsureProxy(client); err != nil {
+		appendLog(ctx, cfg.DeploymentID, "ensuring reverse proxy (Traefik)...", "stdout", "proxy_setup")
+		proxyProgress := func(msg string) {
+			appendLog(ctx, cfg.DeploymentID, msg, "stdout", "proxy_setup")
+		}
+		if err := proxy.EnsureProxy(client, proxyProgress); err != nil {
 			errMsg := err.Error()
 			if updateErr := db.SetServerProxyError(ctx, cfg.ServerID, "degraded", errMsg); updateErr != nil {
 				log.Printf("SetServerProxyError error: %v", updateErr)
@@ -129,17 +133,18 @@ func RunDeploy(cfg DeployConfig) {
 			failDeploy(cfg.DeploymentID, "Proxy setup failed: "+errMsg)
 			return
 		}
-		appendLog(ctx, cfg.DeploymentID, "proxy running", "stdout")
 	}
 
 	// step 3: stop/remove old container unless already removed during proxy migration
 	if !currentContainerRemoved {
+		appendLog(ctx, cfg.DeploymentID, "stopping existing container...", "stdout", "stop_container")
 		if !stopAndRemoveContainer(ctx, client, cfg.DeploymentID, cfg.ContainerName) {
 			return
 		}
 	}
 
 	// step 4: docker run with env vars
+	appendLog(ctx, cfg.DeploymentID, "starting application container...", "stdout", "start_container")
 	if !runStep(ctx, client, cfg.DeploymentID, buildDockerRunCmd(docker, cfg)) {
 		return
 	}
@@ -166,7 +171,7 @@ func RunDeploy(cfg DeployConfig) {
 		}
 
 		if len(unresolvedDomains) > 0 {
-			appendLog(ctx, cfg.DeploymentID, "waiting for TLS certificates...", "stdout")
+			appendLog(ctx, cfg.DeploymentID, "waiting for TLS certificates...", "stdout", "tls_cert")
 
 			for i := 0; i < 6 && len(unresolvedDomains) > 0; i++ {
 				if i > 0 {
@@ -177,7 +182,7 @@ func RunDeploy(cfg DeployConfig) {
 						if err := db.SetDomainReady(ctx, domainID); err != nil {
 							log.Printf("SetDomainReady %s error: %v", domain, err)
 						} else {
-							appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS ready for %s", domain), "stdout")
+							appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS ready for %s", domain), "stdout", "tls_cert")
 						}
 						delete(unresolvedDomains, domain)
 					}
@@ -189,7 +194,7 @@ func RunDeploy(cfg DeployConfig) {
 				for domain := range unresolvedDomains {
 					names = append(names, domain)
 				}
-				appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS pending for: %s; will retry in background", strings.Join(names, ", ")), "stdout")
+				appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS pending for: %s; will retry in background", strings.Join(names, ", ")), "stdout", "tls_cert")
 			}
 		}
 	}
@@ -242,13 +247,13 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 	go func() {
 		defer wg.Done()
 		for line := range stdoutCh {
-			appendLog(ctx, deploymentID, line, "stdout")
+			appendLog(ctx, deploymentID, line, "stdout", "")
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for line := range stderrCh {
-			appendLog(ctx, deploymentID, line, "stderr")
+			appendLog(ctx, deploymentID, line, "stderr", "")
 		}
 	}()
 

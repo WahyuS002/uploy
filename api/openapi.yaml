@@ -1263,6 +1263,7 @@ components:
         - created_at
         - output
         - type
+        - phase
       properties:
         id:
           type: integer
@@ -1279,6 +1280,9 @@ components:
           enum:
             - stdout
             - stderr
+        phase:
+          type: string
+          description: Structured deploy phase identifier. Empty string for raw command output.
 
     CreateApplicationRequest:
       type: object

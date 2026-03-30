@@ -278,7 +278,7 @@
 
 		<!-- Deployment logs -->
 		{#if deploymentId}
-			<DeploymentLogs {deploymentId} />
+			<DeploymentLogs {deploymentId} onDone={() => loadDeployments()} />
 		{/if}
 
 		<!-- Deployment History -->

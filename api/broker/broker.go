@@ -19,6 +19,7 @@ type Event struct {
 	CreatedAt time.Time
 	Output    string
 	LogType   string // "stdout" or "stderr"
+	Phase     string // structured deploy phase identifier
 	Status    string // only for Done
 }
 
@@ -70,7 +71,7 @@ func publish(deploymentID string, event Event) {
 	}
 }
 
-func PublishLog(deploymentID string, id int64, order int, createdAt time.Time, output, logType string) {
+func PublishLog(deploymentID string, id int64, order int, createdAt time.Time, output, logType, phase string) {
 	publish(deploymentID, Event{
 		Type:      Log,
 		ID:        id,
@@ -78,6 +79,7 @@ func PublishLog(deploymentID string, id int64, order int, createdAt time.Time, o
 		CreatedAt: createdAt,
 		Output:    output,
 		LogType:   logType,
+		Phase:     phase,
 	})
 }
 

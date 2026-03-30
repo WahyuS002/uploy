@@ -411,6 +411,8 @@ export interface components {
             output: string;
             /** @enum {string} */
             type: "stdout" | "stderr";
+            /** @description Structured deploy phase identifier. Empty string for raw command output. */
+            phase: string;
         };
         CreateApplicationRequest: {
             name: string;

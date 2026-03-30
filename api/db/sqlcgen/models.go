@@ -59,6 +59,7 @@ type DeploymentLog struct {
 	CreatedAt    time.Time `json:"created_at"`
 	Order        int32     `json:"order"`
 	Type         string    `json:"type"`
+	Phase        string    `json:"phase"`
 }
 
 type OauthIdentity struct {
