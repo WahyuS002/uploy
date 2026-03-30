@@ -20,6 +20,7 @@ DOCKER_DNS=""
 SKIP_DNS_CONFIG=false
 CHECK_ONLY=false
 FORCE=false
+VERBOSE=false
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,6 +40,119 @@ die() {
     exit 1
 }
 
+# Interactive TTY detection (used by spinner)
+IS_TTY=false
+if [[ -t 1 ]]; then
+    IS_TTY=true
+fi
+
+# Spinner for long-running steps (only in default mode + interactive TTY)
+_spinner_pid=""
+_start_spinner() {
+    local label="$1"
+    if [[ "$IS_TTY" == true ]]; then
+        (
+            local chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+            local i=0
+            while true; do
+                printf "\r  ${COLOR_YELLOW}%s${COLOR_RESET}  %s" "${chars:i%${#chars}:1}" "$label"
+                i=$((i + 1))
+                sleep 0.1
+            done
+        ) &
+        _spinner_pid=$!
+    fi
+}
+
+_stop_spinner() {
+    if [[ -n "$_spinner_pid" ]]; then
+        kill "$_spinner_pid" 2>/dev/null
+        wait "$_spinner_pid" 2>/dev/null || true
+        _spinner_pid=""
+        # Clear the spinner line
+        printf "\r\033[K"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# run_step — centralised executor for long-running commands
+#
+#   run_step "label" command [args...]
+#
+# Default mode: output goes to a temp log; a spinner is shown on TTY.
+# --verbose mode: output streams to stdout/stderr live.
+# On failure: prints the label, last 10 lines of the log, and the log path.
+# ---------------------------------------------------------------------------
+LOG_DIR=""
+_RUN_STEP_FAILED=false
+
+_ensure_log_dir() {
+    if [[ -z "$LOG_DIR" ]]; then
+        LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/uploy-install.XXXXXX")
+        # Clean up temp dir on exit — but only when all steps passed
+        trap '_cleanup_log_dir' EXIT
+    fi
+}
+
+_cleanup_log_dir() {
+    # Kill any lingering spinner first
+    if [[ -n "$_spinner_pid" ]]; then
+        kill "$_spinner_pid" 2>/dev/null
+        wait "$_spinner_pid" 2>/dev/null || true
+    fi
+    if [[ -n "$LOG_DIR" && -d "$LOG_DIR" ]]; then
+        if [[ "$_RUN_STEP_FAILED" == true ]]; then
+            printf "  ....  Logs preserved in: %s\n" "$LOG_DIR"
+        else
+            rm -rf "$LOG_DIR"
+        fi
+    fi
+}
+
+run_step() {
+    local label="$1"
+    shift
+    _ensure_log_dir
+    local logfile="$LOG_DIR/$(echo "$label" | tr ' /' '__').log"
+
+    if [[ "$VERBOSE" == true ]]; then
+        info "$label"
+        if "$@" 2>&1 | tee "$logfile"; then
+            pass "$label"
+            return 0
+        else
+            _RUN_STEP_FAILED=true
+            fail "$label"
+            printf "  ${COLOR_RED}>>>${COLOR_RESET} Log: %s\n" "$logfile" >&2
+            return 1
+        fi
+    fi
+
+    # Default (quiet) mode
+    if [[ "$IS_TTY" == true ]]; then
+        _start_spinner "$label"
+    else
+        info "$label"
+    fi
+
+    if "$@" > "$logfile" 2>&1; then
+        _stop_spinner
+        pass "$label"
+        return 0
+    else
+        local rc=$?
+        _stop_spinner
+        _RUN_STEP_FAILED=true
+        fail "$label"
+        echo ""
+        printf "  ${COLOR_RED}>>>${COLOR_RESET} Last 10 lines of output:\n"
+        tail -n 10 "$logfile" | sed 's/^/      /'
+        printf "  ${COLOR_RED}>>>${COLOR_RESET} Full log: %s\n" "$logfile"
+        echo ""
+        return $rc
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # OS detection
 # ---------------------------------------------------------------------------
@@ -56,47 +170,52 @@ detect_os() {
 # Docker installation per distro
 # ---------------------------------------------------------------------------
 install_docker() {
-    info "Installing Docker for '$OS_TYPE'. This may take a while..."
+    info "Installing Docker for '$OS_TYPE'..."
 
     case "$OS_TYPE" in
         ubuntu|debian)
-            apt-get update -y >/dev/null 2>&1
-            apt-get install -y ca-certificates curl gnupg >/dev/null 2>&1
+            run_step "Updating package index" apt-get update -y
+            run_step "Installing prerequisites (ca-certificates, curl, gnupg)" apt-get install -y ca-certificates curl gnupg
             install -m 0755 -d /etc/apt/keyrings
-            curl -fsSL "https://download.docker.com/linux/$OS_TYPE/gpg" \
-                | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null
+            run_step "Downloading Docker GPG key" bash -c \
+                "curl -fsSL 'https://download.docker.com/linux/$OS_TYPE/gpg' | gpg --dearmor -o /etc/apt/keyrings/docker.gpg"
             chmod a+r /etc/apt/keyrings/docker.gpg
             echo \
                 "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
                 https://download.docker.com/linux/$OS_TYPE $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
                 | tee /etc/apt/sources.list.d/docker.list >/dev/null
-            apt-get update -y >/dev/null 2>&1
-            apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin >/dev/null 2>&1
+            run_step "Updating package index (with Docker repo)" apt-get update -y
+            run_step "Installing Docker Engine" apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             ;;
         centos|rhel|rocky|almalinux)
-            dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
-            if command -v dnf5 &>/dev/null; then
-                dnf config-manager addrepo --from-repofile="https://download.docker.com/linux/centos/docker-ce.repo" --overwrite >/dev/null 2>&1
-            else
-                dnf config-manager --add-repo="https://download.docker.com/linux/centos/docker-ce.repo" >/dev/null 2>&1
+            if ! rpm -q dnf-plugins-core &>/dev/null; then
+                run_step "Installing dnf-plugins-core" dnf install -y dnf-plugins-core
             fi
-            dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin >/dev/null 2>&1
+            if command -v dnf5 &>/dev/null; then
+                run_step "Adding Docker repository" dnf config-manager addrepo --from-repofile="https://download.docker.com/linux/centos/docker-ce.repo" --overwrite
+            else
+                run_step "Adding Docker repository" dnf config-manager --add-repo="https://download.docker.com/linux/centos/docker-ce.repo"
+            fi
+            run_step "Installing Docker Engine" dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             ;;
         fedora)
-            dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
-            if command -v dnf5 &>/dev/null; then
-                dnf config-manager addrepo --from-repofile="https://download.docker.com/linux/fedora/docker-ce.repo" --overwrite >/dev/null 2>&1
-            else
-                dnf config-manager --add-repo="https://download.docker.com/linux/fedora/docker-ce.repo" >/dev/null 2>&1
+            if ! rpm -q dnf-plugins-core &>/dev/null; then
+                run_step "Installing dnf-plugins-core" dnf install -y dnf-plugins-core
             fi
-            dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin >/dev/null 2>&1
+            if command -v dnf5 &>/dev/null; then
+                run_step "Adding Docker repository" dnf config-manager addrepo --from-repofile="https://download.docker.com/linux/fedora/docker-ce.repo" --overwrite
+            else
+                run_step "Adding Docker repository" dnf config-manager --add-repo="https://download.docker.com/linux/fedora/docker-ce.repo"
+            fi
+            run_step "Installing Docker Engine" dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             ;;
         amzn)
-            dnf install -y docker >/dev/null 2>&1
+            run_step "Installing Docker" dnf install -y docker
             # Amazon Linux ships docker without compose plugin — install manually
             DOCKER_CONFIG=${DOCKER_CONFIG:-/usr/local/lib/docker}
             mkdir -p "$DOCKER_CONFIG/cli-plugins"
-            curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
+            run_step "Downloading Docker Compose plugin" curl -fsSL \
+                "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
                 -o "$DOCKER_CONFIG/cli-plugins/docker-compose"
             chmod +x "$DOCKER_CONFIG/cli-plugins/docker-compose"
             ;;
@@ -107,8 +226,8 @@ install_docker() {
 
     # Enable and start Docker
     if command -v systemctl &>/dev/null; then
-        systemctl enable docker >/dev/null 2>&1
-        systemctl start docker >/dev/null 2>&1
+        run_step "Enabling Docker service" systemctl enable docker
+        run_step "Starting Docker service" systemctl start docker
     fi
 
     # Verify installation succeeded
@@ -126,7 +245,12 @@ Optional flags:
   --skip-dns-config         Skip Docker daemon DNS configuration
   --check-only              Audit prerequisites without modifying the system
   --force                   Allow overwrite/backup of existing configuration
+  --verbose                 Stream full command output instead of showing a spinner
   -h, --help                Show this help message
+
+By default, long-running steps (package installs, Docker setup) show a
+compact spinner on interactive terminals and a simple start/done line on
+non-TTY output. Use --verbose when you need the raw output for debugging.
 EOF
     exit 0
 }
@@ -140,6 +264,7 @@ while [[ $# -gt 0 ]]; do
         --skip-dns-config) SKIP_DNS_CONFIG=true; shift ;;
         --check-only)   CHECK_ONLY=true; shift ;;
         --force)        FORCE=true; shift ;;
+        --verbose)      VERBOSE=true; shift ;;
         -h|--help)      usage ;;
         *) die "Unknown flag: $1. Use --help for usage." ;;
     esac
@@ -448,9 +573,7 @@ with open('$DAEMON_JSON', 'w') as f:
 
     # Restart Docker only if config changed
     if [[ "$DNS_CHANGED" == true ]]; then
-        info "Restarting Docker daemon to apply DNS changes..."
-        systemctl restart docker
-        pass "Docker daemon restarted"
+        run_step "Restarting Docker daemon to apply DNS changes" systemctl restart docker
     fi
 fi
 
@@ -513,11 +636,9 @@ fi
 # troubleshooting guidance recommends validating name resolution from inside a
 # container, not only from the host.
 if [[ "$SKIP_DNS_CONFIG" == false ]]; then
-    if docker run --rm alpine:3.20 nslookup example.com &>/dev/null; then
-        pass "Docker container DNS resolution works"
+    if run_step "Docker container DNS resolution" docker run --rm alpine:3.20 nslookup example.com; then
         RESULTS+=("Docker DNS: OK")
     else
-        fail "Docker container DNS resolution failed"
         RESULTS+=("Docker DNS: FAIL")
         mark_fail
     fi
