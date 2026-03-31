@@ -197,10 +197,17 @@ func HasCertificateForHostname(client *ssh.Client, hostname string) bool {
 		`grep -q '"%s"' %s/acme.json 2>/dev/null`,
 		hostname, proxyBaseDir,
 	)
-	stdoutCh, stderrCh, done := client.StreamCommand(cmd)
-	drainBoth(stdoutCh, stderrCh)
-	err := <-done
-	return err == nil
+	if runSimple(client, cmd) == nil {
+		return true
+	}
+
+	// acme.json is created with 0600 permissions, so non-root SSH users may
+	// need sudo -n to read it even when Docker access has already been granted.
+	if !client.IsRoot() && runSimple(client, "sudo -n "+cmd) == nil {
+		return true
+	}
+
+	return false
 }
 
 func runIgnoreError(client *ssh.Client, cmd string) error {
