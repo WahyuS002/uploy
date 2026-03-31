@@ -136,8 +136,16 @@ func isContainerRunning(client *ssh.Client, name string) (bool, error) {
 func drainBoth(stdoutCh, stderrCh <-chan string) {
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); for range stdoutCh {} }()
-	go func() { defer wg.Done(); for range stderrCh {} }()
+	go func() {
+		defer wg.Done()
+		for range stdoutCh {
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range stderrCh {
+		}
+	}()
 	wg.Wait()
 }
 
@@ -158,7 +166,11 @@ func runSimple(client *ssh.Client, cmd string) error {
 	var stderrLines []string
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); for range stdoutCh {} }()
+	go func() {
+		defer wg.Done()
+		for range stdoutCh {
+		}
+	}()
 	go func() {
 		defer wg.Done()
 		for line := range stderrCh {
