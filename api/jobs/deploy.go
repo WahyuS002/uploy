@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -171,7 +172,7 @@ func RunDeploy(cfg DeployConfig) {
 		}
 
 		if len(unresolvedDomains) > 0 {
-			appendLog(ctx, cfg.DeploymentID, "waiting for TLS certificates...", "stdout", "tls_cert")
+			appendLog(ctx, cfg.DeploymentID, "checking HTTPS certificate status...", "stdout", "tls_cert")
 
 			for i := 0; i < 6 && len(unresolvedDomains) > 0; i++ {
 				if i > 0 {
@@ -182,7 +183,7 @@ func RunDeploy(cfg DeployConfig) {
 						if err := db.SetDomainReady(ctx, domainID); err != nil {
 							log.Printf("SetDomainReady %s error: %v", domain, err)
 						} else {
-							appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS ready for %s", domain), "stdout", "tls_cert")
+							appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("HTTPS is ready for %s", domain), "stdout", "tls_cert")
 						}
 						delete(unresolvedDomains, domain)
 					}
@@ -194,7 +195,8 @@ func RunDeploy(cfg DeployConfig) {
 				for domain := range unresolvedDomains {
 					names = append(names, domain)
 				}
-				appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("TLS pending for: %s; will retry in background", strings.Join(names, ", ")), "stdout", "tls_cert")
+				sort.Strings(names)
+				appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("HTTPS is not ready yet for: %s. The app is deployed and Uploy will keep checking in the background.", strings.Join(names, ", ")), "stdout", "tls_cert")
 			}
 		}
 	}
