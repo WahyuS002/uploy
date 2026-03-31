@@ -7,7 +7,6 @@ import (
 
 	"github.com/WahyuS002/uploy/crypto"
 	"github.com/WahyuS002/uploy/db"
-	"github.com/WahyuS002/uploy/proxy"
 	"github.com/WahyuS002/uploy/ssh"
 )
 
@@ -86,8 +85,9 @@ func reconcilePendingDomains(parent context.Context) {
 		}
 
 		for _, d := range serverDomains {
-			if proxy.HasCertificateForHostname(client, d.Domain) {
-				if err := db.SetDomainReady(ctx, d.ID); err != nil {
+			certPresent, err := promoteDomainIfCertificateReady(ctx, client, d.ID, d.Domain)
+			if certPresent {
+				if err != nil {
 					log.Printf("Domain reconciler: promote domain %s (%s) failed: %v", d.ID, d.Domain, err)
 				} else {
 					log.Printf("Domain reconciler: domain %s (%s) is ready", d.ID, d.Domain)

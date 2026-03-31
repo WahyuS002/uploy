@@ -187,8 +187,9 @@ func RunDeploy(cfg DeployConfig) {
 					time.Sleep(tlsRetryInterval)
 				}
 				for domain, domainID := range unresolvedDomains {
-					if proxy.HasCertificateForHostname(client, domain) {
-						if err := db.SetDomainReady(ctx, domainID); err != nil {
+					certPresent, err := promoteDomainIfCertificateReady(ctx, client, domainID, domain)
+					if certPresent {
+						if err != nil {
 							log.Printf("SetDomainReady %s error: %v", domain, err)
 						} else {
 							appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("HTTPS is ready for %s", domain), "stdout", "tls_cert")
