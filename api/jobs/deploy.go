@@ -18,6 +18,14 @@ import (
 
 const proxyContainerName = "uploy-proxy"
 
+// TLS foreground polling: check immediately, then retry up to
+// tlsForegroundAttempts−1 more times with tlsRetryInterval pauses
+// (~50 s total) before deferring to the background reconciler.
+const (
+	tlsForegroundAttempts = 6
+	tlsRetryInterval      = 10 * time.Second
+)
+
 type DeployConfig struct {
 	DeploymentID  string
 	ApplicationID string
@@ -174,9 +182,9 @@ func RunDeploy(cfg DeployConfig) {
 		if len(unresolvedDomains) > 0 {
 			appendLog(ctx, cfg.DeploymentID, "checking HTTPS certificate status...", "stdout", "tls_cert")
 
-			for i := 0; i < 6 && len(unresolvedDomains) > 0; i++ {
+			for i := 0; i < tlsForegroundAttempts && len(unresolvedDomains) > 0; i++ {
 				if i > 0 {
-					time.Sleep(10 * time.Second)
+					time.Sleep(tlsRetryInterval)
 				}
 				for domain, domainID := range unresolvedDomains {
 					if proxy.HasCertificateForHostname(client, domain) {
