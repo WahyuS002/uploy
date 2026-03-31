@@ -32,12 +32,12 @@ func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
 		return fmt.Errorf("docker compose not available: %w", err)
 	}
 
-	// 2. Create Docker network
+	// 2. Create Docker network — if create fails, verify it already exists
 	progress("creating uploy network...")
-	if err := runIgnoreError(client, fmt.Sprintf(
-		"%s network create %s 2>/dev/null || true", docker, networkName,
-	)); err != nil {
-		return fmt.Errorf("create network: %w", err)
+	if err := runSimple(client, fmt.Sprintf("%s network create %s", docker, networkName)); err != nil {
+		if err2 := runSimple(client, fmt.Sprintf("%s network inspect %s", docker, networkName)); err2 != nil {
+			return fmt.Errorf("create network: %w", err)
+		}
 	}
 
 	// 3. Setup directory + acme.json (each command retries with sudo -n on failure)
@@ -118,27 +118,17 @@ networks:
 }
 
 func isContainerRunning(client *ssh.Client, name string) (bool, error) {
-	stdoutCh, _, done := client.StreamCommand(
-		fmt.Sprintf("%s inspect -f '{{.State.Running}}' %s 2>/dev/null || echo false", client.DockerBin(), name),
+	stdoutCh, stderrCh, done := client.StreamCommand(
+		fmt.Sprintf("%s inspect -f '{{.State.Running}}' %s", client.DockerBin(), name),
 	)
 
 	var output string
-	for line := range stdoutCh {
-		output = line
-	}
-	if err := <-done; err != nil {
-		return false, nil
-	}
-
-	return output == "true", nil
-}
-
-func drainBoth(stdoutCh, stderrCh <-chan string) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for range stdoutCh {
+		for line := range stdoutCh {
+			output = line
 		}
 	}()
 	go func() {
@@ -147,15 +137,19 @@ func drainBoth(stdoutCh, stderrCh <-chan string) {
 		}
 	}()
 	wg.Wait()
+
+	if err := <-done; err != nil {
+		return false, fmt.Errorf("inspect container %s: %w", name, err)
+	}
+
+	return output == "true", nil
 }
 
 // runElevated tries cmd directly; for non-root users, retries with sudo -n on failure.
 func runElevated(client *ssh.Client, cmd string) error {
-	if err := runSimple(client, cmd); err == nil {
-		return nil
-	}
-	if client.IsRoot() {
-		return runSimple(client, cmd)
+	err := runSimple(client, cmd)
+	if err == nil || client.IsRoot() {
+		return err
 	}
 	return runSimple(client, "sudo -n "+cmd)
 }
@@ -208,11 +202,4 @@ func HasCertificateForHostname(client *ssh.Client, hostname string) bool {
 	}
 
 	return false
-}
-
-func runIgnoreError(client *ssh.Client, cmd string) error {
-	stdoutCh, stderrCh, done := client.StreamCommand(cmd)
-	drainBoth(stdoutCh, stderrCh)
-	<-done
-	return nil
 }
