@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { cn } from '$lib/components/ui/cn.js';
 	import type { components } from '$lib/api/v1';
 
 	type LogEntry = components['schemas']['LogEntry'];
@@ -16,7 +17,6 @@
 	let streamError: string = $state('');
 	let eventSource: EventSource | null = null;
 
-	// Map structured phase identifiers from backend to human-readable labels
 	const phaseLabels: Record<string, string> = {
 		connect: 'Connecting to Server',
 		pull_image: 'Pulling Image',
@@ -36,8 +36,6 @@
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
 
 	function updatePhaseFromLog(log: LogEntry) {
-		// Track the last stderr line that carries the real error detail.
-		// Skip synthetic wrappers so the banner shows the actual error.
 		if (
 			log.type === 'stderr' &&
 			log.phase !== 'failed' &&
@@ -85,24 +83,6 @@
 		if (status === 'success') return 'success';
 		if (status === 'failed') return 'error';
 		return 'active';
-	});
-
-	let bannerColor: string = $derived.by(() => {
-		if (bannerStatus === 'success') return '#10b981';
-		if (bannerStatus === 'error') return '#ef4444';
-		return '#3b82f6';
-	});
-
-	let bannerBgColor: string = $derived.by(() => {
-		if (bannerStatus === 'success') return 'rgba(16, 185, 129, 0.1)';
-		if (bannerStatus === 'error') return 'rgba(239, 68, 68, 0.1)';
-		return 'rgba(59, 130, 246, 0.1)';
-	});
-
-	let statusIcon: string = $derived.by(() => {
-		if (bannerStatus === 'success') return '\u2714';
-		if (bannerStatus === 'error') return '\u2716';
-		return '\u25CF';
 	});
 
 	onMount(() => {
@@ -155,72 +135,54 @@
 <div>
 	<!-- Phase Banner -->
 	<div
-		style="
-			border: 1px solid {bannerColor};
-			background: {bannerBgColor};
-			border-radius: 8px;
-			padding: 0.75rem 1rem;
-			margin-bottom: 0.75rem;
-			font-family: system-ui, -apple-system, sans-serif;
-		"
+		class={cn(
+			'mb-3 rounded-lg border p-3',
+			bannerStatus === 'success' && 'border-success/40 bg-success/10',
+			bannerStatus === 'error' && 'border-danger/40 bg-danger/10',
+			bannerStatus === 'active' && 'border-accent/40 bg-accent/10'
+		)}
 	>
-		<div style="display: flex; justify-content: space-between; align-items: center;">
-			<div style="display: flex; align-items: center; gap: 0.5rem;">
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-2">
 				<span
-					style="
-						color: {bannerColor};
-						font-size: 0.75rem;
-						{bannerStatus === 'active' ? 'animation: pulse 2s infinite;' : ''}
-					">{statusIcon}</span
+					class={cn(
+						'text-xs',
+						bannerStatus === 'success' && 'text-success',
+						bannerStatus === 'error' && 'text-danger',
+						bannerStatus === 'active' && 'animate-pulse text-accent'
+					)}
 				>
-				<span style="font-weight: 600; color: {bannerColor}; font-size: 0.9rem;"
-					>{currentPhase}</span
+					{#if bannerStatus === 'success'}&#10004;{:else if bannerStatus === 'error'}&#10006;{:else}&#9679;{/if}
+				</span>
+				<span
+					class={cn(
+						'text-sm font-semibold',
+						bannerStatus === 'success' && 'text-success',
+						bannerStatus === 'error' && 'text-danger',
+						bannerStatus === 'active' && 'text-accent'
+					)}
 				>
+					{currentPhase}
+				</span>
 			</div>
-			<span style="font-size: 0.8rem; color: #888; font-variant-numeric: tabular-nums;"
-				>{formatElapsed(elapsedSeconds)}</span
-			>
+			<span class="text-sm text-muted-foreground tabular-nums">
+				{formatElapsed(elapsedSeconds)}
+			</span>
 		</div>
 		{#if currentSubtext && bannerStatus !== 'success'}
-			<div style="margin-top: 0.25rem; font-size: 0.8rem; color: #999;">
-				{currentSubtext}
-			</div>
+			<div class="mt-1 text-sm text-muted-foreground">{currentSubtext}</div>
 		{/if}
 		{#if streamError}
-			<div style="margin-top: 0.25rem; font-size: 0.8rem; color: #ef4444;">
-				{streamError}
-			</div>
+			<div class="mt-1 text-sm text-danger">{streamError}</div>
 		{/if}
 	</div>
 
 	<!-- Log Panel -->
-	<div
-		style="
-			background: #1a1a1a;
-			color: #fff;
-			padding: 1rem;
-			font-family: monospace;
-			border-radius: 8px;
-			max-height: 400px;
-			overflow-y: auto;
-		"
-	>
+	<div class="max-h-100 overflow-y-auto rounded-lg bg-[#1a1a1a] p-4 font-mono text-white">
 		{#each logs as log (log.order)}
-			<p style="margin: 0; color: {log.type === 'stderr' ? '#ff6b6b' : '#fff'}">
+			<p class={cn('m-0', log.type === 'stderr' ? 'text-[#ff6b6b]' : 'text-white')}>
 				{log.output}
 			</p>
 		{/each}
 	</div>
 </div>
-
-<style>
-	@keyframes pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.4;
-		}
-	}
-</style>

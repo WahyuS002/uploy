@@ -3,6 +3,11 @@
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
+	import PageHeader from '$lib/components/app/PageHeader.svelte';
+	import FormField from '$lib/components/app/FormField.svelte';
+	import ResourceListItem from '$lib/components/app/ResourceListItem.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
 	type EnvironmentResponse = components['schemas']['EnvironmentResponse'];
@@ -75,58 +80,57 @@
 
 {#if project}
 	<section>
-		<h2 class="mb-4 text-xl font-bold">{project.name}</h2>
+		<PageHeader title={project.name} />
 
 		<div class="mb-6">
-			<h3 class="mb-2 text-lg font-bold">Environments</h3>
+			<h3 class="mb-2 text-lg font-bold text-foreground">Environments</h3>
 
 			{#if canEdit}
 				<form
-					onsubmit={(e) => { e.preventDefault(); createEnvironment(); }}
+					onsubmit={(e) => {
+						e.preventDefault();
+						createEnvironment();
+					}}
 					class="mb-4 flex items-end gap-2"
 				>
-					<label class="flex flex-1 flex-col gap-1 text-sm">
-						<span>Environment name</span>
-						<input
+					<FormField label="Environment name">
+						<Input
 							type="text"
 							bind:value={envName}
 							placeholder="e.g. staging, production"
 							required
-							class="rounded border p-1 text-sm"
 						/>
-					</label>
-					<button
-						type="submit"
-						disabled={creating}
-						class="cursor-pointer rounded-sm bg-black px-3 py-1.5 text-sm text-white disabled:opacity-50"
-					>
+					</FormField>
+					<Button type="submit" size="sm" loading={creating}>
 						{creating ? 'Creating...' : 'Add Environment'}
-					</button>
+					</Button>
 				</form>
 				{#if error}
-					<p class="mb-2 text-sm text-red-600">{error}</p>
+					<p class="mb-2 text-sm text-danger">{error}</p>
 				{/if}
 			{/if}
 
 			{#if environments.length === 0}
-				<p class="text-sm text-gray-500">No environments yet.</p>
+				<p class="text-sm text-muted-foreground">No environments yet.</p>
 			{:else}
 				<div class="flex flex-col gap-1">
-					{#each environments as env}
-						<div class="flex items-center justify-between rounded border p-3">
+					{#each environments as env (env.id)}
+						<ResourceListItem class="justify-between">
 							<div>
-								<span class="font-bold">{env.name}</span>
-								<span class="ml-2 text-xs text-gray-400">{env.id}</span>
+								<span class="font-bold text-foreground">{env.name}</span>
+								<span class="ml-2 text-xs text-muted-foreground">{env.id}</span>
 							</div>
 							{#if isOwner}
-								<button
+								<Button
+									variant="ghost"
+									size="sm"
 									onclick={() => deleteEnvironment(env.id)}
-									class="cursor-pointer text-sm text-red-500 hover:text-red-700"
+									class="text-danger hover:text-red-700"
 								>
 									Delete
-								</button>
+								</Button>
 							{/if}
-						</div>
+						</ResourceListItem>
 					{/each}
 				</div>
 			{/if}

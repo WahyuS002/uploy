@@ -2,6 +2,14 @@
 	import { invalidateAll } from '$app/navigation';
 	import { createApiClient } from '$lib/api/client';
 	import type { PageData } from './$types';
+	import PageHeader from '$lib/components/app/PageHeader.svelte';
+	import FormField from '$lib/components/app/FormField.svelte';
+	import CopyButton from '$lib/components/app/CopyButton.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
+	import Textarea from '$lib/components/ui/Textarea.svelte';
+	import Alert from '$lib/components/ui/Alert.svelte';
+	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -12,7 +20,6 @@
 	let error = $state('');
 	let loading = $state(false);
 	let lastCreatedKey = $state<{ name: string; public_key: string } | null>(null);
-	let copiedId = $state<string | null>(null);
 	let expandedKeyId = $state<string | null>(null);
 
 	// Import form state
@@ -71,53 +78,35 @@
 			loading = false;
 		}
 	}
-
-	async function copyText(text: string, id: string) {
-		await navigator.clipboard.writeText(text);
-		copiedId = id;
-		setTimeout(() => (copiedId = null), 2000);
-	}
 </script>
 
 <section>
-	<h2 class="mb-4 text-xl font-bold">SSH Keys</h2>
+	<PageHeader title="SSH Keys" />
 
 	{#if isOwner}
 		{#if lastCreatedKey}
-			<div class="mb-8 max-w-md rounded-lg border border-green-200 bg-green-50 p-5">
-				<p class="mb-1 text-sm font-semibold text-green-800">Key created</p>
-				<p class="mb-3 text-sm text-green-700">
+			<Alert tone="success" class="mb-8 max-w-md p-5">
+				<p class="mb-1 text-sm font-semibold">Key created</p>
+				<p class="mb-3 text-sm">
 					<span class="font-medium">{lastCreatedKey.name}</span> is ready. Add this public key to
 					<code class="rounded bg-green-100 px-1 text-xs">~/.ssh/authorized_keys</code> on your remote
 					server.
 				</p>
 				<div class="mb-3 flex items-start gap-2">
-					<pre
-						class="flex-1 overflow-x-auto rounded bg-white p-2 font-mono text-xs break-all whitespace-pre-wrap">{lastCreatedKey.public_key}</pre>
-					<button
-						type="button"
-						class="shrink-0 cursor-pointer rounded border bg-white px-2 py-1 text-xs hover:bg-gray-50"
-						onclick={() => copyText(lastCreatedKey!.public_key, 'created')}
-					>
-						{copiedId === 'created' ? 'Copied!' : 'Copy public key'}
-					</button>
+					<CodeBlock code={lastCreatedKey.public_key} class="flex-1 bg-white" />
+					<CopyButton text={lastCreatedKey.public_key} defaultLabel="Copy public key" />
 				</div>
 				<div class="flex items-center gap-3">
-					<a
-						href="/dashboard/servers"
-						class="rounded-sm bg-black px-3 py-1.5 text-sm text-white hover:bg-gray-800"
-					>
-						Go to Servers
-					</a>
+					<Button href="/dashboard/servers" size="sm">Go to Servers</Button>
 					<button
 						type="button"
-						class="cursor-pointer text-sm text-gray-500 hover:text-gray-700"
+						class="cursor-pointer text-sm text-muted-foreground hover:text-foreground"
 						onclick={() => (lastCreatedKey = null)}
 					>
 						Dismiss
 					</button>
 				</div>
-			</div>
+			</Alert>
 		{:else if view === 'import'}
 			<div class="mb-8 max-w-md">
 				<form
@@ -127,42 +116,30 @@
 					}}
 					class="flex flex-col gap-3"
 				>
-					<label class="flex flex-col gap-1 text-sm">
-						Name
-						<input
-							type="text"
-							bind:value={importName}
-							required
-							class="rounded border p-2"
-							placeholder="production-server"
-						/>
-					</label>
-					<label class="flex flex-col gap-1 text-sm">
-						Private Key
-						<textarea
+					<FormField label="Name">
+						<Input type="text" bind:value={importName} required placeholder="production-server" />
+					</FormField>
+					<FormField label="Private Key">
+						<Textarea
 							bind:value={privateKey}
 							required
-							rows="6"
-							class="rounded border p-2 font-mono text-xs"
+							rows={6}
+							class="font-mono text-xs"
 							placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-						></textarea>
-					</label>
+						/>
+					</FormField>
 
 					{#if error}
-						<p class="text-sm text-red-600">{error}</p>
+						<p class="text-sm text-danger">{error}</p>
 					{/if}
 
-					<button
-						type="submit"
-						disabled={loading}
-						class="cursor-pointer rounded-sm bg-black p-2 text-white disabled:opacity-50"
-					>
+					<Button type="submit" {loading} class="w-full">
 						{loading ? 'Saving...' : 'Add SSH Key'}
-					</button>
+					</Button>
 				</form>
 				<button
 					type="button"
-					class="mt-3 cursor-pointer text-sm text-gray-500 hover:text-gray-700"
+					class="mt-3 cursor-pointer text-sm text-muted-foreground hover:text-foreground"
 					onclick={() => {
 						view = 'default';
 						error = '';
@@ -173,26 +150,21 @@
 			</div>
 		{:else}
 			<div class="mb-8 max-w-md">
-				<p class="mb-4 text-sm text-gray-600">
+				<p class="mb-4 text-sm text-muted-foreground">
 					Generate an SSH key to connect Uploy to your servers. You'll add the public key to your
 					server after generating.
 				</p>
 
 				{#if error}
-					<p class="mb-3 text-sm text-red-600">{error}</p>
+					<p class="mb-3 text-sm text-danger">{error}</p>
 				{/if}
 
-				<button
-					type="button"
-					disabled={loading}
-					class="mb-3 w-full cursor-pointer rounded-sm bg-black p-2.5 text-white disabled:opacity-50"
-					onclick={quickGenerate}
-				>
+				<Button {loading} class="mb-3 w-full" onclick={quickGenerate}>
 					{loading ? 'Generating...' : 'Generate Ed25519 Key'}
-				</button>
+				</Button>
 				<button
 					type="button"
-					class="cursor-pointer text-sm text-gray-500 hover:text-gray-700"
+					class="cursor-pointer text-sm text-muted-foreground hover:text-foreground"
 					onclick={() => {
 						view = 'import';
 						error = '';
@@ -205,39 +177,32 @@
 
 		{#if keys.length > 0}
 			<div class="max-w-2xl">
-				<h3 class="mb-3 text-sm font-semibold text-gray-700">Your keys</h3>
-				<ul class="divide-y">
+				<h3 class="mb-3 text-sm font-semibold text-foreground">Your keys</h3>
+				<ul class="divide-y divide-border">
 					{#each keys as key (key.id)}
 						<li class="flex items-center justify-between py-2.5">
 							<div>
-								<p class="text-sm">{key.name}</p>
-								<p class="text-xs text-gray-400">
+								<p class="text-sm text-foreground">{key.name}</p>
+								<p class="text-xs text-muted-foreground">
 									{new Date(key.created_at).toLocaleDateString()}
 								</p>
 							</div>
 							<div class="flex items-center gap-2">
 								{#if key.public_key}
-									<button
-										type="button"
-										class="cursor-pointer rounded border px-2 py-1 text-xs hover:bg-gray-50"
+									<Button
+										variant="secondary"
+										size="sm"
 										onclick={() => (expandedKeyId = expandedKeyId === key.id ? null : key.id)}
 									>
 										{expandedKeyId === key.id ? 'Hide' : 'Show'} public key
-									</button>
-									<button
-										type="button"
-										class="cursor-pointer rounded border px-2 py-1 text-xs hover:bg-gray-50"
-										onclick={() => copyText(key.public_key, key.id)}
-									>
-										{copiedId === key.id ? 'Copied!' : 'Copy public key'}
-									</button>
+									</Button>
+									<CopyButton text={key.public_key} defaultLabel="Copy public key" />
 								{/if}
 							</div>
 						</li>
 						{#if expandedKeyId === key.id && key.public_key}
 							<li class="pb-3">
-								<pre
-									class="overflow-x-auto rounded bg-gray-50 p-2 font-mono text-xs break-all whitespace-pre-wrap">{key.public_key}</pre>
+								<CodeBlock code={key.public_key} />
 							</li>
 						{/if}
 					{/each}
@@ -245,7 +210,7 @@
 			</div>
 		{/if}
 	{:else}
-		<p class="max-w-md text-sm text-gray-500">
+		<p class="max-w-md text-sm text-muted-foreground">
 			Only workspace owners can manage SSH keys. Contact your workspace owner to add or generate
 			keys.
 		</p>
