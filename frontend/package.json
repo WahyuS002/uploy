@@ -46,6 +46,7 @@
 		]
 	},
 	"dependencies": {
+		"lucide-svelte": "^1.0.1",
 		"openapi-fetch": "^0.17.0"
 	}
 }

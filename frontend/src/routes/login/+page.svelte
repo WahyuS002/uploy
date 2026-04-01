@@ -36,7 +36,7 @@
 				return;
 			}
 
-			window.location.href = '/dashboard';
+			window.location.href = '/dashboard/projects';
 		} catch {
 			error = 'Network error';
 		} finally {

@@ -4,7 +4,7 @@
 	onMount(async () => {
 		const res = await fetch('/api/auth/me');
 		if (res.ok) {
-			window.location.href = '/dashboard';
+			window.location.href = '/dashboard/projects';
 		} else {
 			window.location.href = '/login';
 		}
