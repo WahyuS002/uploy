@@ -5,18 +5,18 @@
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
 
-	type ApplicationResponse = components['schemas']['ApplicationResponse'];
-	type ApplicationDomainResponse = components['schemas']['ApplicationDomainResponse'];
-	type ApplicationEnvResponse = components['schemas']['ApplicationEnvResponse'];
+	type ServiceResponse = components['schemas']['ServiceResponse'];
+	type ServiceDomainResponse = components['schemas']['ServiceDomainResponse'];
+	type ServiceEnvResponse = components['schemas']['ServiceEnvResponse'];
 	type DeploymentResponse = components['schemas']['DeploymentResponse'];
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
 	let isOwner = $derived(data.workspace?.role === 'owner');
 
-	let app = $state<ApplicationResponse | null>(null);
-	let domains = $state<ApplicationDomainResponse[]>([]);
-	let envs = $state<ApplicationEnvResponse[]>([]);
+	let svc = $state<ServiceResponse | null>(null);
+	let domains = $state<ServiceDomainResponse[]>([]);
+	let envs = $state<ServiceEnvResponse[]>([]);
 	let envsLoaded = $state(false);
 	let deploymentId = $state<string | null>(null);
 	let deploying = $state(false);
@@ -34,25 +34,25 @@
 	let envValue = $state('');
 	let envError = $state('');
 
-	const appId = $page.params.id as string;
+	const svcId = $page.params.id as string;
 
-	async function loadApp() {
-		const { data } = await api.GET('/api/applications/{id}', {
-			params: { path: { id: appId } }
+	async function loadService() {
+		const { data } = await api.GET('/api/services/{id}', {
+			params: { path: { id: svcId } }
 		});
-		if (data) app = data;
+		if (data) svc = data;
 	}
 
 	async function loadDomains() {
-		const { data } = await api.GET('/api/applications/{id}/domains', {
-			params: { path: { id: appId } }
+		const { data } = await api.GET('/api/services/{id}/domains', {
+			params: { path: { id: svcId } }
 		});
 		if (data) domains = data;
 	}
 
 	async function loadEnvs() {
-		const { data, error } = await api.GET('/api/applications/{id}/envs', {
-			params: { path: { id: appId } }
+		const { data, error } = await api.GET('/api/services/{id}/envs', {
+			params: { path: { id: svcId } }
 		});
 		if (data) {
 			envs = data;
@@ -63,8 +63,8 @@
 	}
 
 	async function loadDeployments() {
-		const { data } = await api.GET('/api/applications/{id}/deployments', {
-			params: { path: { id: appId }, query: { limit: 10 } }
+		const { data } = await api.GET('/api/services/{id}/deployments', {
+			params: { path: { id: svcId }, query: { limit: 10 } }
 		});
 		if (data) deployments = data;
 	}
@@ -75,7 +75,7 @@
 		needsRedeploy = false;
 		try {
 			const { data, error } = await api.POST('/api/deployments', {
-				body: { application_id: appId }
+				body: { service_id: svcId }
 			});
 			if (error) {
 				deployError = (error as { error: string }).error;
@@ -96,8 +96,8 @@
 		domainError = '';
 		domainAdding = true;
 		try {
-			const { data, error } = await api.POST('/api/applications/{id}/domains', {
-				params: { path: { id: appId } },
+			const { data, error } = await api.POST('/api/services/{id}/domains', {
+				params: { path: { id: svcId } },
 				body: { domain: domainInput.trim() }
 			});
 			if (error) {
@@ -117,8 +117,8 @@
 	}
 
 	async function deleteDomain(domainId: string) {
-		await api.DELETE('/api/applications/{id}/domains/{domainId}', {
-			params: { path: { id: appId, domainId } }
+		await api.DELETE('/api/services/{id}/domains/{domainId}', {
+			params: { path: { id: svcId, domainId } }
 		});
 		domains = domains.filter((d) => d.id !== domainId);
 		needsRedeploy = true;
@@ -126,8 +126,8 @@
 
 	async function addEnv() {
 		envError = '';
-		const { data, error } = await api.POST('/api/applications/{id}/envs', {
-			params: { path: { id: appId } },
+		const { data, error } = await api.POST('/api/services/{id}/envs', {
+			params: { path: { id: svcId } },
 			body: { key: envKey, value: envValue }
 		});
 		if (error) {
@@ -148,28 +148,29 @@
 	}
 
 	async function deleteEnv(key: string) {
-		await api.DELETE('/api/applications/{id}/envs/{key}', {
-			params: { path: { id: appId, key } }
+		await api.DELETE('/api/services/{id}/envs/{key}', {
+			params: { path: { id: svcId, key } }
 		});
 		envs = envs.filter((e) => e.key !== key);
 	}
 
 	$effect(() => {
-		loadApp();
+		loadService();
 		loadDomains();
 		loadEnvs();
 		loadDeployments();
 	});
 </script>
 
-{#if app}
+{#if svc}
 	<section>
-		<h2 class="mb-4 text-xl font-bold">{app.name}</h2>
+		<h2 class="mb-4 text-xl font-bold">{svc.name}</h2>
 
 		<div class="mb-4 text-sm text-gray-600">
-			<p>Image: {app.image}</p>
-			<p>Container: {app.container_name}</p>
-			<p>Port: {app.port}</p>
+			<p>Image: {svc.image}</p>
+			<p>Container: {svc.container_name}</p>
+			<p>Port: {svc.port}</p>
+			<p>Kind: {svc.kind}</p>
 		</div>
 
 		<!-- Domains Section -->

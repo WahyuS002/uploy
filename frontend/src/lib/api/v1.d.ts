@@ -133,62 +133,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/applications": {
+    "/api/projects": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List applications in workspace */
-        get: operations["listApplications"];
+        /** List projects in workspace */
+        get: operations["listProjects"];
         put?: never;
-        /** Create a new application */
-        post: operations["createApplication"];
+        /** Create a new project */
+        post: operations["createProject"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/applications/{id}": {
+    "/api/projects/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get application details */
-        get: operations["getApplication"];
-        /** Update application configuration */
-        put: operations["updateApplication"];
+        /** Get project details */
+        get: operations["getProject"];
+        /** Update project */
+        put: operations["updateProject"];
         post?: never;
-        /** Delete an application */
-        delete: operations["deleteApplication"];
+        /** Delete a project */
+        delete: operations["deleteProject"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/applications/{id}/envs": {
+    "/api/projects/{id}/environments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List environment variables for an application */
-        get: operations["listApplicationEnvs"];
+        /** List environments in a project */
+        get: operations["listEnvironments"];
+        put?: never;
+        /** Create a new environment in a project */
+        post: operations["createEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{id}/environments/{envId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get environment details */
+        get: operations["getEnvironment"];
+        /** Update environment */
+        put: operations["updateEnvironment"];
+        post?: never;
+        /** Delete an environment */
+        delete: operations["deleteEnvironment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List services in workspace */
+        get: operations["listServices"];
+        put?: never;
+        /** Create a new service */
+        post: operations["createService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/services/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get service details */
+        get: operations["getService"];
+        /** Update service configuration */
+        put: operations["updateService"];
+        post?: never;
+        /** Delete a service */
+        delete: operations["deleteService"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/services/{id}/envs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List environment variables for a service */
+        get: operations["listServiceEnvs"];
         put?: never;
         /** Set or update an environment variable */
-        post: operations["upsertApplicationEnv"];
+        post: operations["upsertServiceEnv"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/applications/{id}/envs/{key}": {
+    "/api/services/{id}/envs/{key}": {
         parameters: {
             query?: never;
             header?: never;
@@ -199,21 +273,21 @@ export interface paths {
         put?: never;
         post?: never;
         /** Delete an environment variable */
-        delete: operations["deleteApplicationEnv"];
+        delete: operations["deleteServiceEnv"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/applications/{id}/deployments": {
+    "/api/services/{id}/deployments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List deployment history for an application */
-        get: operations["listApplicationDeployments"];
+        /** List deployment history for a service */
+        get: operations["listServiceDeployments"];
         put?: never;
         post?: never;
         delete?: never;
@@ -222,25 +296,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/applications/{id}/domains": {
+    "/api/services/{id}/domains": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List domains for an application */
-        get: operations["listApplicationDomains"];
+        /** List domains for a service */
+        get: operations["listServiceDomains"];
         put?: never;
-        /** Add a domain to an application */
-        post: operations["createApplicationDomain"];
+        /** Add a domain to a service */
+        post: operations["createServiceDomain"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/applications/{id}/domains/{domainId}": {
+    "/api/services/{id}/domains/{domainId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -249,10 +323,10 @@ export interface paths {
         };
         get?: never;
         /** Update domain settings */
-        put: operations["updateApplicationDomain"];
+        put: operations["updateServiceDomain"];
         post?: never;
-        /** Remove a domain from an application */
-        delete: operations["deleteApplicationDomain"];
+        /** Remove a domain from a service */
+        delete: operations["deleteServiceDomain"];
         options?: never;
         head?: never;
         patch?: never;
@@ -338,7 +412,7 @@ export interface components {
             ok: boolean;
         };
         DeployRequest: {
-            application_id: string;
+            service_id: string;
         };
         DeployResponse: {
             deployment_id: string;
@@ -347,7 +421,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "in_progress" | "success" | "failed";
-            application_id: string;
+            service_id: string;
             /** Format: date-time */
             created_at: string;
         };
@@ -414,27 +488,67 @@ export interface components {
             /** @description Structured deploy phase identifier. Empty string for raw command output. */
             phase: string;
         };
-        CreateApplicationRequest: {
+        ProjectResponse: {
+            id: string;
+            name: string;
+            workspace_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateProjectRequest: {
+            name: string;
+        };
+        UpdateProjectRequest: {
+            name: string;
+        };
+        EnvironmentResponse: {
+            id: string;
+            name: string;
+            project_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateEnvironmentRequest: {
+            name: string;
+        };
+        UpdateEnvironmentRequest: {
+            name: string;
+        };
+        CreateServiceRequest: {
+            name: string;
+            image: string;
+            container_name: string;
+            port: number;
+            server_id: string;
+            environment_id: string;
+            /**
+             * @default application
+             * @enum {string}
+             */
+            kind: "application";
+        };
+        UpdateServiceRequest: {
             name: string;
             image: string;
             container_name: string;
             port: number;
             server_id: string;
         };
-        UpdateApplicationRequest: {
-            name: string;
-            image: string;
-            container_name: string;
-            port: number;
-            server_id: string;
-        };
-        ApplicationResponse: {
+        ServiceResponse: {
             id: string;
             name: string;
             image: string;
             container_name: string;
             port: number;
             server_id: string;
+            /** @enum {string} */
+            kind: "application";
+            project_id: string;
+            environment_id: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -446,7 +560,7 @@ export interface components {
         UpdateDomainRequest: {
             is_primary: boolean;
         };
-        ApplicationDomainResponse: {
+        ServiceDomainResponse: {
             id: string;
             domain: string;
             is_primary: boolean;
@@ -466,7 +580,7 @@ export interface components {
             key: string;
             value: string;
         };
-        ApplicationEnvResponse: {
+        ServiceEnvResponse: {
             /** Format: int64 */
             id: number;
             key: string;
@@ -721,7 +835,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Server not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -906,7 +1020,7 @@ export interface operations {
             };
         };
     };
-    listApplications: {
+    listProjects: {
         parameters: {
             query?: never;
             header?: never;
@@ -915,13 +1029,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description List of applications */
+            /** @description List of projects */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationResponse"][];
+                    "application/json": components["schemas"]["ProjectResponse"][];
                 };
             };
             /** @description Not authenticated */
@@ -944,7 +1058,7 @@ export interface operations {
             };
         };
     };
-    createApplication: {
+    createProject: {
         parameters: {
             query?: never;
             header?: never;
@@ -953,17 +1067,518 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateApplicationRequest"];
+                "application/json": components["schemas"]["CreateProjectRequest"];
             };
         };
         responses: {
-            /** @description Application created */
+            /** @description Project created */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationResponse"];
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Project updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listEnvironments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of environments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentResponse"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEnvironmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Environment created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Project not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                envId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Environment details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Environment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                envId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEnvironmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Environment updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Environment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                envId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Environment deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Environment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listServices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of services */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceResponse"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Service created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceResponse"];
                 };
             };
             /** @description Invalid request */
@@ -1013,7 +1628,7 @@ export interface operations {
             };
         };
     };
-    getApplication: {
+    getService: {
         parameters: {
             query?: never;
             header?: never;
@@ -1024,13 +1639,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Application details */
+            /** @description Service details */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationResponse"];
+                    "application/json": components["schemas"]["ServiceResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -1042,7 +1657,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1053,7 +1668,7 @@ export interface operations {
             };
         };
     };
-    updateApplication: {
+    updateService: {
         parameters: {
             query?: never;
             header?: never;
@@ -1064,17 +1679,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateApplicationRequest"];
+                "application/json": components["schemas"]["UpdateServiceRequest"];
             };
         };
         responses: {
-            /** @description Application updated */
+            /** @description Service updated */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationResponse"];
+                    "application/json": components["schemas"]["ServiceResponse"];
                 };
             };
             /** @description Invalid request */
@@ -1104,7 +1719,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1115,7 +1730,7 @@ export interface operations {
             };
         };
     };
-    deleteApplication: {
+    deleteService: {
         parameters: {
             query?: never;
             header?: never;
@@ -1126,7 +1741,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Application deleted */
+            /** @description Service deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1151,7 +1766,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1162,7 +1777,7 @@ export interface operations {
             };
         };
     };
-    listApplicationEnvs: {
+    listServiceEnvs: {
         parameters: {
             query?: never;
             header?: never;
@@ -1179,7 +1794,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationEnvResponse"][];
+                    "application/json": components["schemas"]["ServiceEnvResponse"][];
                 };
             };
             /** @description Not authenticated */
@@ -1200,7 +1815,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1211,7 +1826,7 @@ export interface operations {
             };
         };
     };
-    upsertApplicationEnv: {
+    upsertServiceEnv: {
         parameters: {
             query?: never;
             header?: never;
@@ -1232,7 +1847,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationEnvResponse"];
+                    "application/json": components["schemas"]["ServiceEnvResponse"];
                 };
             };
             /** @description Invalid request */
@@ -1262,7 +1877,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1273,7 +1888,7 @@ export interface operations {
             };
         };
     };
-    deleteApplicationEnv: {
+    deleteServiceEnv: {
         parameters: {
             query?: never;
             header?: never;
@@ -1310,7 +1925,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1321,7 +1936,7 @@ export interface operations {
             };
         };
     };
-    listApplicationDeployments: {
+    listServiceDeployments: {
         parameters: {
             query?: {
                 limit?: number;
@@ -1352,7 +1967,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1372,7 +1987,7 @@ export interface operations {
             };
         };
     };
-    listApplicationDomains: {
+    listServiceDomains: {
         parameters: {
             query?: never;
             header?: never;
@@ -1389,7 +2004,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationDomainResponse"][];
+                    "application/json": components["schemas"]["ServiceDomainResponse"][];
                 };
             };
             /** @description Not authenticated */
@@ -1401,7 +2016,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1412,7 +2027,7 @@ export interface operations {
             };
         };
     };
-    createApplicationDomain: {
+    createServiceDomain: {
         parameters: {
             query?: never;
             header?: never;
@@ -1433,7 +2048,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationDomainResponse"];
+                    "application/json": components["schemas"]["ServiceDomainResponse"];
                 };
             };
             /** @description Invalid request */
@@ -1463,7 +2078,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Application not found */
+            /** @description Service not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -1483,7 +2098,7 @@ export interface operations {
             };
         };
     };
-    updateApplicationDomain: {
+    updateServiceDomain: {
         parameters: {
             query?: never;
             header?: never;
@@ -1505,7 +2120,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApplicationDomainResponse"];
+                    "application/json": components["schemas"]["ServiceDomainResponse"];
                 };
             };
             /** @description Invalid request */
@@ -1546,7 +2161,7 @@ export interface operations {
             };
         };
     };
-    deleteApplicationDomain: {
+    deleteServiceDomain: {
         parameters: {
             query?: never;
             header?: never;

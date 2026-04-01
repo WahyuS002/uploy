@@ -34,40 +34,44 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Satu query JOIN: application + server + ssh key
-	appWithServer, err := db.GetApplicationWithServer(r.Context(), req.ApplicationId)
+	svcWithServer, err := db.GetServiceWithServer(r.Context(), req.ServiceId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			log.Printf("GetApplicationWithServer id=%s error: %v", req.ApplicationId, err)
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up application"})
+			log.Printf("GetServiceWithServer id=%s error: %v", req.ServiceId, err)
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up service"})
 		}
 		return
 	}
-	if appWithServer.WorkspaceID != sc.WorkspaceID {
-		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+	if svcWithServer.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
+		return
+	}
+
+	if svcWithServer.Kind != "application" {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "only application services can be deployed"})
 		return
 	}
 
 	// Load env vars and domains
-	envPairs, err := db.GetApplicationEnvPairs(r.Context(), appWithServer.ID)
+	envPairs, err := db.GetServiceEnvPairs(r.Context(), svcWithServer.ID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load environment variables"})
 		return
 	}
 
-	appDomains, err := db.ListDomainsByApplication(r.Context(), appWithServer.ID)
+	svcDomains, err := db.ListDomainsByService(r.Context(), svcWithServer.ID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load domains"})
 		return
 	}
-	domainNames := make([]string, len(appDomains))
-	for i, d := range appDomains {
+	domainNames := make([]string, len(svcDomains))
+	for i, d := range svcDomains {
 		domainNames[i] = d.Domain
 	}
 
-	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID, appWithServer.ID)
+	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID, svcWithServer.ID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create deployment"})
 		return
@@ -75,18 +79,18 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 
 	go jobs.RunDeploy(jobs.DeployConfig{
 		DeploymentID:  deployment.ID,
-		ApplicationID: appWithServer.ID,
-		Image:         appWithServer.Image,
-		ContainerName: appWithServer.ContainerName,
-		Port:          int(appWithServer.Port),
+		ServiceID:     svcWithServer.ID,
+		Image:         svcWithServer.Image,
+		ContainerName: svcWithServer.ContainerName,
+		Port:          int(svcWithServer.Port),
 		EnvVars:       envPairs,
 		Domains:       domainNames,
-		ServerID:      appWithServer.ServerID,
+		ServerID:      svcWithServer.ServerID,
 		Server: ssh.ServerConfig{
-			Host:       appWithServer.Host,
-			Port:       int(appWithServer.ServerPort),
-			User:       appWithServer.SSHUser,
-			PrivateKey: appWithServer.PrivateKey,
+			Host:       svcWithServer.Host,
+			Port:       int(svcWithServer.ServerPort),
+			User:       svcWithServer.SSHUser,
+			PrivateKey: svcWithServer.PrivateKey,
 		},
 	})
 
@@ -224,20 +228,20 @@ drain:
 	}
 }
 
-func (s *Server) ListApplicationDeployments(w http.ResponseWriter, r *http.Request, id string, params gen.ListApplicationDeploymentsParams) {
+func (s *Server) ListServiceDeployments(w http.ResponseWriter, r *http.Request, id string, params gen.ListServiceDeploymentsParams) {
 	sc, _ := auth.GetSessionContext(r)
 
-	app, err := db.GetApplicationByID(r.Context(), id)
+	svc, err := db.GetServiceByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get application"})
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get service"})
 		}
 		return
 	}
-	if app.WorkspaceID != sc.WorkspaceID {
-		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+	if svc.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		return
 	}
 
@@ -246,7 +250,7 @@ func (s *Server) ListApplicationDeployments(w http.ResponseWriter, r *http.Reque
 		limit = int32(*params.Limit)
 	}
 
-	deployments, err := db.ListDeploymentsByApplication(r.Context(), app.ID, limit)
+	deployments, err := db.ListDeploymentsByService(r.Context(), svc.ID, limit)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list deployments"})
 		return
@@ -255,10 +259,10 @@ func (s *Server) ListApplicationDeployments(w http.ResponseWriter, r *http.Reque
 	resp := make([]gen.DeploymentResponse, len(deployments))
 	for i, d := range deployments {
 		resp[i] = gen.DeploymentResponse{
-			Id:            d.ID,
-			Status:        gen.DeploymentResponseStatus(d.Status),
-			ApplicationId: d.ApplicationID,
-			CreatedAt:     d.CreatedAt,
+			Id:        d.ID,
+			Status:    gen.DeploymentResponseStatus(d.Status),
+			ServiceId: d.ServiceID,
+			CreatedAt: d.CreatedAt,
 		}
 	}
 

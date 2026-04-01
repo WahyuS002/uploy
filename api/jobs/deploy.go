@@ -28,7 +28,7 @@ const (
 
 type DeployConfig struct {
 	DeploymentID  string
-	ApplicationID string
+	ServiceID     string
 	Image         string
 	ContainerName string
 	Port          int
@@ -167,9 +167,9 @@ func RunDeploy(cfg DeployConfig) {
 
 		// Only poll domains that are not yet ready (pending or error).
 		// Domains already marked ready keep their status — certs persist across redeploys.
-		domainList, err := db.ListDomainsByApplication(ctx, cfg.ApplicationID)
+		domainList, err := db.ListDomainsByService(ctx, cfg.ServiceID)
 		if err != nil {
-			log.Printf("ListDomainsByApplication error: %v", err)
+			log.Printf("ListDomainsByService error: %v", err)
 		}
 
 		unresolvedDomains := make(map[string]string) // domain -> domainID

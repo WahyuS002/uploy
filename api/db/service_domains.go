@@ -8,9 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type ApplicationDomain struct {
+type ServiceDomain struct {
 	ID               string     `json:"id"`
-	ApplicationID    string     `json:"application_id"`
+	ServiceID        string     `json:"service_id"`
 	Domain           string     `json:"domain"`
 	IsPrimary        bool       `json:"is_primary"`
 	Status           string     `json:"status"`
@@ -22,20 +22,20 @@ type ApplicationDomain struct {
 }
 
 type PendingDomain struct {
-	ID            string
-	Domain        string
-	ApplicationID string
-	ServerID      string
-	Host          string
-	ServerPort    int32
-	SSHUser       string
-	EncryptedKey  string
+	ID           string
+	Domain       string
+	ServiceID    string
+	ServerID     string
+	Host         string
+	ServerPort   int32
+	SSHUser      string
+	EncryptedKey string
 }
 
-func domainFromRow(r sqlcgen.ApplicationDomain) ApplicationDomain {
-	return ApplicationDomain{
+func domainFromRow(r sqlcgen.ServiceDomain) ServiceDomain {
+	return ServiceDomain{
 		ID:               r.ID,
-		ApplicationID:    r.ApplicationID,
+		ServiceID:        r.ServiceID,
 		Domain:           r.Domain,
 		IsPrimary:        r.IsPrimary,
 		Status:           r.Status,
@@ -47,72 +47,72 @@ func domainFromRow(r sqlcgen.ApplicationDomain) ApplicationDomain {
 	}
 }
 
-func CreateApplicationDomain(ctx context.Context, applicationID, domain string, isPrimary bool) (ApplicationDomain, error) {
-	r, err := Queries.CreateApplicationDomain(ctx, sqlcgen.CreateApplicationDomainParams{
-		ApplicationID: applicationID,
-		Domain:        domain,
-		IsPrimary:     isPrimary,
+func CreateServiceDomain(ctx context.Context, serviceID, domain string, isPrimary bool) (ServiceDomain, error) {
+	r, err := Queries.CreateServiceDomain(ctx, sqlcgen.CreateServiceDomainParams{
+		ServiceID: serviceID,
+		Domain:    domain,
+		IsPrimary: isPrimary,
 	})
 	if err != nil {
-		return ApplicationDomain{}, err
+		return ServiceDomain{}, err
 	}
 	return domainFromRow(r), nil
 }
 
-func GetApplicationDomainByID(ctx context.Context, id string) (ApplicationDomain, error) {
-	r, err := Queries.GetApplicationDomainByID(ctx, id)
+func GetServiceDomainByID(ctx context.Context, id string) (ServiceDomain, error) {
+	r, err := Queries.GetServiceDomainByID(ctx, id)
 	if err != nil {
-		return ApplicationDomain{}, err
+		return ServiceDomain{}, err
 	}
 	return domainFromRow(r), nil
 }
 
-func ListDomainsByApplication(ctx context.Context, applicationID string) ([]ApplicationDomain, error) {
-	rows, err := Queries.ListDomainsByApplication(ctx, applicationID)
+func ListDomainsByService(ctx context.Context, serviceID string) ([]ServiceDomain, error) {
+	rows, err := Queries.ListDomainsByService(ctx, serviceID)
 	if err != nil {
 		return nil, err
 	}
-	domains := make([]ApplicationDomain, len(rows))
+	domains := make([]ServiceDomain, len(rows))
 	for i, r := range rows {
 		domains[i] = domainFromRow(r)
 	}
 	return domains, nil
 }
 
-// UpdateApplicationDomainPrimary sets is_primary on a domain. When promoting to
-// primary, it first demotes any existing primary for the same application inside
+// UpdateServiceDomainPrimary sets is_primary on a domain. When promoting to
+// primary, it first demotes any existing primary for the same service inside
 // a transaction so the partial unique index is never violated.
-func UpdateApplicationDomainPrimary(ctx context.Context, applicationID, id string, isPrimary bool) (ApplicationDomain, error) {
+func UpdateServiceDomainPrimary(ctx context.Context, serviceID, id string, isPrimary bool) (ServiceDomain, error) {
 	tx, err := Pool.Begin(ctx)
 	if err != nil {
-		return ApplicationDomain{}, err
+		return ServiceDomain{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	qtx := Queries.WithTx(tx)
 
 	if isPrimary {
-		if err := qtx.ClearPrimaryByApplication(ctx, applicationID); err != nil {
-			return ApplicationDomain{}, err
+		if err := qtx.ClearPrimaryByService(ctx, serviceID); err != nil {
+			return ServiceDomain{}, err
 		}
 	}
 
-	r, err := qtx.UpdateApplicationDomainPrimary(ctx, sqlcgen.UpdateApplicationDomainPrimaryParams{
+	r, err := qtx.UpdateServiceDomainPrimary(ctx, sqlcgen.UpdateServiceDomainPrimaryParams{
 		ID:        id,
 		IsPrimary: isPrimary,
 	})
 	if err != nil {
-		return ApplicationDomain{}, err
+		return ServiceDomain{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return ApplicationDomain{}, err
+		return ServiceDomain{}, err
 	}
 	return domainFromRow(r), nil
 }
 
-func DeleteApplicationDomain(ctx context.Context, id string) error {
-	return Queries.DeleteApplicationDomain(ctx, id)
+func DeleteServiceDomain(ctx context.Context, id string) error {
+	return Queries.DeleteServiceDomain(ctx, id)
 }
 
 func SetDomainReady(ctx context.Context, id string) error {
@@ -134,14 +134,14 @@ func ListUnresolvedDomains(ctx context.Context) ([]PendingDomain, error) {
 	domains := make([]PendingDomain, len(rows))
 	for i, r := range rows {
 		domains[i] = PendingDomain{
-			ID:            r.ID,
-			Domain:        r.Domain,
-			ApplicationID: r.ApplicationID,
-			ServerID:      r.ServerID,
-			Host:          r.Host,
-			ServerPort:    r.ServerPort,
-			SSHUser:       r.SshUser,
-			EncryptedKey:  r.PrivateKey,
+			ID:           r.ID,
+			Domain:       r.Domain,
+			ServiceID:    r.ServiceID,
+			ServerID:     r.ServerID,
+			Host:         r.Host,
+			ServerPort:   r.ServerPort,
+			SSHUser:      r.SshUser,
+			EncryptedKey: r.PrivateKey,
 		}
 	}
 	return domains, nil

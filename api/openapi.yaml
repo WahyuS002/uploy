@@ -1,7 +1,7 @@
 openapi: "3.0.3"
 info:
   title: Uploy API
-  version: 0.1.0
+  version: 0.2.0
   description: Uploy deployment platform API
 
 paths:
@@ -173,7 +173,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Server not found
+          description: Service not found
           content:
             application/json:
               schema:
@@ -313,10 +313,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/applications:
+  /api/projects:
     post:
-      operationId: createApplication
-      summary: Create a new application
+      operationId: createProject
+      summary: Create a new project
       security:
         - cookieAuth: []
       requestBody:
@@ -324,14 +324,405 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateApplicationRequest"
+              $ref: "#/components/schemas/CreateProjectRequest"
       responses:
         "201":
-          description: Application created
+          description: Project created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApplicationResponse"
+                $ref: "#/components/schemas/ProjectResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: listProjects
+      summary: List projects in workspace
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/projects/{id}:
+    get:
+      operationId: getProject
+      summary: Get project details
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateProject
+      summary: Update project
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteProject
+      summary: Delete a project
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Project deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/projects/{id}/environments:
+    get:
+      operationId: listEnvironments
+      summary: List environments in a project
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of environments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EnvironmentResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createEnvironment
+      summary: Create a new environment in a project
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEnvironmentRequest"
+      responses:
+        "201":
+          description: Environment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvironmentResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/projects/{id}/environments/{envId}:
+    get:
+      operationId: getEnvironment
+      summary: Get environment details
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: envId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Environment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvironmentResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateEnvironment
+      summary: Update environment
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: envId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEnvironmentRequest"
+      responses:
+        "200":
+          description: Environment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvironmentResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteEnvironment
+      summary: Delete an environment
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: envId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Environment deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/services:
+    post:
+      operationId: createService
+      summary: Create a new service
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "201":
+          description: Service created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResponse"
         "400":
           description: Invalid request
           content:
@@ -363,19 +754,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     get:
-      operationId: listApplications
-      summary: List applications in workspace
+      operationId: listServices
+      summary: List services in workspace
       security:
         - cookieAuth: []
       responses:
         "200":
-          description: List of applications
+          description: List of services
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ApplicationResponse"
+                  $ref: "#/components/schemas/ServiceResponse"
         "401":
           description: Not authenticated
           content:
@@ -389,10 +780,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/applications/{id}:
+  /api/services/{id}:
     get:
-      operationId: getApplication
-      summary: Get application details
+      operationId: getService
+      summary: Get service details
       security:
         - cookieAuth: []
       parameters:
@@ -403,11 +794,11 @@ paths:
             type: string
       responses:
         "200":
-          description: Application details
+          description: Service details
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApplicationResponse"
+                $ref: "#/components/schemas/ServiceResponse"
         "401":
           description: Not authenticated
           content:
@@ -415,14 +806,14 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     put:
-      operationId: updateApplication
-      summary: Update application configuration
+      operationId: updateService
+      summary: Update service configuration
       security:
         - cookieAuth: []
       parameters:
@@ -436,14 +827,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateApplicationRequest"
+              $ref: "#/components/schemas/UpdateServiceRequest"
       responses:
         "200":
-          description: Application updated
+          description: Service updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApplicationResponse"
+                $ref: "#/components/schemas/ServiceResponse"
         "400":
           description: Invalid request
           content:
@@ -463,14 +854,14 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     delete:
-      operationId: deleteApplication
-      summary: Delete an application
+      operationId: deleteService
+      summary: Delete a service
       security:
         - cookieAuth: []
       parameters:
@@ -481,7 +872,7 @@ paths:
             type: string
       responses:
         "204":
-          description: Application deleted
+          description: Service deleted
         "401":
           description: Not authenticated
           content:
@@ -495,16 +886,16 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/applications/{id}/envs:
+  /api/services/{id}/envs:
     get:
-      operationId: listApplicationEnvs
-      summary: List environment variables for an application
+      operationId: listServiceEnvs
+      summary: List environment variables for a service
       security:
         - cookieAuth: []
       parameters:
@@ -521,7 +912,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ApplicationEnvResponse"
+                  $ref: "#/components/schemas/ServiceEnvResponse"
         "401":
           description: Not authenticated
           content:
@@ -535,13 +926,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     post:
-      operationId: upsertApplicationEnv
+      operationId: upsertServiceEnv
       summary: Set or update an environment variable
       security:
         - cookieAuth: []
@@ -563,7 +954,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApplicationEnvResponse"
+                $ref: "#/components/schemas/ServiceEnvResponse"
         "400":
           description: Invalid request
           content:
@@ -583,15 +974,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/applications/{id}/envs/{key}:
+  /api/services/{id}/envs/{key}:
     delete:
-      operationId: deleteApplicationEnv
+      operationId: deleteServiceEnv
       summary: Delete an environment variable
       security:
         - cookieAuth: []
@@ -622,16 +1013,16 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/applications/{id}/deployments:
+  /api/services/{id}/deployments:
     get:
-      operationId: listApplicationDeployments
-      summary: List deployment history for an application
+      operationId: listServiceDeployments
+      summary: List deployment history for a service
       security:
         - cookieAuth: []
       parameters:
@@ -662,7 +1053,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
@@ -674,10 +1065,10 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/applications/{id}/domains:
+  /api/services/{id}/domains:
     post:
-      operationId: createApplicationDomain
-      summary: Add a domain to an application
+      operationId: createServiceDomain
+      summary: Add a domain to a service
       security:
         - cookieAuth: []
       parameters:
@@ -698,7 +1089,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApplicationDomainResponse"
+                $ref: "#/components/schemas/ServiceDomainResponse"
         "400":
           description: Invalid request
           content:
@@ -718,7 +1109,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
@@ -730,8 +1121,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     get:
-      operationId: listApplicationDomains
-      summary: List domains for an application
+      operationId: listServiceDomains
+      summary: List domains for a service
       security:
         - cookieAuth: []
       parameters:
@@ -748,7 +1139,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/ApplicationDomainResponse"
+                  $ref: "#/components/schemas/ServiceDomainResponse"
         "401":
           description: Not authenticated
           content:
@@ -756,15 +1147,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Application not found
+          description: Service not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/applications/{id}/domains/{domainId}:
+  /api/services/{id}/domains/{domainId}:
     put:
-      operationId: updateApplicationDomain
+      operationId: updateServiceDomain
       summary: Update domain settings
       security:
         - cookieAuth: []
@@ -791,7 +1182,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApplicationDomainResponse"
+                $ref: "#/components/schemas/ServiceDomainResponse"
         "400":
           description: Invalid request
           content:
@@ -817,8 +1208,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     delete:
-      operationId: deleteApplicationDomain
-      summary: Remove a domain from an application
+      operationId: deleteServiceDomain
+      summary: Remove a domain from a service
       security:
         - cookieAuth: []
       parameters:
@@ -1089,9 +1480,9 @@ components:
     DeployRequest:
       type: object
       required:
-        - application_id
+        - service_id
       properties:
-        application_id:
+        service_id:
           type: string
 
     DeployResponse:
@@ -1107,7 +1498,7 @@ components:
       required:
         - id
         - status
-        - application_id
+        - service_id
         - created_at
       properties:
         id:
@@ -1118,7 +1509,7 @@ components:
             - in_progress
             - success
             - failed
-        application_id:
+        service_id:
           type: string
         created_at:
           type: string
@@ -1284,7 +1675,111 @@ components:
           type: string
           description: Structured deploy phase identifier. Empty string for raw command output.
 
-    CreateApplicationRequest:
+    ProjectResponse:
+      type: object
+      required:
+        - id
+        - name
+        - workspace_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        workspace_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateProjectRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    UpdateProjectRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    EnvironmentResponse:
+      type: object
+      required:
+        - id
+        - name
+        - project_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        project_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateEnvironmentRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    UpdateEnvironmentRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+    CreateServiceRequest:
+      type: object
+      required:
+        - name
+        - image
+        - container_name
+        - port
+        - server_id
+        - environment_id
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+        container_name:
+          type: string
+        port:
+          type: integer
+        server_id:
+          type: string
+        environment_id:
+          type: string
+        kind:
+          type: string
+          default: application
+          enum:
+            - application
+
+    UpdateServiceRequest:
       type: object
       required:
         - name
@@ -1304,27 +1799,7 @@ components:
         server_id:
           type: string
 
-    UpdateApplicationRequest:
-      type: object
-      required:
-        - name
-        - image
-        - container_name
-        - port
-        - server_id
-      properties:
-        name:
-          type: string
-        image:
-          type: string
-        container_name:
-          type: string
-        port:
-          type: integer
-        server_id:
-          type: string
-
-    ApplicationResponse:
+    ServiceResponse:
       type: object
       required:
         - id
@@ -1333,6 +1808,9 @@ components:
         - container_name
         - port
         - server_id
+        - kind
+        - project_id
+        - environment_id
         - created_at
         - updated_at
       properties:
@@ -1347,6 +1825,14 @@ components:
         port:
           type: integer
         server_id:
+          type: string
+        kind:
+          type: string
+          enum:
+            - application
+        project_id:
+          type: string
+        environment_id:
           type: string
         created_at:
           type: string
@@ -1371,7 +1857,7 @@ components:
         is_primary:
           type: boolean
 
-    ApplicationDomainResponse:
+    ServiceDomainResponse:
       type: object
       required:
         - id
@@ -1419,7 +1905,7 @@ components:
         value:
           type: string
 
-    ApplicationEnvResponse:
+    ServiceEnvResponse:
       type: object
       required:
         - id

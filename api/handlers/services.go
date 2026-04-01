@@ -39,7 +39,7 @@ func validatePort(port int) string {
 	return ""
 }
 
-func (s *Server) CreateApplication(w http.ResponseWriter, r *http.Request) {
+func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 	sc, _ := auth.GetSessionContext(r)
 
 	if sc.WorkspaceRole != "owner" && sc.WorkspaceRole != "developer" {
@@ -47,7 +47,7 @@ func (s *Server) CreateApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req gen.CreateApplicationRequest
+	var req gen.CreateServiceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "invalid request body"})
 		return
@@ -97,71 +97,104 @@ func (s *Server) CreateApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app, err := db.CreateApplication(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId, sc.WorkspaceID)
+	// Validate environment ownership chain: env -> project -> workspace
+	env, err := db.GetEnvironmentByID(r.Context(), req.EnvironmentId)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "environment not found"})
+		} else {
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up environment"})
+		}
+		return
+	}
+	proj, err := db.GetProjectByID(r.Context(), env.ProjectID)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up project"})
+		return
+	}
+	if proj.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "environment not found"})
+		return
+	}
+
+	kind := "application"
+	if req.Kind != nil {
+		if !req.Kind.Valid() {
+			respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "invalid kind"})
+			return
+		}
+		kind = string(*req.Kind)
+	}
+	if kind != "application" {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "only 'application' kind is currently supported"})
+		return
+	}
+
+	svc, err := db.CreateService(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId, sc.WorkspaceID, kind, proj.ID, req.EnvironmentId)
 	if err != nil {
 		if isUniqueViolation(err) {
 			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "container_name already in use on this server"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create application"})
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create service"})
 		}
 		return
 	}
 
-	respond.JSON(w, http.StatusCreated, applicationToResponse(app))
+	respond.JSON(w, http.StatusCreated, serviceToResponse(svc))
 }
 
-func (s *Server) ListApplications(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ListServices(w http.ResponseWriter, r *http.Request) {
 	sc, _ := auth.GetSessionContext(r)
 
-	apps, err := db.ListApplicationsByWorkspace(r.Context(), sc.WorkspaceID)
+	services, err := db.ListServicesByWorkspace(r.Context(), sc.WorkspaceID)
 	if err != nil {
-		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list applications"})
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list services"})
 		return
 	}
 
-	resp := make([]gen.ApplicationResponse, len(apps))
-	for i, app := range apps {
-		resp[i] = applicationToResponse(app)
+	resp := make([]gen.ServiceResponse, len(services))
+	for i, svc := range services {
+		resp[i] = serviceToResponse(svc)
 	}
 
 	respond.JSON(w, http.StatusOK, resp)
 }
 
-func (s *Server) GetApplication(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) GetService(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 
-	app, err := db.GetApplicationByID(r.Context(), id)
+	svc, err := db.GetServiceByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get application"})
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get service"})
 		}
 		return
 	}
 
-	if app.WorkspaceID != sc.WorkspaceID {
-		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+	if svc.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		return
 	}
 
-	respond.JSON(w, http.StatusOK, applicationToResponse(app))
+	respond.JSON(w, http.StatusOK, serviceToResponse(svc))
 }
 
-func (s *Server) UpdateApplication(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 
-	existing, err := db.GetApplicationByID(r.Context(), id)
+	existing, err := db.GetServiceByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get application"})
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get service"})
 		}
 		return
 	}
 	if existing.WorkspaceID != sc.WorkspaceID {
-		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		return
 	}
 
@@ -170,7 +203,7 @@ func (s *Server) UpdateApplication(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 
-	var req gen.UpdateApplicationRequest
+	var req gen.UpdateServiceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "invalid request body"})
 		return
@@ -201,11 +234,11 @@ func (s *Server) UpdateApplication(w http.ResponseWriter, r *http.Request, id st
 	}
 
 	if req.ContainerName != existing.ContainerName {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "container_name cannot be changed; delete and recreate the application instead"})
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "container_name cannot be changed; delete and recreate the service instead"})
 		return
 	}
 	if req.ServerId != existing.ServerID {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "server_id cannot be changed; delete and recreate the application instead"})
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "server_id cannot be changed; delete and recreate the service instead"})
 		return
 	}
 
@@ -214,33 +247,33 @@ func (s *Server) UpdateApplication(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 
-	app, err := db.UpdateApplication(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId)
+	svc, err := db.UpdateService(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId)
 	if err != nil {
 		if isUniqueViolation(err) {
 			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "container_name already in use on this server"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to update application"})
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to update service"})
 		}
 		return
 	}
 
-	respond.JSON(w, http.StatusOK, applicationToResponse(app))
+	respond.JSON(w, http.StatusOK, serviceToResponse(svc))
 }
 
-func (s *Server) DeleteApplication(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 
-	app, err := db.GetApplicationByID(r.Context(), id)
+	svc, err := db.GetServiceByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get application"})
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get service"})
 		}
 		return
 	}
-	if app.WorkspaceID != sc.WorkspaceID {
-		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+	if svc.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		return
 	}
 
@@ -249,23 +282,26 @@ func (s *Server) DeleteApplication(w http.ResponseWriter, r *http.Request, id st
 		return
 	}
 
-	if err := db.DeleteApplication(r.Context(), id); err != nil {
-		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to delete application"})
+	if err := db.DeleteService(r.Context(), id); err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to delete service"})
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func applicationToResponse(app db.Application) gen.ApplicationResponse {
-	return gen.ApplicationResponse{
-		Id:            app.ID,
-		Name:          app.Name,
-		Image:         app.Image,
-		ContainerName: app.ContainerName,
-		Port:          int(app.Port),
-		ServerId:      app.ServerID,
-		CreatedAt:     app.CreatedAt,
-		UpdatedAt:     app.UpdatedAt,
+func serviceToResponse(svc db.Service) gen.ServiceResponse {
+	return gen.ServiceResponse{
+		Id:            svc.ID,
+		Name:          svc.Name,
+		Image:         svc.Image,
+		ContainerName: svc.ContainerName,
+		Port:          int(svc.Port),
+		ServerId:      svc.ServerID,
+		Kind:          gen.ServiceResponseKind(svc.Kind),
+		ProjectId:     svc.ProjectID,
+		EnvironmentId: svc.EnvironmentID,
+		CreatedAt:     svc.CreatedAt,
+		UpdatedAt:     svc.UpdatedAt,
 	}
 }

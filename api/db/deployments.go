@@ -10,19 +10,19 @@ import (
 )
 
 type Deployment struct {
-	ID            string
-	Status        string
-	WorkspaceID   string
-	ApplicationID string
-	CreatedAt     time.Time
+	ID          string
+	Status      string
+	WorkspaceID string
+	ServiceID   string
+	CreatedAt   time.Time
 }
 
 func deploymentFromGen(d sqlcgen.Deployment) Deployment {
 	dep := Deployment{
-		ID:            d.ID,
-		Status:        d.Status,
-		ApplicationID: d.ApplicationID,
-		CreatedAt:     d.CreatedAt,
+		ID:        d.ID,
+		Status:    d.Status,
+		ServiceID: d.ServiceID,
+		CreatedAt: d.CreatedAt,
 	}
 	if d.WorkspaceID.Valid {
 		dep.WorkspaceID = d.WorkspaceID.String
@@ -30,10 +30,10 @@ func deploymentFromGen(d sqlcgen.Deployment) Deployment {
 	return dep
 }
 
-func CreateDeployment(ctx context.Context, workspaceID, applicationID string) (Deployment, error) {
+func CreateDeployment(ctx context.Context, workspaceID, serviceID string) (Deployment, error) {
 	row, err := Queries.CreateDeployment(ctx, sqlcgen.CreateDeploymentParams{
-		WorkspaceID:   pgtype.Text{String: workspaceID, Valid: true},
-		ApplicationID: applicationID,
+		WorkspaceID: pgtype.Text{String: workspaceID, Valid: true},
+		ServiceID:   serviceID,
 	})
 	if err != nil {
 		return Deployment{}, err
@@ -41,10 +41,10 @@ func CreateDeployment(ctx context.Context, workspaceID, applicationID string) (D
 	return deploymentFromGen(row), nil
 }
 
-func ListDeploymentsByApplication(ctx context.Context, applicationID string, limit int32) ([]Deployment, error) {
-	rows, err := Queries.ListDeploymentsByApplication(ctx, sqlcgen.ListDeploymentsByApplicationParams{
-		ApplicationID: applicationID,
-		Limit:         limit,
+func ListDeploymentsByService(ctx context.Context, serviceID string, limit int32) ([]Deployment, error) {
+	rows, err := Queries.ListDeploymentsByService(ctx, sqlcgen.ListDeploymentsByServiceParams{
+		ServiceID: serviceID,
+		Limit:     limit,
 	})
 	if err != nil {
 		return nil, err

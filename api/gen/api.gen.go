@@ -19,21 +19,15 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
-// Defines values for ApplicationDomainResponseStatus.
+// Defines values for CreateServiceRequestKind.
 const (
-	ApplicationDomainResponseStatusError   ApplicationDomainResponseStatus = "error"
-	ApplicationDomainResponseStatusPending ApplicationDomainResponseStatus = "pending"
-	ApplicationDomainResponseStatusReady   ApplicationDomainResponseStatus = "ready"
+	CreateServiceRequestKindApplication CreateServiceRequestKind = "application"
 )
 
-// Valid indicates whether the value is a known member of the ApplicationDomainResponseStatus enum.
-func (e ApplicationDomainResponseStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the CreateServiceRequestKind enum.
+func (e CreateServiceRequestKind) Valid() bool {
 	switch e {
-	case ApplicationDomainResponseStatusError:
-		return true
-	case ApplicationDomainResponseStatusPending:
-		return true
-	case ApplicationDomainResponseStatusReady:
+	case CreateServiceRequestKindApplication:
 		return true
 	default:
 		return false
@@ -103,41 +97,40 @@ func (e ServerResponseProxyStatus) Valid() bool {
 	}
 }
 
-// ApplicationDomainResponse defines model for ApplicationDomainResponse.
-type ApplicationDomainResponse struct {
-	CreatedAt        time.Time                       `json:"created_at"`
-	Domain           string                          `json:"domain"`
-	Id               string                          `json:"id"`
-	IsPrimary        bool                            `json:"is_primary"`
-	LastError        *string                         `json:"last_error,omitempty"`
-	LastReconciledAt *time.Time                      `json:"last_reconciled_at,omitempty"`
-	ReadyAt          *time.Time                      `json:"ready_at,omitempty"`
-	Status           ApplicationDomainResponseStatus `json:"status"`
-	UpdatedAt        time.Time                       `json:"updated_at"`
+// Defines values for ServiceDomainResponseStatus.
+const (
+	ServiceDomainResponseStatusError   ServiceDomainResponseStatus = "error"
+	ServiceDomainResponseStatusPending ServiceDomainResponseStatus = "pending"
+	ServiceDomainResponseStatusReady   ServiceDomainResponseStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ServiceDomainResponseStatus enum.
+func (e ServiceDomainResponseStatus) Valid() bool {
+	switch e {
+	case ServiceDomainResponseStatusError:
+		return true
+	case ServiceDomainResponseStatusPending:
+		return true
+	case ServiceDomainResponseStatusReady:
+		return true
+	default:
+		return false
+	}
 }
 
-// ApplicationDomainResponseStatus defines model for ApplicationDomainResponse.Status.
-type ApplicationDomainResponseStatus string
+// Defines values for ServiceResponseKind.
+const (
+	ServiceResponseKindApplication ServiceResponseKind = "application"
+)
 
-// ApplicationEnvResponse defines model for ApplicationEnvResponse.
-type ApplicationEnvResponse struct {
-	CreatedAt time.Time `json:"created_at"`
-	Id        int64     `json:"id"`
-	Key       string    `json:"key"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Value     string    `json:"value"`
-}
-
-// ApplicationResponse defines model for ApplicationResponse.
-type ApplicationResponse struct {
-	ContainerName string    `json:"container_name"`
-	CreatedAt     time.Time `json:"created_at"`
-	Id            string    `json:"id"`
-	Image         string    `json:"image"`
-	Name          string    `json:"name"`
-	Port          int       `json:"port"`
-	ServerId      string    `json:"server_id"`
-	UpdatedAt     time.Time `json:"updated_at"`
+// Valid indicates whether the value is a known member of the ServiceResponseKind enum.
+func (e ServiceResponseKind) Valid() bool {
+	switch e {
+	case ServiceResponseKindApplication:
+		return true
+	default:
+		return false
+	}
 }
 
 // AuthResponse defines model for AuthResponse.
@@ -159,18 +152,19 @@ type CheckConnectionResponse struct {
 	Ok bool `json:"ok"`
 }
 
-// CreateApplicationRequest defines model for CreateApplicationRequest.
-type CreateApplicationRequest struct {
-	ContainerName string `json:"container_name"`
-	Image         string `json:"image"`
-	Name          string `json:"name"`
-	Port          int    `json:"port"`
-	ServerId      string `json:"server_id"`
-}
-
 // CreateDomainRequest defines model for CreateDomainRequest.
 type CreateDomainRequest struct {
 	Domain string `json:"domain"`
+}
+
+// CreateEnvironmentRequest defines model for CreateEnvironmentRequest.
+type CreateEnvironmentRequest struct {
+	Name string `json:"name"`
+}
+
+// CreateProjectRequest defines model for CreateProjectRequest.
+type CreateProjectRequest struct {
+	Name string `json:"name"`
 }
 
 // CreateSSHKeyRequest defines model for CreateSSHKeyRequest.
@@ -188,9 +182,23 @@ type CreateServerRequest struct {
 	SshUser  string `json:"ssh_user"`
 }
 
+// CreateServiceRequest defines model for CreateServiceRequest.
+type CreateServiceRequest struct {
+	ContainerName string                    `json:"container_name"`
+	EnvironmentId string                    `json:"environment_id"`
+	Image         string                    `json:"image"`
+	Kind          *CreateServiceRequestKind `json:"kind,omitempty"`
+	Name          string                    `json:"name"`
+	Port          int                       `json:"port"`
+	ServerId      string                    `json:"server_id"`
+}
+
+// CreateServiceRequestKind defines model for CreateServiceRequest.Kind.
+type CreateServiceRequestKind string
+
 // DeployRequest defines model for DeployRequest.
 type DeployRequest struct {
-	ApplicationId string `json:"application_id"`
+	ServiceId string `json:"service_id"`
 }
 
 // DeployResponse defines model for DeployResponse.
@@ -200,14 +208,23 @@ type DeployResponse struct {
 
 // DeploymentResponse defines model for DeploymentResponse.
 type DeploymentResponse struct {
-	ApplicationId string                   `json:"application_id"`
-	CreatedAt     time.Time                `json:"created_at"`
-	Id            string                   `json:"id"`
-	Status        DeploymentResponseStatus `json:"status"`
+	CreatedAt time.Time                `json:"created_at"`
+	Id        string                   `json:"id"`
+	ServiceId string                   `json:"service_id"`
+	Status    DeploymentResponseStatus `json:"status"`
 }
 
 // DeploymentResponseStatus defines model for DeploymentResponse.Status.
 type DeploymentResponseStatus string
+
+// EnvironmentResponse defines model for EnvironmentResponse.
+type EnvironmentResponse struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        string    `json:"id"`
+	Name      string    `json:"name"`
+	ProjectId string    `json:"project_id"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
@@ -245,6 +262,15 @@ type LogoutResponse struct {
 	Ok bool `json:"ok"`
 }
 
+// ProjectResponse defines model for ProjectResponse.
+type ProjectResponse struct {
+	CreatedAt   time.Time `json:"created_at"`
+	Id          string    `json:"id"`
+	Name        string    `json:"name"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	WorkspaceId string    `json:"workspace_id"`
+}
+
 // SSHKeyResponse defines model for SSHKeyResponse.
 type SSHKeyResponse struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -272,18 +298,71 @@ type ServerResponse struct {
 // ServerResponseProxyStatus defines model for ServerResponse.ProxyStatus.
 type ServerResponseProxyStatus string
 
-// UpdateApplicationRequest defines model for UpdateApplicationRequest.
-type UpdateApplicationRequest struct {
+// ServiceDomainResponse defines model for ServiceDomainResponse.
+type ServiceDomainResponse struct {
+	CreatedAt        time.Time                   `json:"created_at"`
+	Domain           string                      `json:"domain"`
+	Id               string                      `json:"id"`
+	IsPrimary        bool                        `json:"is_primary"`
+	LastError        *string                     `json:"last_error,omitempty"`
+	LastReconciledAt *time.Time                  `json:"last_reconciled_at,omitempty"`
+	ReadyAt          *time.Time                  `json:"ready_at,omitempty"`
+	Status           ServiceDomainResponseStatus `json:"status"`
+	UpdatedAt        time.Time                   `json:"updated_at"`
+}
+
+// ServiceDomainResponseStatus defines model for ServiceDomainResponse.Status.
+type ServiceDomainResponseStatus string
+
+// ServiceEnvResponse defines model for ServiceEnvResponse.
+type ServiceEnvResponse struct {
+	CreatedAt time.Time `json:"created_at"`
+	Id        int64     `json:"id"`
+	Key       string    `json:"key"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Value     string    `json:"value"`
+}
+
+// ServiceResponse defines model for ServiceResponse.
+type ServiceResponse struct {
+	ContainerName string              `json:"container_name"`
+	CreatedAt     time.Time           `json:"created_at"`
+	EnvironmentId string              `json:"environment_id"`
+	Id            string              `json:"id"`
+	Image         string              `json:"image"`
+	Kind          ServiceResponseKind `json:"kind"`
+	Name          string              `json:"name"`
+	Port          int                 `json:"port"`
+	ProjectId     string              `json:"project_id"`
+	ServerId      string              `json:"server_id"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+}
+
+// ServiceResponseKind defines model for ServiceResponse.Kind.
+type ServiceResponseKind string
+
+// UpdateDomainRequest defines model for UpdateDomainRequest.
+type UpdateDomainRequest struct {
+	IsPrimary bool `json:"is_primary"`
+}
+
+// UpdateEnvironmentRequest defines model for UpdateEnvironmentRequest.
+type UpdateEnvironmentRequest struct {
+	Name string `json:"name"`
+}
+
+// UpdateProjectRequest defines model for UpdateProjectRequest.
+type UpdateProjectRequest struct {
+	Name string `json:"name"`
+}
+
+// UpdateServiceRequest defines model for UpdateServiceRequest.
+type UpdateServiceRequest struct {
 	ContainerName string `json:"container_name"`
 	Image         string `json:"image"`
 	Name          string `json:"name"`
 	Port          int    `json:"port"`
 	ServerId      string `json:"server_id"`
-}
-
-// UpdateDomainRequest defines model for UpdateDomainRequest.
-type UpdateDomainRequest struct {
-	IsPrimary bool `json:"is_primary"`
 }
 
 // UpsertEnvRequest defines model for UpsertEnvRequest.
@@ -306,25 +385,10 @@ type Workspace struct {
 	Role *string `json:"role,omitempty"`
 }
 
-// ListApplicationDeploymentsParams defines parameters for ListApplicationDeployments.
-type ListApplicationDeploymentsParams struct {
+// ListServiceDeploymentsParams defines parameters for ListServiceDeployments.
+type ListServiceDeploymentsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
-
-// CreateApplicationJSONRequestBody defines body for CreateApplication for application/json ContentType.
-type CreateApplicationJSONRequestBody = CreateApplicationRequest
-
-// UpdateApplicationJSONRequestBody defines body for UpdateApplication for application/json ContentType.
-type UpdateApplicationJSONRequestBody = UpdateApplicationRequest
-
-// CreateApplicationDomainJSONRequestBody defines body for CreateApplicationDomain for application/json ContentType.
-type CreateApplicationDomainJSONRequestBody = CreateDomainRequest
-
-// UpdateApplicationDomainJSONRequestBody defines body for UpdateApplicationDomain for application/json ContentType.
-type UpdateApplicationDomainJSONRequestBody = UpdateDomainRequest
-
-// UpsertApplicationEnvJSONRequestBody defines body for UpsertApplicationEnv for application/json ContentType.
-type UpsertApplicationEnvJSONRequestBody = UpsertEnvRequest
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -335,11 +399,38 @@ type RegisterJSONRequestBody = LoginRequest
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = DeployRequest
 
+// CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
+type CreateProjectJSONRequestBody = CreateProjectRequest
+
+// UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
+type UpdateProjectJSONRequestBody = UpdateProjectRequest
+
+// CreateEnvironmentJSONRequestBody defines body for CreateEnvironment for application/json ContentType.
+type CreateEnvironmentJSONRequestBody = CreateEnvironmentRequest
+
+// UpdateEnvironmentJSONRequestBody defines body for UpdateEnvironment for application/json ContentType.
+type UpdateEnvironmentJSONRequestBody = UpdateEnvironmentRequest
+
 // CreateServerJSONRequestBody defines body for CreateServer for application/json ContentType.
 type CreateServerJSONRequestBody = CreateServerRequest
 
 // CheckConnectionJSONRequestBody defines body for CheckConnection for application/json ContentType.
 type CheckConnectionJSONRequestBody = CheckConnectionRequest
+
+// CreateServiceJSONRequestBody defines body for CreateService for application/json ContentType.
+type CreateServiceJSONRequestBody = CreateServiceRequest
+
+// UpdateServiceJSONRequestBody defines body for UpdateService for application/json ContentType.
+type UpdateServiceJSONRequestBody = UpdateServiceRequest
+
+// CreateServiceDomainJSONRequestBody defines body for CreateServiceDomain for application/json ContentType.
+type CreateServiceDomainJSONRequestBody = CreateDomainRequest
+
+// UpdateServiceDomainJSONRequestBody defines body for UpdateServiceDomain for application/json ContentType.
+type UpdateServiceDomainJSONRequestBody = UpdateDomainRequest
+
+// UpsertServiceEnvJSONRequestBody defines body for UpsertServiceEnv for application/json ContentType.
+type UpsertServiceEnvJSONRequestBody = UpsertEnvRequest
 
 // CreateSSHKeyJSONRequestBody defines body for CreateSSHKey for application/json ContentType.
 type CreateSSHKeyJSONRequestBody = CreateSSHKeyRequest
@@ -349,45 +440,6 @@ type GenerateSSHKeyJSONRequestBody = GenerateSSHKeyRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// List applications in workspace
-	// (GET /api/applications)
-	ListApplications(w http.ResponseWriter, r *http.Request)
-	// Create a new application
-	// (POST /api/applications)
-	CreateApplication(w http.ResponseWriter, r *http.Request)
-	// Delete an application
-	// (DELETE /api/applications/{id})
-	DeleteApplication(w http.ResponseWriter, r *http.Request, id string)
-	// Get application details
-	// (GET /api/applications/{id})
-	GetApplication(w http.ResponseWriter, r *http.Request, id string)
-	// Update application configuration
-	// (PUT /api/applications/{id})
-	UpdateApplication(w http.ResponseWriter, r *http.Request, id string)
-	// List deployment history for an application
-	// (GET /api/applications/{id}/deployments)
-	ListApplicationDeployments(w http.ResponseWriter, r *http.Request, id string, params ListApplicationDeploymentsParams)
-	// List domains for an application
-	// (GET /api/applications/{id}/domains)
-	ListApplicationDomains(w http.ResponseWriter, r *http.Request, id string)
-	// Add a domain to an application
-	// (POST /api/applications/{id}/domains)
-	CreateApplicationDomain(w http.ResponseWriter, r *http.Request, id string)
-	// Remove a domain from an application
-	// (DELETE /api/applications/{id}/domains/{domainId})
-	DeleteApplicationDomain(w http.ResponseWriter, r *http.Request, id string, domainId string)
-	// Update domain settings
-	// (PUT /api/applications/{id}/domains/{domainId})
-	UpdateApplicationDomain(w http.ResponseWriter, r *http.Request, id string, domainId string)
-	// List environment variables for an application
-	// (GET /api/applications/{id}/envs)
-	ListApplicationEnvs(w http.ResponseWriter, r *http.Request, id string)
-	// Set or update an environment variable
-	// (POST /api/applications/{id}/envs)
-	UpsertApplicationEnv(w http.ResponseWriter, r *http.Request, id string)
-	// Delete an environment variable
-	// (DELETE /api/applications/{id}/envs/{key})
-	DeleteApplicationEnv(w http.ResponseWriter, r *http.Request, id string, key string)
 	// Login with email and password
 	// (POST /api/auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -406,6 +458,36 @@ type ServerInterface interface {
 	// Stream deployment logs via SSE
 	// (GET /api/deployments/{id}/logs)
 	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id string)
+	// List projects in workspace
+	// (GET /api/projects)
+	ListProjects(w http.ResponseWriter, r *http.Request)
+	// Create a new project
+	// (POST /api/projects)
+	CreateProject(w http.ResponseWriter, r *http.Request)
+	// Delete a project
+	// (DELETE /api/projects/{id})
+	DeleteProject(w http.ResponseWriter, r *http.Request, id string)
+	// Get project details
+	// (GET /api/projects/{id})
+	GetProject(w http.ResponseWriter, r *http.Request, id string)
+	// Update project
+	// (PUT /api/projects/{id})
+	UpdateProject(w http.ResponseWriter, r *http.Request, id string)
+	// List environments in a project
+	// (GET /api/projects/{id}/environments)
+	ListEnvironments(w http.ResponseWriter, r *http.Request, id string)
+	// Create a new environment in a project
+	// (POST /api/projects/{id}/environments)
+	CreateEnvironment(w http.ResponseWriter, r *http.Request, id string)
+	// Delete an environment
+	// (DELETE /api/projects/{id}/environments/{envId})
+	DeleteEnvironment(w http.ResponseWriter, r *http.Request, id string, envId string)
+	// Get environment details
+	// (GET /api/projects/{id}/environments/{envId})
+	GetEnvironment(w http.ResponseWriter, r *http.Request, id string, envId string)
+	// Update environment
+	// (PUT /api/projects/{id}/environments/{envId})
+	UpdateEnvironment(w http.ResponseWriter, r *http.Request, id string, envId string)
 	// List registered servers
 	// (GET /api/servers)
 	ListServers(w http.ResponseWriter, r *http.Request)
@@ -415,6 +497,45 @@ type ServerInterface interface {
 	// Test SSH connectivity to a server
 	// (POST /api/servers/check-connection)
 	CheckConnection(w http.ResponseWriter, r *http.Request)
+	// List services in workspace
+	// (GET /api/services)
+	ListServices(w http.ResponseWriter, r *http.Request)
+	// Create a new service
+	// (POST /api/services)
+	CreateService(w http.ResponseWriter, r *http.Request)
+	// Delete a service
+	// (DELETE /api/services/{id})
+	DeleteService(w http.ResponseWriter, r *http.Request, id string)
+	// Get service details
+	// (GET /api/services/{id})
+	GetService(w http.ResponseWriter, r *http.Request, id string)
+	// Update service configuration
+	// (PUT /api/services/{id})
+	UpdateService(w http.ResponseWriter, r *http.Request, id string)
+	// List deployment history for a service
+	// (GET /api/services/{id}/deployments)
+	ListServiceDeployments(w http.ResponseWriter, r *http.Request, id string, params ListServiceDeploymentsParams)
+	// List domains for a service
+	// (GET /api/services/{id}/domains)
+	ListServiceDomains(w http.ResponseWriter, r *http.Request, id string)
+	// Add a domain to a service
+	// (POST /api/services/{id}/domains)
+	CreateServiceDomain(w http.ResponseWriter, r *http.Request, id string)
+	// Remove a domain from a service
+	// (DELETE /api/services/{id}/domains/{domainId})
+	DeleteServiceDomain(w http.ResponseWriter, r *http.Request, id string, domainId string)
+	// Update domain settings
+	// (PUT /api/services/{id}/domains/{domainId})
+	UpdateServiceDomain(w http.ResponseWriter, r *http.Request, id string, domainId string)
+	// List environment variables for a service
+	// (GET /api/services/{id}/envs)
+	ListServiceEnvs(w http.ResponseWriter, r *http.Request, id string)
+	// Set or update an environment variable
+	// (POST /api/services/{id}/envs)
+	UpsertServiceEnv(w http.ResponseWriter, r *http.Request, id string)
+	// Delete an environment variable
+	// (DELETE /api/services/{id}/envs/{key})
+	DeleteServiceEnv(w http.ResponseWriter, r *http.Request, id string, key string)
 	// List stored SSH keys
 	// (GET /api/ssh-keys)
 	ListSSHKeys(w http.ResponseWriter, r *http.Request)
@@ -434,425 +555,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// ListApplications operation middleware
-func (siw *ServerInterfaceWrapper) ListApplications(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListApplications(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateApplication operation middleware
-func (siw *ServerInterfaceWrapper) CreateApplication(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateApplication(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteApplication operation middleware
-func (siw *ServerInterfaceWrapper) DeleteApplication(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteApplication(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetApplication operation middleware
-func (siw *ServerInterfaceWrapper) GetApplication(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetApplication(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateApplication operation middleware
-func (siw *ServerInterfaceWrapper) UpdateApplication(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateApplication(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListApplicationDeployments operation middleware
-func (siw *ServerInterfaceWrapper) ListApplicationDeployments(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListApplicationDeploymentsParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListApplicationDeployments(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListApplicationDomains operation middleware
-func (siw *ServerInterfaceWrapper) ListApplicationDomains(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListApplicationDomains(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateApplicationDomain operation middleware
-func (siw *ServerInterfaceWrapper) CreateApplicationDomain(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateApplicationDomain(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteApplicationDomain operation middleware
-func (siw *ServerInterfaceWrapper) DeleteApplicationDomain(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "domainId" -------------
-	var domainId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "domainId", r.PathValue("domainId"), &domainId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domainId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteApplicationDomain(w, r, id, domainId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateApplicationDomain operation middleware
-func (siw *ServerInterfaceWrapper) UpdateApplicationDomain(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "domainId" -------------
-	var domainId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "domainId", r.PathValue("domainId"), &domainId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domainId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateApplicationDomain(w, r, id, domainId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListApplicationEnvs operation middleware
-func (siw *ServerInterfaceWrapper) ListApplicationEnvs(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListApplicationEnvs(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpsertApplicationEnv operation middleware
-func (siw *ServerInterfaceWrapper) UpsertApplicationEnv(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpsertApplicationEnv(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteApplicationEnv operation middleware
-func (siw *ServerInterfaceWrapper) DeleteApplicationEnv(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "key" -------------
-	var key string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteApplicationEnv(w, r, id, key)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -973,6 +675,321 @@ func (siw *ServerInterfaceWrapper) GetDeploymentLogs(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListProjects operation middleware
+func (siw *ServerInterfaceWrapper) ListProjects(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProjects(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProject operation middleware
+func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProject(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteProject operation middleware
+func (siw *ServerInterfaceWrapper) DeleteProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteProject(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProject operation middleware
+func (siw *ServerInterfaceWrapper) GetProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProject(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateProject operation middleware
+func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateProject(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEnvironments operation middleware
+func (siw *ServerInterfaceWrapper) ListEnvironments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEnvironments(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEnvironment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) DeleteEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "envId" -------------
+	var envId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "envId", r.PathValue("envId"), &envId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "envId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteEnvironment(w, r, id, envId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) GetEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "envId" -------------
+	var envId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "envId", r.PathValue("envId"), &envId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "envId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEnvironment(w, r, id, envId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) UpdateEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "envId" -------------
+	var envId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "envId", r.PathValue("envId"), &envId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "envId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateEnvironment(w, r, id, envId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListServers operation middleware
 func (siw *ServerInterfaceWrapper) ListServers(w http.ResponseWriter, r *http.Request) {
 
@@ -1024,6 +1041,425 @@ func (siw *ServerInterfaceWrapper) CheckConnection(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckConnection(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListServices operation middleware
+func (siw *ServerInterfaceWrapper) ListServices(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServices(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateService operation middleware
+func (siw *ServerInterfaceWrapper) CreateService(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateService(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteService operation middleware
+func (siw *ServerInterfaceWrapper) DeleteService(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteService(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetService operation middleware
+func (siw *ServerInterfaceWrapper) GetService(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetService(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateService operation middleware
+func (siw *ServerInterfaceWrapper) UpdateService(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateService(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListServiceDeployments operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceDeployments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListServiceDeploymentsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceDeployments(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListServiceDomains operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceDomains(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceDomains(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateServiceDomain operation middleware
+func (siw *ServerInterfaceWrapper) CreateServiceDomain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateServiceDomain(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteServiceDomain operation middleware
+func (siw *ServerInterfaceWrapper) DeleteServiceDomain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "domainId" -------------
+	var domainId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "domainId", r.PathValue("domainId"), &domainId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domainId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteServiceDomain(w, r, id, domainId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateServiceDomain operation middleware
+func (siw *ServerInterfaceWrapper) UpdateServiceDomain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "domainId" -------------
+	var domainId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "domainId", r.PathValue("domainId"), &domainId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "domainId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateServiceDomain(w, r, id, domainId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListServiceEnvs operation middleware
+func (siw *ServerInterfaceWrapper) ListServiceEnvs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListServiceEnvs(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpsertServiceEnv operation middleware
+func (siw *ServerInterfaceWrapper) UpsertServiceEnv(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpsertServiceEnv(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteServiceEnv operation middleware
+func (siw *ServerInterfaceWrapper) DeleteServiceEnv(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", r.PathValue("key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteServiceEnv(w, r, id, key)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1213,28 +1649,38 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("GET "+options.BaseURL+"/api/applications", wrapper.ListApplications)
-	m.HandleFunc("POST "+options.BaseURL+"/api/applications", wrapper.CreateApplication)
-	m.HandleFunc("DELETE "+options.BaseURL+"/api/applications/{id}", wrapper.DeleteApplication)
-	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}", wrapper.GetApplication)
-	m.HandleFunc("PUT "+options.BaseURL+"/api/applications/{id}", wrapper.UpdateApplication)
-	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/deployments", wrapper.ListApplicationDeployments)
-	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/domains", wrapper.ListApplicationDomains)
-	m.HandleFunc("POST "+options.BaseURL+"/api/applications/{id}/domains", wrapper.CreateApplicationDomain)
-	m.HandleFunc("DELETE "+options.BaseURL+"/api/applications/{id}/domains/{domainId}", wrapper.DeleteApplicationDomain)
-	m.HandleFunc("PUT "+options.BaseURL+"/api/applications/{id}/domains/{domainId}", wrapper.UpdateApplicationDomain)
-	m.HandleFunc("GET "+options.BaseURL+"/api/applications/{id}/envs", wrapper.ListApplicationEnvs)
-	m.HandleFunc("POST "+options.BaseURL+"/api/applications/{id}/envs", wrapper.UpsertApplicationEnv)
-	m.HandleFunc("DELETE "+options.BaseURL+"/api/applications/{id}/envs/{key}", wrapper.DeleteApplicationEnv)
 	m.HandleFunc("POST "+options.BaseURL+"/api/auth/login", wrapper.Login)
 	m.HandleFunc("POST "+options.BaseURL+"/api/auth/logout", wrapper.Logout)
 	m.HandleFunc("GET "+options.BaseURL+"/api/auth/me", wrapper.GetMe)
 	m.HandleFunc("POST "+options.BaseURL+"/api/auth/register", wrapper.Register)
 	m.HandleFunc("POST "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
 	m.HandleFunc("GET "+options.BaseURL+"/api/deployments/{id}/logs", wrapper.GetDeploymentLogs)
+	m.HandleFunc("GET "+options.BaseURL+"/api/projects", wrapper.ListProjects)
+	m.HandleFunc("POST "+options.BaseURL+"/api/projects", wrapper.CreateProject)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/projects/{id}", wrapper.DeleteProject)
+	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}", wrapper.GetProject)
+	m.HandleFunc("PUT "+options.BaseURL+"/api/projects/{id}", wrapper.UpdateProject)
+	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}/environments", wrapper.ListEnvironments)
+	m.HandleFunc("POST "+options.BaseURL+"/api/projects/{id}/environments", wrapper.CreateEnvironment)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.DeleteEnvironment)
+	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.GetEnvironment)
+	m.HandleFunc("PUT "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.UpdateEnvironment)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers", wrapper.ListServers)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers", wrapper.CreateServer)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/check-connection", wrapper.CheckConnection)
+	m.HandleFunc("GET "+options.BaseURL+"/api/services", wrapper.ListServices)
+	m.HandleFunc("POST "+options.BaseURL+"/api/services", wrapper.CreateService)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}", wrapper.DeleteService)
+	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}", wrapper.GetService)
+	m.HandleFunc("PUT "+options.BaseURL+"/api/services/{id}", wrapper.UpdateService)
+	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/deployments", wrapper.ListServiceDeployments)
+	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/domains", wrapper.ListServiceDomains)
+	m.HandleFunc("POST "+options.BaseURL+"/api/services/{id}/domains", wrapper.CreateServiceDomain)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}/domains/{domainId}", wrapper.DeleteServiceDomain)
+	m.HandleFunc("PUT "+options.BaseURL+"/api/services/{id}/domains/{domainId}", wrapper.UpdateServiceDomain)
+	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/envs", wrapper.ListServiceEnvs)
+	m.HandleFunc("POST "+options.BaseURL+"/api/services/{id}/envs", wrapper.UpsertServiceEnv)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}/envs/{key}", wrapper.DeleteServiceEnv)
 	m.HandleFunc("GET "+options.BaseURL+"/api/ssh-keys", wrapper.ListSSHKeys)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys", wrapper.CreateSSHKey)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys/generate", wrapper.GenerateSSHKey)

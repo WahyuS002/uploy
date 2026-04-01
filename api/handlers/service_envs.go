@@ -17,47 +17,47 @@ import (
 // validEnvKey matches POSIX env var names: [A-Za-z_][A-Za-z0-9_]*
 var validEnvKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// requireApp checks that the application exists and belongs to the current workspace.
-func (s *Server) requireApp(w http.ResponseWriter, r *http.Request, id string) (db.Application, bool) {
+// requireService checks that the service exists and belongs to the current workspace.
+func (s *Server) requireService(w http.ResponseWriter, r *http.Request, id string) (db.Service, bool) {
 	sc, _ := auth.GetSessionContext(r)
 
-	app, err := db.GetApplicationByID(r.Context(), id)
+	svc, err := db.GetServiceByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get application"})
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to get service"})
 		}
-		return db.Application{}, false
+		return db.Service{}, false
 	}
-	if app.WorkspaceID != sc.WorkspaceID {
-		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "application not found"})
-		return db.Application{}, false
+	if svc.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
+		return db.Service{}, false
 	}
-	return app, true
+	return svc, true
 }
 
-func (s *Server) ListApplicationEnvs(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) ListServiceEnvs(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 	if sc.WorkspaceRole != "owner" && sc.WorkspaceRole != "developer" {
 		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
 		return
 	}
 
-	app, ok := s.requireApp(w, r, id)
+	svc, ok := s.requireService(w, r, id)
 	if !ok {
 		return
 	}
 
-	envs, err := db.ListApplicationEnvs(r.Context(), app.ID)
+	envs, err := db.ListServiceEnvVars(r.Context(), svc.ID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list environment variables"})
 		return
 	}
 
-	resp := make([]gen.ApplicationEnvResponse, len(envs))
+	resp := make([]gen.ServiceEnvResponse, len(envs))
 	for i, e := range envs {
-		resp[i] = gen.ApplicationEnvResponse{
+		resp[i] = gen.ServiceEnvResponse{
 			Id:        e.ID,
 			Key:       e.Key,
 			Value:     e.Value,
@@ -69,14 +69,14 @@ func (s *Server) ListApplicationEnvs(w http.ResponseWriter, r *http.Request, id 
 	respond.JSON(w, http.StatusOK, resp)
 }
 
-func (s *Server) UpsertApplicationEnv(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) UpsertServiceEnv(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 	if sc.WorkspaceRole != "owner" && sc.WorkspaceRole != "developer" {
 		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
 		return
 	}
 
-	app, ok := s.requireApp(w, r, id)
+	svc, ok := s.requireService(w, r, id)
 	if !ok {
 		return
 	}
@@ -97,13 +97,13 @@ func (s *Server) UpsertApplicationEnv(w http.ResponseWriter, r *http.Request, id
 		return
 	}
 
-	env, err := db.UpsertApplicationEnv(r.Context(), app.ID, req.Key, req.Value)
+	env, err := db.UpsertServiceEnvVar(r.Context(), svc.ID, req.Key, req.Value)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to set environment variable"})
 		return
 	}
 
-	respond.JSON(w, http.StatusOK, gen.ApplicationEnvResponse{
+	respond.JSON(w, http.StatusOK, gen.ServiceEnvResponse{
 		Id:        env.ID,
 		Key:       env.Key,
 		Value:     env.Value,
@@ -112,19 +112,19 @@ func (s *Server) UpsertApplicationEnv(w http.ResponseWriter, r *http.Request, id
 	})
 }
 
-func (s *Server) DeleteApplicationEnv(w http.ResponseWriter, r *http.Request, id string, key string) {
+func (s *Server) DeleteServiceEnv(w http.ResponseWriter, r *http.Request, id string, key string) {
 	sc, _ := auth.GetSessionContext(r)
 	if sc.WorkspaceRole != "owner" && sc.WorkspaceRole != "developer" {
 		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
 		return
 	}
 
-	_, ok := s.requireApp(w, r, id)
+	_, ok := s.requireService(w, r, id)
 	if !ok {
 		return
 	}
 
-	if err := db.DeleteApplicationEnv(r.Context(), id, key); err != nil {
+	if err := db.DeleteServiceEnvVar(r.Context(), id, key); err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to delete environment variable"})
 		return
 	}

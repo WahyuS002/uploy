@@ -10,46 +10,12 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Application struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Image         string    `json:"image"`
-	ContainerName string    `json:"container_name"`
-	Port          int32     `json:"port"`
-	ServerID      string    `json:"server_id"`
-	WorkspaceID   string    `json:"workspace_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
-type ApplicationDomain struct {
-	ID               string             `json:"id"`
-	ApplicationID    string             `json:"application_id"`
-	Domain           string             `json:"domain"`
-	IsPrimary        bool               `json:"is_primary"`
-	Status           string             `json:"status"`
-	LastError        pgtype.Text        `json:"last_error"`
-	LastReconciledAt pgtype.Timestamptz `json:"last_reconciled_at"`
-	ReadyAt          pgtype.Timestamptz `json:"ready_at"`
-	CreatedAt        time.Time          `json:"created_at"`
-	UpdatedAt        time.Time          `json:"updated_at"`
-}
-
-type ApplicationEnv struct {
-	ID            int64     `json:"id"`
-	ApplicationID string    `json:"application_id"`
-	Key           string    `json:"key"`
-	Value         string    `json:"value"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-}
-
 type Deployment struct {
-	ID            string      `json:"id"`
-	Status        string      `json:"status"`
-	WorkspaceID   pgtype.Text `json:"workspace_id"`
-	ApplicationID string      `json:"application_id"`
-	CreatedAt     time.Time   `json:"created_at"`
+	ID          string      `json:"id"`
+	Status      string      `json:"status"`
+	WorkspaceID pgtype.Text `json:"workspace_id"`
+	ServiceID   string      `json:"service_id"`
+	CreatedAt   time.Time   `json:"created_at"`
 }
 
 type DeploymentLog struct {
@@ -62,6 +28,14 @@ type DeploymentLog struct {
 	Phase        string    `json:"phase"`
 }
 
+type Environment struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	ProjectID string    `json:"project_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type OauthIdentity struct {
 	ID             string    `json:"id"`
 	UserID         string    `json:"user_id"`
@@ -69,6 +43,14 @@ type OauthIdentity struct {
 	ProviderUserID string    `json:"provider_user_id"`
 	ProviderEmail  string    `json:"provider_email"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+type Project struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	WorkspaceID string    `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Server struct {
@@ -83,6 +65,43 @@ type Server struct {
 	ProxyStatus           string             `json:"proxy_status"`
 	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
 	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
+}
+
+type Service struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Image         string    `json:"image"`
+	ContainerName string    `json:"container_name"`
+	Port          int32     `json:"port"`
+	ServerID      string    `json:"server_id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Kind          string    `json:"kind"`
+	ProjectID     string    `json:"project_id"`
+	EnvironmentID string    `json:"environment_id"`
+}
+
+type ServiceDomain struct {
+	ID               string             `json:"id"`
+	ServiceID        string             `json:"service_id"`
+	Domain           string             `json:"domain"`
+	IsPrimary        bool               `json:"is_primary"`
+	Status           string             `json:"status"`
+	LastError        pgtype.Text        `json:"last_error"`
+	LastReconciledAt pgtype.Timestamptz `json:"last_reconciled_at"`
+	ReadyAt          pgtype.Timestamptz `json:"ready_at"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
+}
+
+type ServiceEnvVar struct {
+	ID        int64     `json:"id"`
+	ServiceID string    `json:"service_id"`
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Session struct {

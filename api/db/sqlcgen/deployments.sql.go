@@ -12,31 +12,31 @@ import (
 )
 
 const createDeployment = `-- name: CreateDeployment :one
-INSERT INTO deployments (status, workspace_id, application_id)
+INSERT INTO deployments (status, workspace_id, service_id)
 VALUES ('in_progress', $1, $2)
-RETURNING id, status, workspace_id, application_id, created_at
+RETURNING id, status, workspace_id, service_id, created_at
 `
 
 type CreateDeploymentParams struct {
-	WorkspaceID   pgtype.Text `json:"workspace_id"`
-	ApplicationID string      `json:"application_id"`
+	WorkspaceID pgtype.Text `json:"workspace_id"`
+	ServiceID   string      `json:"service_id"`
 }
 
 func (q *Queries) CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (Deployment, error) {
-	row := q.db.QueryRow(ctx, createDeployment, arg.WorkspaceID, arg.ApplicationID)
+	row := q.db.QueryRow(ctx, createDeployment, arg.WorkspaceID, arg.ServiceID)
 	var i Deployment
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
 		&i.WorkspaceID,
-		&i.ApplicationID,
+		&i.ServiceID,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getDeployment = `-- name: GetDeployment :one
-SELECT id, status, workspace_id, application_id, created_at
+SELECT id, status, workspace_id, service_id, created_at
 FROM deployments WHERE id = $1
 `
 
@@ -47,27 +47,27 @@ func (q *Queries) GetDeployment(ctx context.Context, id string) (Deployment, err
 		&i.ID,
 		&i.Status,
 		&i.WorkspaceID,
-		&i.ApplicationID,
+		&i.ServiceID,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const listDeploymentsByApplication = `-- name: ListDeploymentsByApplication :many
-SELECT id, status, workspace_id, application_id, created_at
+const listDeploymentsByService = `-- name: ListDeploymentsByService :many
+SELECT id, status, workspace_id, service_id, created_at
 FROM deployments
-WHERE application_id = $1
+WHERE service_id = $1
 ORDER BY created_at DESC
 LIMIT $2
 `
 
-type ListDeploymentsByApplicationParams struct {
-	ApplicationID string `json:"application_id"`
-	Limit         int32  `json:"limit"`
+type ListDeploymentsByServiceParams struct {
+	ServiceID string `json:"service_id"`
+	Limit     int32  `json:"limit"`
 }
 
-func (q *Queries) ListDeploymentsByApplication(ctx context.Context, arg ListDeploymentsByApplicationParams) ([]Deployment, error) {
-	rows, err := q.db.Query(ctx, listDeploymentsByApplication, arg.ApplicationID, arg.Limit)
+func (q *Queries) ListDeploymentsByService(ctx context.Context, arg ListDeploymentsByServiceParams) ([]Deployment, error) {
+	rows, err := q.db.Query(ctx, listDeploymentsByService, arg.ServiceID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (q *Queries) ListDeploymentsByApplication(ctx context.Context, arg ListDepl
 			&i.ID,
 			&i.Status,
 			&i.WorkspaceID,
-			&i.ApplicationID,
+			&i.ServiceID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
