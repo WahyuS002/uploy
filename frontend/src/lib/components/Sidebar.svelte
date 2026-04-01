@@ -21,10 +21,10 @@
 	}
 </script>
 
-<aside class="flex w-60 flex-col border-r border-[#EEEFF1] bg-[#FBFBFB]">
+<aside class="my-4 flex w-60 flex-col bg-[#FBFBFB]">
 	<!-- Workspace header -->
-	<header class="flex flex-col gap-1 pt-1">
-		<div class="flex flex-row px-2 py-1">
+	<header class="flex flex-col gap-1">
+		<div class="flex flex-row px-2">
 			<div class="flex h-10 w-full flex-row items-center">
 				<div class="flex min-w-0 flex-1 items-center select-none">
 					<a
@@ -68,7 +68,7 @@
 	</nav>
 
 	<!-- User -->
-	<section class="flex flex-col gap-0.5 px-2 py-2">
+	<section class="flex flex-col gap-0.5 px-2">
 		<div class="flex h-9 w-full items-center gap-2 rounded-full pr-2 pl-2.5">
 			<span
 				class="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-gray-300 text-[10px] font-medium text-gray-700"
