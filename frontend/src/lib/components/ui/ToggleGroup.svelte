@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { ToggleGroup } from 'bits-ui';
 	import { cn } from './cn.js';
-	import type { Component } from 'svelte';
+	import { Icon, type IconSource } from '@steeze-ui/svelte-icon';
 
-	type ToggleOption = { value: string; label: string; icon?: Component };
+	type ToggleOption = { value: string; label?: string; icon?: IconSource; title?: string };
 
 	type Props = {
 		value?: string;
@@ -19,23 +19,28 @@
 	type="single"
 	bind:value
 	{onValueChange}
-	class={cn('inline-flex items-center gap-1', className)}
+	class={cn(
+		'inline-flex items-center gap-0.5 rounded-md border border-border bg-surface p-0.5',
+		className
+	)}
 >
 	{#each options as option (option.value)}
 		<ToggleGroup.Item
 			value={option.value}
+			title={option.title ?? option.label}
 			class={cn(
-				'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+				'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-[5px] px-1.5 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
 				value === option.value
 					? 'bg-gray-200 text-foreground'
 					: 'text-muted-foreground hover:text-foreground'
 			)}
 		>
 			{#if option.icon}
-				{@const Icon = option.icon}
-				<Icon size={16} />
+				<Icon src={option.icon} theme="outline" class="h-4 w-4" />
 			{/if}
-			{option.label}
+			{#if option.label}
+				<span>{option.label}</span>
+			{/if}
 		</ToggleGroup.Item>
 	{/each}
 </ToggleGroup.Root>

@@ -9,8 +9,10 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import ToggleGroup from '$lib/components/ui/ToggleGroup.svelte';
+	import { Select } from 'bits-ui';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Plus } from '@steeze-ui/heroicons';
+	import { Plus, Squares2x2, ListBullet, Check } from '@steeze-ui/heroicons';
+	import { ListFilter } from 'lucide-svelte';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ProjectResponse = components['schemas']['ProjectResponse'];
@@ -25,6 +27,11 @@
 	let loading = $state(true);
 	let sortBy = $state<'recent' | 'name'>('recent');
 	let viewMode = $state<'grid' | 'list'>('grid');
+
+	const sortOptions = [
+		{ value: 'recent', label: 'Recent activity' },
+		{ value: 'name', label: 'Name' }
+	];
 
 	// Create project
 	let showCreateForm = $state(false);
@@ -111,12 +118,53 @@
 <section>
 	<PageHeader title="Projects">
 		{#snippet actions()}
-			{#if canEdit}
-				<Button size="sm" onclick={() => (showCreateForm = !showCreateForm)}>
-					<Icon src={Plus} theme="outline" class="h-4 w-4" />
-					New
-				</Button>
-			{/if}
+			<div class="flex items-center gap-2">
+				<Select.Root type="single" bind:value={sortBy} items={sortOptions}>
+					<Select.Trigger
+						class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-sm text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+					>
+						<ListFilter class="h-4 w-4" strokeWidth={1.75} />
+					</Select.Trigger>
+					<Select.Portal>
+						<Select.Content
+							class="z-50 min-w-[160px] rounded-lg border border-border bg-surface p-1 shadow-md"
+							sideOffset={4}
+						>
+							<Select.Viewport>
+								{#each sortOptions as option (option.value)}
+									<Select.Item
+										value={option.value}
+										label={option.label}
+										class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none select-none data-[highlighted]:bg-surface-muted"
+									>
+										{#snippet children({ selected })}
+											<span class="inline-flex h-4 w-4 items-center justify-center">
+												{#if selected}
+													<Icon src={Check} theme="outline" class="h-3 w-3" />
+												{/if}
+											</span>
+											{option.label}
+										{/snippet}
+									</Select.Item>
+								{/each}
+							</Select.Viewport>
+						</Select.Content>
+					</Select.Portal>
+				</Select.Root>
+				<ToggleGroup
+					bind:value={viewMode}
+					options={[
+						{ value: 'grid', icon: Squares2x2, title: 'Grid view' },
+						{ value: 'list', icon: ListBullet, title: 'List view' }
+					]}
+				/>
+				{#if canEdit}
+					<Button size="sm" onclick={() => (showCreateForm = !showCreateForm)}>
+						<Icon src={Plus} theme="outline" class="h-4 w-4" />
+						New
+					</Button>
+				{/if}
+			</div>
 		{/snippet}
 	</PageHeader>
 
@@ -152,33 +200,6 @@
 				<p class="mt-2 text-sm text-danger">{createError}</p>
 			{/if}
 		</Card>
-	{/if}
-
-	<!-- Toolbar -->
-	{#if !loading}
-		<div class="mb-4 flex items-center justify-between text-sm text-muted-foreground">
-			<div class="flex items-center gap-2">
-				<span>{projects.length} {projects.length === 1 ? 'Project' : 'Projects'}</span>
-				<span class="text-gray-300">|</span>
-				<label class="flex items-center gap-1">
-					Sort By:
-					<select
-						bind:value={sortBy}
-						class="cursor-pointer border-none bg-transparent p-0 text-sm text-muted-foreground focus:ring-0"
-					>
-						<option value="recent">Recent Activity</option>
-						<option value="name">Name</option>
-					</select>
-				</label>
-			</div>
-			<ToggleGroup
-				bind:value={viewMode}
-				options={[
-					{ value: 'grid', label: 'Grid' },
-					{ value: 'list', label: 'List' }
-				]}
-			/>
-		</div>
 	{/if}
 
 	<!-- Content -->
