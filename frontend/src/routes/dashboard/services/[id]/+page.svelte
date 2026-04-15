@@ -11,6 +11,8 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import { Server } from '@steeze-ui/heroicons';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ServiceDomainResponse = components['schemas']['ServiceDomainResponse'];
@@ -284,7 +286,11 @@
 			<h3 class="mb-2 text-lg font-bold text-foreground">Deployment History</h3>
 
 			{#if deployments.length === 0}
-				<p class="text-sm text-muted-foreground">No deployments yet.</p>
+				<EmptyState
+					icon={Server}
+					title="No deployments yet"
+					description="Trigger your first deployment to see its status and history here."
+				/>
 			{:else}
 				<div class="flex flex-col gap-1">
 					{#each deployments as dep (dep.id)}

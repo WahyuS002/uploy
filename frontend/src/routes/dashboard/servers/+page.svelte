@@ -11,6 +11,8 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import { Server } from '@steeze-ui/heroicons';
 
 	let { data }: { data: PageData } = $props();
 
@@ -198,6 +200,10 @@
 			</tbody>
 		</table>
 	{:else}
-		<p class="text-sm text-muted-foreground">No servers registered yet.</p>
+		<EmptyState
+			icon={Server}
+			title="No servers registered yet"
+			description="Connect your first server to start deploying services to your own infrastructure."
+		/>
 	{/if}
 </section>

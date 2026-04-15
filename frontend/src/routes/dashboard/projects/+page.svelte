@@ -11,7 +11,7 @@
 	import ToggleGroup from '$lib/components/ui/ToggleGroup.svelte';
 	import { Select } from 'bits-ui';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Plus, Squares2x2, ListBullet, Check } from '@steeze-ui/heroicons';
+	import { Plus, Squares2x2, ListBullet, Check, Cube, Server } from '@steeze-ui/heroicons';
 	import { ListFilter } from 'lucide-svelte';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
@@ -204,33 +204,45 @@
 
 	<!-- Content -->
 	{#if loading}
-		<div class="flex items-center gap-2 py-12 text-sm text-muted-foreground">
-			<svg
-				class="h-4 w-4 animate-spin"
-				xmlns="http://www.w3.org/2000/svg"
-				fill="none"
-				viewBox="0 0 24 24"
-			>
-				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-				></circle>
-				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-				></path>
-			</svg>
-			Loading projects...
-		</div>
-	{:else if projects.length === 0}
-		<EmptyState message="No projects yet">
-			{#snippet actions()}
-				{#if canEdit}
-					<button
-						onclick={() => (showCreateForm = true)}
-						class="cursor-pointer text-sm font-medium text-foreground underline hover:no-underline"
+		{#if viewMode === 'grid'}
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				{#each [0, 1, 2, 3, 4, 5] as i (i)}
+					<div class="overflow-hidden rounded-xl border border-border bg-surface">
+						<div class="px-4 pt-4 pb-3">
+							<div class="h-4 w-32 animate-pulse rounded bg-surface-muted"></div>
+						</div>
+						<div class="mx-4 mb-3 h-28 animate-pulse rounded-lg bg-surface-muted"></div>
+						<div class="flex items-center gap-2 border-t border-border px-4 py-3">
+							<div class="h-2 w-2 animate-pulse rounded-full bg-surface-muted"></div>
+							<div class="h-3 w-20 animate-pulse rounded bg-surface-muted"></div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="flex flex-col gap-2">
+				{#each [0, 1, 2, 3, 4] as i (i)}
+					<div
+						class="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
 					>
-						Create your first project
-					</button>
-				{/if}
-			{/snippet}
-		</EmptyState>
+						<div class="flex items-center gap-3">
+							<div class="h-9 w-9 animate-pulse rounded-lg bg-surface-muted"></div>
+							<div class="flex flex-col gap-1.5">
+								<div class="h-4 w-32 animate-pulse rounded bg-surface-muted"></div>
+								<div class="h-3 w-24 animate-pulse rounded bg-surface-muted"></div>
+							</div>
+						</div>
+						<div class="h-3 w-20 animate-pulse rounded bg-surface-muted"></div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	{:else if projects.length === 0}
+		<EmptyState
+			icons={[Squares2x2, Cube, Server, Plus]}
+			title="No projects yet"
+			description="Create your first project to start organizing services, environments, and deployments."
+		/>
 	{:else if viewMode === 'grid'}
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			{#each sortedProjects() as project (project.id)}

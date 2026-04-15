@@ -8,6 +8,8 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import { Cube } from '@steeze-ui/heroicons';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ServerResponse = components['schemas']['ServerResponse'];
@@ -117,14 +119,7 @@
 <section>
 	<PageHeader title="Services" />
 
-	{#if canEdit && projects.length === 0}
-		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<p class="mb-6 text-sm text-muted-foreground">
-			You need a project and environment before creating a service.
-			<a href="/dashboard/projects" class="text-accent underline">Create a project</a> first.
-		</p>
-		<!-- eslint-enable svelte/no-navigation-without-resolve -->
-	{:else if canEdit}
+	{#if canEdit && projects.length > 0}
 		<!-- Create form -->
 		<form
 			onsubmit={(e) => {
@@ -188,7 +183,23 @@
 
 	<!-- Service list -->
 	{#if services.length === 0}
-		<p class="text-sm text-muted-foreground">No services yet.</p>
+		{#if canEdit && projects.length === 0}
+			<EmptyState
+				icon={Cube}
+				title="No project yet"
+				description="You need a project and environment before creating a service."
+			>
+				{#snippet actions()}
+					<Button href="/dashboard/projects" size="sm">Create a project</Button>
+				{/snippet}
+			</EmptyState>
+		{:else}
+			<EmptyState
+				icon={Cube}
+				title="No services yet"
+				description="Deploy your first service to start running containers across your environments."
+			/>
+		{/if}
 	{:else}
 		<div class="flex flex-col gap-2">
 			{#each services as svc (svc.id)}

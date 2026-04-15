@@ -8,6 +8,8 @@
 	import ResourceListItem from '$lib/components/app/ResourceListItem.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import { Squares2x2 } from '@steeze-ui/heroicons';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
 	type EnvironmentResponse = components['schemas']['EnvironmentResponse'];
@@ -111,7 +113,11 @@
 			{/if}
 
 			{#if environments.length === 0}
-				<p class="text-sm text-muted-foreground">No environments yet.</p>
+				<EmptyState
+					icon={Squares2x2}
+					title="No environments yet"
+					description="Add an environment like staging or production to group your services."
+				/>
 			{:else}
 				<div class="flex flex-col gap-1">
 					{#each environments as env (env.id)}
