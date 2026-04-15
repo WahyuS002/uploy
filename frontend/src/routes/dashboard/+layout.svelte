@@ -11,7 +11,7 @@
 	<div class="flex flex-1">
 		<Sidebar workspaceName={data.workspace?.name ?? 'Uploy'} />
 
-		<main class="mx-4 mb-4 flex-1 rounded-lg border border-border bg-surface px-5 py-2">
+		<main class="mx-4 mb-4 flex-1 rounded-lg border border-border bg-surface px-60 py-14">
 			{@render children()}
 		</main>
 	</div>

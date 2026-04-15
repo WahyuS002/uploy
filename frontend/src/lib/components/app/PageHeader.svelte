@@ -12,7 +12,7 @@
 
 <div class="mb-6 flex min-h-8 items-center justify-between">
 	<div>
-		<h2 class="text-sm text-foreground">{title}</h2>
+		<h2 class="text-xl font-medium text-foreground">{title}</h2>
 		{#if description}
 			<p class="mt-1 text-sm text-muted-foreground">{description}</p>
 		{/if}

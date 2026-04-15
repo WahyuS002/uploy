@@ -20,7 +20,7 @@
 
 <aside class="mb-4 flex w-48 flex-col bg-background">
 	<!-- Navigation -->
-	<nav class="flex-1 overflow-y-auto px-2 py-2">
+	<nav class="flex-1 overflow-y-auto px-2 pt-14 pb-2">
 		<div class="flex flex-col gap-px">
 			{#each navItems as item (item.href)}
 				<SidebarNavItem
