@@ -5,7 +5,7 @@
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
-	import Card from '$lib/components/ui/Card.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import ToggleGroup from '$lib/components/ui/ToggleGroup.svelte';
@@ -34,10 +34,21 @@
 	];
 
 	// Create project
-	let showCreateForm = $state(false);
+	let createDialogOpen = $state(false);
 	let newProjectName = $state('');
 	let creating = $state(false);
 	let createError = $state('');
+
+	function closeCreateDialog() {
+		createDialogOpen = false;
+	}
+
+	$effect(() => {
+		if (!createDialogOpen) {
+			newProjectName = '';
+			createError = '';
+		}
+	});
 
 	let sortedProjects = $derived(() => {
 		const sorted = [...projects];
@@ -100,8 +111,7 @@
 			}
 			if (data) {
 				projects = [data, ...projects];
-				newProjectName = '';
-				showCreateForm = false;
+				closeCreateDialog();
 			}
 		} catch {
 			createError = 'Network error';
@@ -159,7 +169,7 @@
 					]}
 				/>
 				{#if canEdit}
-					<Button size="sm" onclick={() => (showCreateForm = !showCreateForm)}>
+					<Button size="sm" onclick={() => (createDialogOpen = true)}>
 						<Icon src={Plus} theme="outline" class="h-4 w-4" />
 						New
 					</Button>
@@ -168,39 +178,47 @@
 		{/snippet}
 	</PageHeader>
 
-	<!-- Create project form -->
-	{#if showCreateForm}
-		<Card class="mb-6 bg-surface-muted p-4">
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					createProject();
-				}}
-				class="flex items-end gap-3"
+	<!-- Create project dialog -->
+	<Dialog
+		bind:open={createDialogOpen}
+		title="New project"
+		description="Give your project a name. You can add services and environments after it's created."
+		dismissible={!creating}
+	>
+		<form
+			id="create-project-form"
+			onsubmit={(e) => {
+				e.preventDefault();
+				createProject();
+			}}
+		>
+			<FormField label="Project name" error={createError}>
+				<Input
+					type="text"
+					bind:value={newProjectName}
+					placeholder="my-project"
+					required
+					autofocus
+					disabled={creating}
+				/>
+			</FormField>
+		</form>
+
+		{#snippet footer()}
+			<Button
+				type="button"
+				variant="secondary"
+				size="sm"
+				onclick={closeCreateDialog}
+				disabled={creating}
 			>
-				<FormField label="Project name">
-					<Input type="text" bind:value={newProjectName} placeholder="my-project" required />
-				</FormField>
-				<Button type="submit" size="sm" loading={creating}>
-					{creating ? 'Creating...' : 'Create'}
-				</Button>
-				<Button
-					type="button"
-					variant="secondary"
-					size="sm"
-					onclick={() => {
-						showCreateForm = false;
-						createError = '';
-					}}
-				>
-					Cancel
-				</Button>
-			</form>
-			{#if createError}
-				<p class="mt-2 text-sm text-danger">{createError}</p>
-			{/if}
-		</Card>
-	{/if}
+				Cancel
+			</Button>
+			<Button type="submit" form="create-project-form" size="sm" loading={creating}>
+				{creating ? 'Creating...' : 'Create'}
+			</Button>
+		{/snippet}
+	</Dialog>
 
 	<!-- Content -->
 	{#if loading}

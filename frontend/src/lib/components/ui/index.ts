@@ -14,4 +14,5 @@ export { default as Select } from './Select.svelte';
 export { default as ToggleGroup } from './ToggleGroup.svelte';
 export { default as Collapsible } from './Collapsible.svelte';
 export { default as Tooltip } from './Tooltip.svelte';
+export { default as Dialog } from './Dialog.svelte';
 export { cn } from './cn.js';
