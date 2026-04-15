@@ -1,13 +1,18 @@
 <script lang="ts">
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import Topbar from '$lib/components/Topbar.svelte';
 
 	let { data, children } = $props();
 </script>
 
-<div class="flex min-h-screen bg-background">
-	<Sidebar workspaceName={data.workspace?.name ?? 'Uploy'} userEmail={data.user?.email ?? ''} />
+<div class="flex min-h-screen flex-col bg-background">
+	<Topbar userEmail={data.user?.email ?? ''} />
 
-	<main class="m-4 flex-1 rounded-lg border border-border bg-surface px-5 py-2">
-		{@render children()}
-	</main>
+	<div class="flex flex-1">
+		<Sidebar workspaceName={data.workspace?.name ?? 'Uploy'} />
+
+		<main class="mx-4 mb-4 flex-1 rounded-lg border border-border bg-surface px-5 py-2">
+			{@render children()}
+		</main>
+	</div>
 </div>

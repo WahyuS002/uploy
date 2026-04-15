@@ -9,7 +9,8 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import ToggleGroup from '$lib/components/ui/ToggleGroup.svelte';
-	import { Plus } from 'lucide-svelte';
+	import { Icon } from '@steeze-ui/svelte-icon';
+	import { Plus } from '@steeze-ui/heroicons';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ProjectResponse = components['schemas']['ProjectResponse'];
@@ -112,7 +113,7 @@
 		{#snippet actions()}
 			{#if canEdit}
 				<Button size="sm" onclick={() => (showCreateForm = !showCreateForm)}>
-					<Plus size={16} />
+					<Icon src={Plus} theme="outline" class="h-4 w-4" />
 					New
 				</Button>
 			{/if}

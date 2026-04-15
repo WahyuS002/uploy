@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Select } from 'bits-ui';
 	import { cn } from './cn.js';
-	import { ChevronDown, Check } from 'lucide-svelte';
+	import { Icon } from '@steeze-ui/svelte-icon';
+	import { ChevronDown, Check } from '@steeze-ui/heroicons';
 
 	type SelectItem = { value: string; label: string; disabled?: boolean };
 
@@ -40,7 +41,7 @@
 		<span class={cn(!selectedLabel && 'text-muted-foreground')}>
 			{selectedLabel || placeholder}
 		</span>
-		<ChevronDown size={14} class="text-muted-foreground" />
+		<Icon src={ChevronDown} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
 	</Select.Trigger>
 
 	<Select.Portal>
@@ -59,7 +60,7 @@
 						{#snippet children({ selected })}
 							<span class="inline-flex h-4 w-4 items-center justify-center">
 								{#if selected}
-									<Check size={12} />
+									<Icon src={Check} theme="outline" class="h-3 w-3" />
 								{/if}
 							</span>
 							{item.label}

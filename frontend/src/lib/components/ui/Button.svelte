@@ -6,7 +6,7 @@
 		{
 			variants: {
 				variant: {
-					primary: 'rounded-lg bg-black text-white hover:bg-gray-800',
+					primary: 'rounded-lg bg-primary text-primary-foreground hover:bg-primary/90',
 					secondary: 'rounded-lg border border-border hover:bg-surface-muted',
 					ghost: 'rounded-lg hover:bg-surface-muted',
 					danger: 'rounded-lg bg-danger text-white hover:bg-red-600'
