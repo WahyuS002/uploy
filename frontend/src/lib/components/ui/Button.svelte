@@ -6,10 +6,10 @@
 		{
 			variants: {
 				variant: {
-					primary: 'rounded-lg bg-primary text-primary-foreground hover:bg-primary/90',
-					secondary: 'rounded-lg border border-border hover:bg-surface-muted',
-					ghost: 'rounded-lg hover:bg-surface-muted',
-					danger: 'rounded-lg bg-danger text-white hover:bg-red-600'
+					primary: 'rounded-md bg-primary text-primary-foreground hover:bg-primary/90',
+					secondary: 'rounded-md border border-border bg-white hover:bg-surface-muted',
+					ghost: 'rounded-md hover:bg-surface-muted',
+					danger: 'rounded-md bg-danger text-white hover:bg-red-600'
 				},
 				size: {
 					sm: 'h-8 px-3 text-xs',

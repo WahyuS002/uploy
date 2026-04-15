@@ -10,12 +10,10 @@
 	let { label, error, children }: Props = $props();
 </script>
 
-<div class="flex flex-col gap-1">
-	<label class="text-sm font-medium text-foreground">
-		{label}
-		{@render children()}
-	</label>
+<label class="flex flex-col gap-1.5">
+	<span class="text-xs text-muted-foreground">{label}</span>
+	{@render children()}
 	{#if error}
 		<p class="text-sm text-danger">{error}</p>
 	{/if}
-</div>
+</label>

@@ -9,7 +9,6 @@
 	type Props = {
 		open?: boolean;
 		title: string;
-		description?: string;
 		dismissible?: boolean;
 		class?: string;
 		children: Snippet;
@@ -19,7 +18,6 @@
 	let {
 		open = $bindable(false),
 		title,
-		description,
 		dismissible = true,
 		class: className,
 		children,
@@ -43,15 +41,8 @@
 			)}
 		>
 			<div class="rounded-xl border border-border bg-surface text-foreground">
-				<div class="flex items-start justify-between gap-4 px-5 pt-5 pb-3">
-					<div class="flex flex-col gap-1">
-						<Dialog.Title class="text-base font-semibold text-foreground">{title}</Dialog.Title>
-						{#if description}
-							<Dialog.Description class="text-sm text-muted-foreground">
-								{description}
-							</Dialog.Description>
-						{/if}
-					</div>
+				<div class="flex items-start justify-between gap-4 px-5 py-3">
+					<Dialog.Title class="text-base font-semibold text-foreground">{title}</Dialog.Title>
 					{#if dismissible}
 						<Dialog.Close>
 							{#snippet child({ props })}
@@ -62,11 +53,14 @@
 						</Dialog.Close>
 					{/if}
 				</div>
-				<div class="px-5 pb-5">
+				<hr class="border-border" />
+				<div class="px-5 py-5">
 					{@render children()}
 				</div>
 				{#if footer}
-					<div class="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+					<div
+						class="flex items-center justify-end gap-2 border-t border-border bg-gray-50 px-5 py-3"
+					>
 						{@render footer()}
 					</div>
 				{/if}

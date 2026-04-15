@@ -179,12 +179,7 @@
 	</PageHeader>
 
 	<!-- Create project dialog -->
-	<Dialog
-		bind:open={createDialogOpen}
-		title="New project"
-		description="Give your project a name. You can add services and environments after it's created."
-		dismissible={!creating}
-	>
+	<Dialog bind:open={createDialogOpen} title="New project" dismissible={!creating}>
 		<form
 			id="create-project-form"
 			onsubmit={(e) => {
@@ -196,7 +191,7 @@
 				<Input
 					type="text"
 					bind:value={newProjectName}
-					placeholder="my-project"
+					placeholder="Enter project name"
 					required
 					autofocus
 					disabled={creating}
