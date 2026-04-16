@@ -9,9 +9,12 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
 
 	type SSHKeyResponse = components['schemas']['SSHKeyResponse'];
 	type ServerResponse = components['schemas']['ServerResponse'];
+
+	const CREATE_NEW = '__create_new__';
 
 	type Props = {
 		onsuccess?: (server: ServerResponse) => void;
@@ -24,13 +27,14 @@
 	let keys = $state<SSHKeyResponse[]>([]);
 	let keysLoading = $state(true);
 	let keysError = $state('');
-	let showKeyCreate = $state(false);
+	let sshKeyDialogOpen = $state(false);
 
 	let name = $state('');
 	let host = $state('');
 	let port = $state(22);
 	let sshUser = $state('root');
 	let sshKeyId = $state('');
+	let selectValue = $state('');
 	let error = $state('');
 	let loading = $state(false);
 
@@ -53,7 +57,20 @@
 		host.trim() !== '' && sshUser.trim() !== '' && sshKeyId !== '' && !checking && !keysError
 	);
 
-	let keyItems = $derived(keys.map((k) => ({ value: k.id, label: k.name })));
+	let keyItems = $derived([
+		{ value: CREATE_NEW, label: 'Create new SSH key' },
+		...keys.map((k) => ({ value: k.id, label: k.name }))
+	]);
+
+	function handleKeySelectChange(value: string) {
+		if (value === CREATE_NEW) {
+			sshKeyDialogOpen = true;
+			selectValue = sshKeyId;
+			return;
+		}
+		selectValue = value;
+		sshKeyId = value;
+	}
 
 	async function loadKeys() {
 		keysLoading = true;
@@ -73,9 +90,10 @@
 	}
 
 	async function handleKeyCreated(key: SSHKeyResponse) {
-		showKeyCreate = false;
+		sshKeyDialogOpen = false;
 		await loadKeys();
 		sshKeyId = key.id;
+		selectValue = key.id;
 	}
 
 	async function checkConnection() {
@@ -115,6 +133,7 @@
 			port = 22;
 			sshUser = 'root';
 			sshKeyId = '';
+			selectValue = '';
 			verified = null;
 			if (data) onsuccess?.(data);
 		} catch {
@@ -158,8 +177,15 @@
 		</div>
 
 		<FormField label="SSH Key">
+			<Select
+				items={keyItems}
+				bind:value={selectValue}
+				onValueChange={handleKeySelectChange}
+				disabled={!!keysError}
+				placeholder="Select an SSH key"
+			/>
 			{#if keysError}
-				<div class="flex items-center gap-2">
+				<div class="mt-1.5 flex items-center gap-2">
 					<p class="text-sm text-danger">{keysError}</p>
 					<button
 						type="button"
@@ -169,33 +195,8 @@
 						Retry
 					</button>
 				</div>
-			{:else if keys.length === 0 && !showKeyCreate}
-				<button
-					type="button"
-					onclick={() => (showKeyCreate = true)}
-					class="inline-flex h-10 w-full items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
-				>
-					No SSH keys yet — Create SSH key
-				</button>
-			{:else}
-				<Select items={keyItems} bind:value={sshKeyId} required placeholder="Select an SSH key" />
 			{/if}
 		</FormField>
-
-		{#if showKeyCreate}
-			<div class="rounded-lg border border-border bg-surface-muted/50 p-4">
-				<SSHKeyCreatePanel onsuccess={handleKeyCreated} />
-				{#if keys.length > 0}
-					<button
-						type="button"
-						class="mt-3 cursor-pointer text-sm text-muted-foreground hover:text-foreground"
-						onclick={() => (showKeyCreate = false)}
-					>
-						Cancel
-					</button>
-				{/if}
-			</div>
-		{/if}
 
 		{#if selectedKeyPublicKey}
 			<Alert tone="info">
@@ -235,3 +236,7 @@
 		</div>
 	</form>
 {/if}
+
+<Dialog bind:open={sshKeyDialogOpen} title="Create SSH key">
+	<SSHKeyCreatePanel onsuccess={handleKeyCreated} />
+</Dialog>
