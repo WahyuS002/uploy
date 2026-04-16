@@ -4,10 +4,7 @@
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import Input from '$lib/components/ui/Input.svelte';
-	import Dialog from '$lib/components/ui/Dialog.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import FormField from '$lib/components/app/FormField.svelte';
 	import ToggleGroup from '$lib/components/ui/ToggleGroup.svelte';
 	import { Select } from 'bits-ui';
 	import { Icon } from '@steeze-ui/svelte-icon';
@@ -32,23 +29,6 @@
 		{ value: 'recent', label: 'Recent activity' },
 		{ value: 'name', label: 'Name' }
 	];
-
-	// Create project
-	let createDialogOpen = $state(false);
-	let newProjectName = $state('');
-	let creating = $state(false);
-	let createError = $state('');
-
-	function closeCreateDialog() {
-		createDialogOpen = false;
-	}
-
-	$effect(() => {
-		if (!createDialogOpen) {
-			newProjectName = '';
-			createError = '';
-		}
-	});
 
 	let sortedProjects = $derived(() => {
 		const sorted = [...projects];
@@ -95,28 +75,6 @@
 			}
 		} finally {
 			loading = false;
-		}
-	}
-
-	async function createProject() {
-		createError = '';
-		creating = true;
-		try {
-			const { data, error } = await api.POST('/api/projects', {
-				body: { name: newProjectName }
-			});
-			if (error) {
-				createError = (error as { error: string }).error;
-				return;
-			}
-			if (data) {
-				projects = [data, ...projects];
-				closeCreateDialog();
-			}
-		} catch {
-			createError = 'Network error';
-		} finally {
-			creating = false;
 		}
 	}
 
@@ -169,7 +127,7 @@
 					]}
 				/>
 				{#if canEdit}
-					<Button size="sm" onclick={() => (createDialogOpen = true)}>
+					<Button href="/dashboard/new" size="sm">
 						<Icon src={Plus} theme="outline" class="h-4 w-4" />
 						New
 					</Button>
@@ -177,43 +135,6 @@
 			</div>
 		{/snippet}
 	</PageHeader>
-
-	<!-- Create project dialog -->
-	<Dialog bind:open={createDialogOpen} title="New project" dismissible={!creating}>
-		<form
-			id="create-project-form"
-			onsubmit={(e) => {
-				e.preventDefault();
-				createProject();
-			}}
-		>
-			<FormField label="Project name" error={createError}>
-				<Input
-					type="text"
-					bind:value={newProjectName}
-					placeholder="Enter project name"
-					required
-					autofocus
-					disabled={creating}
-				/>
-			</FormField>
-		</form>
-
-		{#snippet footer()}
-			<Button
-				type="button"
-				variant="secondary"
-				size="sm"
-				onclick={closeCreateDialog}
-				disabled={creating}
-			>
-				Cancel
-			</Button>
-			<Button type="submit" form="create-project-form" size="sm" loading={creating}>
-				{creating ? 'Creating...' : 'Create'}
-			</Button>
-		{/snippet}
-	</Dialog>
 
 	<!-- Content -->
 	{#if loading}

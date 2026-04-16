@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
@@ -40,6 +41,11 @@
 	let envItems = $derived(environments.map((e) => ({ value: e.id, label: e.name })));
 
 	async function load() {
+		const qs = page.url.searchParams;
+		const qsServerId = qs.get('serverId') ?? '';
+		const qsProjectId = qs.get('projectId') ?? '';
+		const qsEnvironmentId = qs.get('environmentId') ?? '';
+
 		const [servicesRes, serversRes, projectsRes] = await Promise.all([
 			api.GET('/api/services'),
 			api.GET('/api/servers'),
@@ -48,20 +54,28 @@
 		if (servicesRes.data) services = servicesRes.data;
 		if (serversRes.data) {
 			servers = serversRes.data;
-			if (servers.length > 0 && !selectedServerId) {
+			const preferred = qsServerId && servers.some((s) => s.id === qsServerId) ? qsServerId : '';
+			if (preferred) {
+				selectedServerId = preferred;
+			} else if (servers.length > 0 && !selectedServerId) {
 				selectedServerId = servers[0].id;
 			}
 		}
 		if (projectsRes.data) {
 			projects = projectsRes.data;
-			if (projects.length > 0 && !selectedProjectId) {
+			const preferredProject =
+				qsProjectId && projects.some((p) => p.id === qsProjectId) ? qsProjectId : '';
+			if (preferredProject) {
+				selectedProjectId = preferredProject;
+				await loadEnvironments(qsEnvironmentId);
+			} else if (projects.length > 0 && !selectedProjectId) {
 				selectedProjectId = projects[0].id;
 				await loadEnvironments();
 			}
 		}
 	}
 
-	async function loadEnvironments() {
+	async function loadEnvironments(preferredEnvId: string = '') {
 		if (!selectedProjectId) {
 			environments = [];
 			selectedEnvironmentId = '';
@@ -72,7 +86,9 @@
 		});
 		if (data) {
 			environments = data;
-			if (environments.length > 0) {
+			if (preferredEnvId && environments.some((e) => e.id === preferredEnvId)) {
+				selectedEnvironmentId = preferredEnvId;
+			} else if (environments.length > 0) {
 				selectedEnvironmentId = environments[0].id;
 			} else {
 				selectedEnvironmentId = '';

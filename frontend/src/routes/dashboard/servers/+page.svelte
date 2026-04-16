@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { createApiClient } from '$lib/api/client';
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
@@ -71,6 +72,13 @@
 		}
 	}
 
+	function safeReturnTo(): string | null {
+		const raw = page.url.searchParams.get('returnTo');
+		if (!raw) return null;
+		if (!raw.startsWith('/') || raw.startsWith('//')) return null;
+		return raw;
+	}
+
 	async function createServer() {
 		if (!isVerified) return;
 		error = '';
@@ -89,6 +97,12 @@
 			sshUser = 'root';
 			sshKeyId = '';
 			verified = null;
+			const returnTo = safeReturnTo();
+			if (returnTo) {
+				// eslint-disable-next-line svelte/no-navigation-without-resolve
+				await goto(returnTo);
+				return;
+			}
 			await invalidateAll();
 		} catch {
 			error = 'Network error, please try again';
