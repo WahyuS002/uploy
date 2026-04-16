@@ -125,8 +125,8 @@
 
 <section>
 	<PageHeader
-		title="New"
-		description="Pick a server, then choose how you want to start."
+		title="New project"
+		description="Choose a server, then pick how you want to start this project."
 	/>
 
 	{#if loading}
@@ -154,7 +154,7 @@
 			description="Uploy deploys to your own infrastructure. Add your first server, then come back here to start a project."
 		>
 			{#snippet actions()}
-				<Button href="/dashboard/servers?returnTo=/dashboard/new" size="sm">
+				<Button href="/dashboard/servers?returnTo=/dashboard/projects/new" size="sm">
 					Add a server
 				</Button>
 				<Button href="/dashboard/projects" variant="secondary" size="sm">Cancel</Button>
@@ -181,7 +181,7 @@
 				{#if isOwner}
 					<!-- eslint-disable svelte/no-navigation-without-resolve -->
 					<a
-						href="/dashboard/servers?returnTo=/dashboard/new"
+						href="/dashboard/servers?returnTo=/dashboard/projects/new"
 						class="text-xs text-muted-foreground hover:text-foreground"
 					>
 						+ Add server

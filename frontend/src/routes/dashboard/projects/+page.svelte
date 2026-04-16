@@ -127,7 +127,7 @@
 					]}
 				/>
 				{#if canEdit}
-					<Button href="/dashboard/new" size="sm">
+					<Button href="/dashboard/projects/new" size="sm">
 						<Icon src={Plus} theme="outline" class="h-4 w-4" />
 						New
 					</Button>
