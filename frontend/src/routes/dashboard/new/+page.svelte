@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
+	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -14,6 +15,10 @@
 	type EnvironmentResponse = components['schemas']['EnvironmentResponse'];
 
 	type Starter = 'empty-project' | 'docker-image';
+
+	let { data }: { data: PageData } = $props();
+	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
+	let isOwner = $derived(data.workspace?.role === 'owner');
 
 	let servers = $state<ServerResponse[]>([]);
 	let loading = $state(true);
@@ -132,7 +137,17 @@
 				<div class="h-40 animate-pulse rounded-xl bg-surface-muted"></div>
 			</div>
 		</div>
-	{:else if servers.length === 0}
+	{:else if !canEdit}
+		<EmptyState
+			icon={Server}
+			title="You don't have permission to create projects"
+			description="Ask a workspace owner or developer to create a project, or request a role change."
+		>
+			{#snippet actions()}
+				<Button href="/dashboard/projects" variant="secondary" size="sm">Back to projects</Button>
+			{/snippet}
+		</EmptyState>
+	{:else if servers.length === 0 && isOwner}
 		<EmptyState
 			icon={Server}
 			title="Connect a server to get started"
@@ -145,6 +160,16 @@
 				<Button href="/dashboard/projects" variant="secondary" size="sm">Cancel</Button>
 			{/snippet}
 		</EmptyState>
+	{:else if servers.length === 0}
+		<EmptyState
+			icon={Server}
+			title="No servers available"
+			description="A workspace owner needs to connect a server before you can create a project. Ask an owner to add one."
+		>
+			{#snippet actions()}
+				<Button href="/dashboard/projects" variant="secondary" size="sm">Back to projects</Button>
+			{/snippet}
+		</EmptyState>
 	{:else}
 		<!-- Step 1: Server -->
 		<div class="mb-8">
@@ -153,14 +178,16 @@
 					<span class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-primary-foreground">1</span>
 					Choose a server
 				</h3>
-				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<a
-					href="/dashboard/servers?returnTo=/dashboard/new"
-					class="text-xs text-muted-foreground hover:text-foreground"
-				>
-					+ Add server
-				</a>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				{#if isOwner}
+					<!-- eslint-disable svelte/no-navigation-without-resolve -->
+					<a
+						href="/dashboard/servers?returnTo=/dashboard/new"
+						class="text-xs text-muted-foreground hover:text-foreground"
+					>
+						+ Add server
+					</a>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				{/if}
 			</div>
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 				{#each servers as server (server.id)}
@@ -218,7 +245,7 @@
 							size="sm"
 							onclick={runEmptyProject}
 							loading={busyStarter === 'empty-project'}
-							disabled={busyStarter !== null}
+							disabled={!selectedServerId || busyStarter !== null}
 						>
 							{busyStarter === 'empty-project' ? 'Creating...' : 'Create project'}
 						</Button>

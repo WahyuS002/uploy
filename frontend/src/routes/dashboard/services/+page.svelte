@@ -206,7 +206,7 @@
 				description="You need a project and environment before creating a service."
 			>
 				{#snippet actions()}
-					<Button href="/dashboard/projects" size="sm">Create a project</Button>
+					<Button href="/dashboard/new" size="sm">Create a project</Button>
 				{/snippet}
 			</EmptyState>
 		{:else}
