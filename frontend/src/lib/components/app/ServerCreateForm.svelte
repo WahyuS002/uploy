@@ -3,6 +3,7 @@
 	import type { components } from '$lib/api/v1';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import CopyButton from '$lib/components/app/CopyButton.svelte';
+	import SSHKeyCreatePanel from '$lib/components/app/SSHKeyCreatePanel.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
@@ -23,6 +24,7 @@
 	let keys = $state<SSHKeyResponse[]>([]);
 	let keysLoading = $state(true);
 	let keysError = $state('');
+	let showKeyCreate = $state(false);
 
 	let name = $state('');
 	let host = $state('');
@@ -48,7 +50,7 @@
 	);
 
 	let canCheckConnection = $derived(
-		host.trim() !== '' && sshUser.trim() !== '' && sshKeyId !== '' && !checking
+		host.trim() !== '' && sshUser.trim() !== '' && sshKeyId !== '' && !checking && !keysError
 	);
 
 	let keyItems = $derived(keys.map((k) => ({ value: k.id, label: k.name })));
@@ -68,6 +70,12 @@
 		} finally {
 			keysLoading = false;
 		}
+	}
+
+	async function handleKeyCreated(key: SSHKeyResponse) {
+		showKeyCreate = false;
+		await loadKeys();
+		sshKeyId = key.id;
 	}
 
 	async function checkConnection() {
@@ -126,16 +134,6 @@
 		<div class="h-10 animate-pulse rounded-lg bg-surface-muted"></div>
 		<div class="h-10 animate-pulse rounded-lg bg-surface-muted"></div>
 	</div>
-{:else if keysError}
-	<Alert tone="danger">
-		<p class="text-sm">{keysError}</p>
-	</Alert>
-{:else if keys.length === 0}
-	<Alert tone="warning">
-		<p class="text-sm">
-			No SSH keys found. <a href="/dashboard/ssh-keys" class="underline hover:no-underline">Add an SSH key</a> first, then come back to add a server.
-		</p>
-	</Alert>
 {:else}
 	<form
 		onsubmit={(e) => {
@@ -158,9 +156,46 @@
 				<Input type="text" bind:value={sshUser} required placeholder="root" />
 			</FormField>
 		</div>
+
 		<FormField label="SSH Key">
-			<Select items={keyItems} bind:value={sshKeyId} required placeholder="Select an SSH key" />
+			{#if keysError}
+				<div class="flex items-center gap-2">
+					<p class="text-sm text-danger">{keysError}</p>
+					<button
+						type="button"
+						class="cursor-pointer text-sm text-foreground underline hover:no-underline"
+						onclick={loadKeys}
+					>
+						Retry
+					</button>
+				</div>
+			{:else if keys.length === 0 && !showKeyCreate}
+				<button
+					type="button"
+					onclick={() => (showKeyCreate = true)}
+					class="inline-flex h-10 w-full items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+				>
+					No SSH keys yet — Create SSH key
+				</button>
+			{:else}
+				<Select items={keyItems} bind:value={sshKeyId} required placeholder="Select an SSH key" />
+			{/if}
 		</FormField>
+
+		{#if showKeyCreate}
+			<div class="rounded-lg border border-border bg-surface-muted/50 p-4">
+				<SSHKeyCreatePanel onsuccess={handleKeyCreated} />
+				{#if keys.length > 0}
+					<button
+						type="button"
+						class="mt-3 cursor-pointer text-sm text-muted-foreground hover:text-foreground"
+						onclick={() => (showKeyCreate = false)}
+					>
+						Cancel
+					</button>
+				{/if}
+			</div>
+		{/if}
 
 		{#if selectedKeyPublicKey}
 			<Alert tone="info">
@@ -194,7 +229,7 @@
 					Check Connection
 				{/if}
 			</Button>
-			<Button type="submit" {loading} disabled={!isVerified}>
+			<Button type="submit" {loading} disabled={!isVerified || !!keysError}>
 				{loading ? 'Saving...' : 'Add Server'}
 			</Button>
 		</div>
