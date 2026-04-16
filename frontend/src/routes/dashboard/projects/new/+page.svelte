@@ -4,7 +4,9 @@
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
+	import ServerCreateForm from '$lib/components/app/ServerCreateForm.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { Server, Check, Squares2x2 } from '@steeze-ui/heroicons';
@@ -25,6 +27,7 @@
 	let selectedServerId = $state('');
 	let busyStarter = $state<Starter | null>(null);
 	let error = $state('');
+	let serverDialogOpen = $state(false);
 
 	let selectedServer = $derived(servers.find((s) => s.id === selectedServerId));
 
@@ -47,6 +50,13 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function handleServerCreated(server: ServerResponse) {
+		serverDialogOpen = false;
+		await load();
+		selectedServerId = server.id;
+		error = '';
 	}
 
 	async function ensureProject(): Promise<ProjectResponse | null> {
@@ -154,7 +164,7 @@
 			description="Uploy deploys to your own infrastructure. Add your first server, then come back here to start a project."
 		>
 			{#snippet actions()}
-				<Button href="/dashboard/servers?returnTo=/dashboard/projects/new" size="sm">
+				<Button size="sm" onclick={() => (serverDialogOpen = true)}>
 					Add a server
 				</Button>
 				<Button href="/dashboard/projects" variant="secondary" size="sm">Cancel</Button>
@@ -179,14 +189,13 @@
 					Choose a server
 				</h3>
 				{#if isOwner}
-					<!-- eslint-disable svelte/no-navigation-without-resolve -->
-					<a
-						href="/dashboard/servers?returnTo=/dashboard/projects/new"
+					<button
+						type="button"
+						onclick={() => (serverDialogOpen = true)}
 						class="text-xs text-muted-foreground hover:text-foreground"
 					>
 						+ Add server
-					</a>
-					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+					</button>
 				{/if}
 			</div>
 			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -282,4 +291,8 @@
 			{/if}
 		</div>
 	{/if}
+
+	<Dialog bind:open={serverDialogOpen} title="Add a server" class="max-w-2xl">
+		<ServerCreateForm onsuccess={handleServerCreated} />
+	</Dialog>
 </section>
