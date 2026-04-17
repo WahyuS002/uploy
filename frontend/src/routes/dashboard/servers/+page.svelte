@@ -3,7 +3,9 @@
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
-	import ServerCreateForm from '$lib/components/app/ServerCreateForm.svelte';
+	import ServerCreateFields from '$lib/components/app/ServerCreateFields.svelte';
+	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { Server } from '@steeze-ui/heroicons';
 
@@ -15,6 +17,8 @@
 	async function handleServerCreated() {
 		await invalidateAll();
 	}
+
+	const serverController = new ServerCreateController({ onSuccess: handleServerCreated });
 </script>
 
 <section>
@@ -22,7 +26,38 @@
 
 	{#if isOwner}
 		<div class="mb-8 max-w-md">
-			<ServerCreateForm onsuccess={handleServerCreated} />
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					serverController.createServer();
+				}}
+				class="flex flex-col gap-3"
+			>
+				<ServerCreateFields controller={serverController} />
+				<div class="flex gap-2">
+					<Button
+						type="button"
+						variant="secondary"
+						disabled={!serverController.canCheckConnection}
+						onclick={serverController.checkConnection}
+					>
+						{#if serverController.checking}
+							Checking...
+						{:else if serverController.isVerified}
+							Connected
+						{:else}
+							Check Connection
+						{/if}
+					</Button>
+					<Button
+						type="submit"
+						loading={serverController.loading}
+						disabled={!serverController.isVerified || !!serverController.keysError}
+					>
+						{serverController.loading ? 'Saving...' : 'Add Server'}
+					</Button>
+				</div>
+			</form>
 		</div>
 	{/if}
 

@@ -113,8 +113,8 @@
 	</button>
 {:else}
 	<p class="mb-4 text-sm text-muted-foreground">
-		Generate an SSH key to connect Uploy to your servers. You'll add the public key to your
-		server after generating.
+		Generate an SSH key to connect Uploy to your servers. You'll add the public key to your server
+		after generating.
 	</p>
 
 	{#if error}

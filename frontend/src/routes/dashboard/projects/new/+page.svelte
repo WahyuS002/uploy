@@ -4,9 +4,14 @@
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
-	import ServerCreateForm from '$lib/components/app/ServerCreateForm.svelte';
+	import ServerCreateFields from '$lib/components/app/ServerCreateFields.svelte';
+	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Dialog from '$lib/components/ui/Dialog.svelte';
+	import DialogContent from '$lib/components/ui/DialogContent.svelte';
+	import DialogHeader from '$lib/components/ui/DialogHeader.svelte';
+	import DialogTitle from '$lib/components/ui/DialogTitle.svelte';
+	import DialogFooter from '$lib/components/ui/DialogFooter.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { Server, Check, Squares2x2 } from '@steeze-ui/heroicons';
@@ -58,6 +63,8 @@
 		selectedServerId = server.id;
 		error = '';
 	}
+
+	const serverController = new ServerCreateController({ onSuccess: handleServerCreated });
 
 	async function ensureProject(): Promise<ProjectResponse | null> {
 		const { data, error: err } = await api.POST('/api/projects', {
@@ -164,9 +171,7 @@
 			description="Uploy deploys to your own infrastructure. Add your first server, then come back here to start a project."
 		>
 			{#snippet actions()}
-				<Button size="sm" onclick={() => (serverDialogOpen = true)}>
-					Add a server
-				</Button>
+				<Button size="sm" onclick={() => (serverDialogOpen = true)}>Add a server</Button>
 				<Button href="/dashboard/projects" variant="secondary" size="sm">Cancel</Button>
 			{/snippet}
 		</EmptyState>
@@ -185,7 +190,10 @@
 		<div class="mb-8">
 			<div class="mb-3 flex items-baseline justify-between">
 				<h3 class="text-sm font-semibold text-foreground">
-					<span class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-primary-foreground">1</span>
+					<span
+						class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-primary-foreground"
+						>1</span
+					>
 					Choose a server
 				</h3>
 				{#if isOwner}
@@ -230,7 +238,10 @@
 		<!-- Step 2: Starter -->
 		<div>
 			<h3 class="mb-3 text-sm font-semibold text-foreground">
-				<span class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-primary-foreground">2</span>
+				<span
+					class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-primary-foreground"
+					>2</span
+				>
 				Pick a starter
 			</h3>
 			{#if !selectedServerId}
@@ -292,7 +303,44 @@
 		</div>
 	{/if}
 
-	<Dialog bind:open={serverDialogOpen} title="Add a server" class="max-w-2xl">
-		<ServerCreateForm onsuccess={handleServerCreated} />
+	<Dialog bind:open={serverDialogOpen}>
+		<DialogContent class="max-w-2xl">
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					serverController.createServer();
+				}}
+			>
+				<DialogHeader>
+					<DialogTitle>Add a server</DialogTitle>
+				</DialogHeader>
+				<div class="px-5 pb-5">
+					<ServerCreateFields controller={serverController} />
+				</div>
+				<DialogFooter>
+					<Button
+						type="button"
+						variant="secondary"
+						disabled={!serverController.canCheckConnection}
+						onclick={serverController.checkConnection}
+					>
+						{#if serverController.checking}
+							Checking...
+						{:else if serverController.isVerified}
+							Connected
+						{:else}
+							Check Connection
+						{/if}
+					</Button>
+					<Button
+						type="submit"
+						loading={serverController.loading}
+						disabled={!serverController.isVerified || !!serverController.keysError}
+					>
+						{serverController.loading ? 'Saving...' : 'Add Server'}
+					</Button>
+				</DialogFooter>
+			</form>
+		</DialogContent>
 	</Dialog>
 </section>
