@@ -160,6 +160,26 @@ func (s *Server) ListServices(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, http.StatusOK, resp)
 }
 
+func (s *Server) ListProjectServices(w http.ResponseWriter, r *http.Request, id string) {
+	proj, ok := s.requireProject(w, r, id)
+	if !ok {
+		return
+	}
+
+	services, err := db.ListServicesByProject(r.Context(), proj.ID)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list services"})
+		return
+	}
+
+	resp := make([]gen.ServiceResponse, len(services))
+	for i, svc := range services {
+		resp[i] = serviceToResponse(svc)
+	}
+
+	respond.JSON(w, http.StatusOK, resp)
+}
+
 func (s *Server) GetService(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 

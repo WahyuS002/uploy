@@ -104,6 +104,23 @@ func ListServicesByEnvironment(ctx context.Context, environmentID string) ([]Ser
 	return services, nil
 }
 
+func ListServicesByProject(ctx context.Context, projectID string) ([]Service, error) {
+	rows, err := Queries.ListServicesByProject(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	services := make([]Service, len(rows))
+	for i, r := range rows {
+		services[i] = Service{
+			ID: r.ID, Name: r.Name, Image: r.Image, ContainerName: r.ContainerName,
+			Port: r.Port, ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
+			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
+			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		}
+	}
+	return services, nil
+}
+
 func UpdateService(ctx context.Context, id, name, image, containerName string, port int32, serverID string) (Service, error) {
 	r, err := Queries.UpdateService(ctx, sqlcgen.UpdateServiceParams{
 		ID:            id,

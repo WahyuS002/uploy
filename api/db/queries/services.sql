@@ -15,6 +15,10 @@ FROM services WHERE workspace_id = $1 ORDER BY created_at DESC;
 SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at
 FROM services WHERE environment_id = $1 ORDER BY created_at DESC;
 
+-- name: ListServicesByProject :many
+SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at
+FROM services WHERE project_id = $1 ORDER BY created_at DESC;
+
 -- name: UpdateService :one
 UPDATE services
 SET name = $2, image = $3, container_name = $4, port = $5, server_id = $6, updated_at = NOW()

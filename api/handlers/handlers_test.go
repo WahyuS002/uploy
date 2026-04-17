@@ -71,6 +71,7 @@ func TestProtectedRouteWithoutSession_Returns401JSON(t *testing.T) {
 		{"GET", "/api/auth/me"},
 		{"POST", "/api/deployments"},
 		{"GET", "/api/deployments/550e8400-e29b-41d4-a716-446655440000/logs"},
+		{"GET", "/api/projects/550e8400-e29b-41d4-a716-446655440000/services"},
 	}
 
 	for _, rt := range routes {

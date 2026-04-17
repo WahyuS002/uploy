@@ -234,6 +234,59 @@ func (q *Queries) ListServicesByEnvironment(ctx context.Context, environmentID s
 	return items, nil
 }
 
+const listServicesByProject = `-- name: ListServicesByProject :many
+SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at
+FROM services WHERE project_id = $1 ORDER BY created_at DESC
+`
+
+type ListServicesByProjectRow struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Image         string    `json:"image"`
+	ContainerName string    `json:"container_name"`
+	Port          int32     `json:"port"`
+	ServerID      string    `json:"server_id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	Kind          string    `json:"kind"`
+	ProjectID     string    `json:"project_id"`
+	EnvironmentID string    `json:"environment_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListServicesByProject(ctx context.Context, projectID string) ([]ListServicesByProjectRow, error) {
+	rows, err := q.db.Query(ctx, listServicesByProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListServicesByProjectRow{}
+	for rows.Next() {
+		var i ListServicesByProjectRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Image,
+			&i.ContainerName,
+			&i.Port,
+			&i.ServerID,
+			&i.WorkspaceID,
+			&i.Kind,
+			&i.ProjectID,
+			&i.EnvironmentID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServicesByWorkspace = `-- name: ListServicesByWorkspace :many
 SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at
 FROM services WHERE workspace_id = $1 ORDER BY created_at DESC

@@ -123,11 +123,10 @@
 			const params = new URLSearchParams({
 				starter: 'docker-image',
 				serverId: selectedServerId,
-				projectId: project.id,
 				environmentId: envRow.id
 			});
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			await goto(`/dashboard/services?${params.toString()}`);
+			await goto(`/dashboard/projects/${project.id}?${params.toString()}`);
 		} catch {
 			error = 'Network error';
 		} finally {
@@ -321,7 +320,7 @@
 					<Button
 						type="button"
 						variant="secondary"
-						disabled={!serverController.canCheckConnection}
+						disabled={serverController.isVerified || !serverController.canCheckConnection}
 						onclick={serverController.checkConnection}
 					>
 						{#if serverController.checking}

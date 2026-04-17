@@ -1,14 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Squares2x2, Cube, Key, Server, ChevronUpDown } from '@steeze-ui/heroicons';
+	import { Squares2x2, Key, Server, ChevronUpDown } from '@steeze-ui/heroicons';
 	import SidebarNavItem from '$lib/components/app/SidebarNavItem.svelte';
 
 	let { workspaceName }: { workspaceName: string } = $props();
 
 	const navItems = [
 		{ href: '/dashboard/projects', label: 'Projects', icon: Squares2x2 },
-		{ href: '/dashboard/services', label: 'Services', icon: Cube },
 		{ href: '/dashboard/ssh-keys', label: 'SSH Keys', icon: Key },
 		{ href: '/dashboard/servers', label: 'Servers', icon: Server }
 	];
