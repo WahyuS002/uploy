@@ -1,20 +1,34 @@
+<script lang="ts" module>
+	import { cva, type VariantProps } from 'class-variance-authority';
+
+	export const inputVariants = cva(
+		'block w-full rounded-md border field-focus-glow border-border-input bg-surface font-normal text-foreground placeholder:text-placeholder disabled:opacity-50',
+		{
+			variants: {
+				size: {
+					sm: 'px-2.5 py-1.5 text-xs',
+					md: 'px-3 py-2 text-sm'
+				}
+			},
+			defaultVariants: { size: 'md' }
+		}
+	);
+
+	export type InputSize = VariantProps<typeof inputVariants>['size'];
+</script>
+
 <script lang="ts">
 	import { cn } from './cn.js';
 	import type { HTMLInputAttributes } from 'svelte/elements';
 
-	type Props = Omit<HTMLInputAttributes, 'class'> & {
+	type Props = Omit<HTMLInputAttributes, 'class' | 'size'> & {
 		class?: string;
+		size?: InputSize;
+		nativeSize?: number;
 		value?: HTMLInputAttributes['value'];
 	};
 
-	let { class: className, value = $bindable(), ...rest }: Props = $props();
+	let { class: className, size, nativeSize, value = $bindable(), ...rest }: Props = $props();
 </script>
 
-<input
-	bind:value
-	class={cn(
-		'block w-full rounded-md border field-focus-glow border-border-input bg-surface px-3 py-2 text-sm font-normal text-foreground placeholder:text-placeholder disabled:opacity-50',
-		className
-	)}
-	{...rest}
-/>
+<input bind:value size={nativeSize} class={cn(inputVariants({ size }), className)} {...rest} />

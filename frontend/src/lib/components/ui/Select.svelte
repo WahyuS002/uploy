@@ -1,3 +1,22 @@
+<script lang="ts" module>
+	import { cva, type VariantProps } from 'class-variance-authority';
+
+	export const selectTriggerVariants = cva(
+		'inline-flex w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-border-input bg-surface text-foreground hover:bg-surface-muted disabled:opacity-50',
+		{
+			variants: {
+				size: {
+					sm: 'h-8 px-2.5 text-xs',
+					md: 'h-10 px-3 py-2 text-sm'
+				}
+			},
+			defaultVariants: { size: 'md' }
+		}
+	);
+
+	export type SelectSize = VariantProps<typeof selectTriggerVariants>['size'];
+</script>
+
 <script lang="ts">
 	import { Select } from 'bits-ui';
 	import { cn } from './cn.js';
@@ -14,6 +33,7 @@
 		disabled?: boolean;
 		required?: boolean;
 		name?: string;
+		size?: SelectSize;
 		class?: string;
 	};
 
@@ -25,6 +45,7 @@
 		disabled = false,
 		required = false,
 		name,
+		size,
 		class: className
 	}: Props = $props();
 
@@ -32,12 +53,7 @@
 </script>
 
 <Select.Root type="single" bind:value {onValueChange} {disabled} {required} {name} {items}>
-	<Select.Trigger
-		class={cn(
-			'inline-flex h-10 w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-border-input bg-surface px-3 py-2 text-sm text-foreground hover:bg-surface-muted disabled:opacity-50',
-			className
-		)}
-	>
+	<Select.Trigger class={cn(selectTriggerVariants({ size }), className)}>
 		<span class={cn(!selectedLabel && 'text-muted-foreground')}>
 			{selectedLabel || placeholder}
 		</span>
@@ -46,7 +62,7 @@
 
 	<Select.Portal>
 		<Select.Content
-			class="z-50 max-h-60 w-[var(--bits-select-anchor-width)] min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-lg border border-border bg-surface shadow-md"
+			class="z-50 max-h-60 w-[var(--bits-select-anchor-width)] min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-lg border border-border bg-surface shadow-overlay"
 			sideOffset={4}
 		>
 			<Select.Viewport class="p-1">

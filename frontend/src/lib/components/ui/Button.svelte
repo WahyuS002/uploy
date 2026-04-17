@@ -2,16 +2,18 @@
 	import { cva, type VariantProps } from 'class-variance-authority';
 
 	export const buttonVariants = cva(
-		'inline-flex cursor-pointer items-center justify-center gap-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+		'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
 		{
 			variants: {
 				variant: {
-					primary: 'rounded-md bg-primary text-primary-foreground hover:bg-primary/90',
-					secondary: 'rounded-md border border-border bg-white hover:bg-surface-muted',
-					ghost: 'rounded-md hover:bg-surface-muted',
-					danger: 'rounded-md bg-danger text-white hover:bg-red-600'
+					primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+					secondary: 'border border-border bg-surface text-foreground hover:bg-surface-muted',
+					subtle: 'bg-surface-muted text-foreground hover:bg-surface-sunken',
+					ghost: 'text-foreground hover:bg-surface-muted',
+					danger: 'bg-danger text-white hover:bg-danger/90'
 				},
 				size: {
+					xs: 'h-7 gap-1.5 px-2.5 text-xs',
 					sm: 'h-8 px-3 text-xs',
 					md: 'h-10 px-4 py-2'
 				}

@@ -16,20 +16,20 @@
 	let displayIcon = $derived(icon ?? icons?.[0]);
 </script>
 
-<div class={cn('flex flex-col items-center px-6 py-16 text-center', className)}>
+<div class={cn('flex flex-col items-center px-6 py-12 text-center', className)}>
 	{#if displayIcon}
 		<div
-			class="mb-6 grid h-14 w-14 place-content-center rounded-2xl border border-border bg-surface"
+			class="mb-5 grid h-12 w-12 place-content-center rounded-xl bg-surface-muted text-muted-foreground"
 		>
-			<Icon src={displayIcon} theme="outline" class="h-6 w-6 text-foreground" />
+			<Icon src={displayIcon} theme="outline" class="h-5 w-5" />
 		</div>
 	{/if}
-	<h3 class="text-lg font-semibold text-foreground">{title}</h3>
+	<h3 class="text-base font-semibold text-foreground">{title}</h3>
 	{#if description}
-		<p class="mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
+		<p class="mt-1.5 max-w-md text-sm text-muted-foreground">{description}</p>
 	{/if}
 	{#if actions}
-		<div class="mt-6 flex items-center gap-3">
+		<div class="mt-5 flex items-center gap-2">
 			{@render actions()}
 		</div>
 	{/if}

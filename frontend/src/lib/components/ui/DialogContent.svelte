@@ -19,17 +19,17 @@
 
 <BitsDialog.Portal>
 	<BitsDialog.Overlay
-		class="fixed inset-0 z-50 bg-black/40 data-[state=closed]:animate-[dialog-overlay-out_100ms_ease-in] data-[state=open]:animate-[dialog-overlay-in_100ms_ease-out]"
+		class="fixed inset-0 z-50 bg-foreground/25 data-[state=closed]:animate-[dialog-overlay-out_120ms_ease-in] data-[state=open]:animate-[dialog-overlay-in_120ms_ease-out]"
 	/>
 	<BitsDialog.Content
 		interactOutsideBehavior={lockedBehavior('close')}
 		escapeKeydownBehavior={lockedBehavior('close')}
 		class={cn(
-			'fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/20 p-1.5 shadow-lg outline-none',
+			'fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface text-foreground shadow-overlay outline-none',
 			className
 		)}
 	>
-		<div class="relative rounded-xl border border-border bg-surface text-foreground">
+		<div class="relative">
 			{@render children()}
 			{#if dismissible}
 				<div class="absolute top-2.5 right-2.5">

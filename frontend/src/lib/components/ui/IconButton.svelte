@@ -10,28 +10,46 @@
 			variants: {
 				variant: {
 					default:
-						'rounded-full border border-border bg-white text-muted-foreground hover:bg-surface-muted hover:text-foreground',
+						'rounded-full border border-border bg-surface text-muted-foreground hover:bg-surface-muted hover:text-foreground',
 					ghost: 'rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground'
 				},
 				size: {
 					sm: 'h-6 w-6',
 					md: 'h-8 w-8'
+				},
+				selected: {
+					true: '',
+					false: ''
 				}
 			},
-			defaultVariants: { variant: 'default', size: 'sm' }
+			compoundVariants: [
+				{
+					variant: 'default',
+					selected: true,
+					class: 'border-border-input bg-surface-muted text-foreground'
+				},
+				{ variant: 'ghost', selected: true, class: 'bg-surface-muted text-foreground' }
+			],
+			defaultVariants: { variant: 'default', size: 'sm', selected: false }
 		}
 	);
 
 	type Props = Omit<HTMLButtonAttributes, 'class'> & {
 		variant?: VariantProps<typeof iconButtonVariants>['variant'];
 		size?: VariantProps<typeof iconButtonVariants>['size'];
+		selected?: boolean;
 		class?: string;
 		children: Snippet;
 	};
 
-	let { variant, size, class: className, children, ...rest }: Props = $props();
+	let { variant, size, selected = false, class: className, children, ...rest }: Props = $props();
 </script>
 
-<button type="button" class={cn(iconButtonVariants({ variant, size }), className)} {...rest}>
+<button
+	type="button"
+	aria-pressed={selected || undefined}
+	class={cn(iconButtonVariants({ variant, size, selected }), className)}
+	{...rest}
+>
 	{@render children()}
 </button>
