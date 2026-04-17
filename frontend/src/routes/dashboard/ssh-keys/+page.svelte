@@ -3,11 +3,10 @@
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
-	import CopyButton from '$lib/components/app/CopyButton.svelte';
+	import PublicKeyHelper from '$lib/components/app/PublicKeyHelper.svelte';
 	import SSHKeyCreatePanel from '$lib/components/app/SSHKeyCreatePanel.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
-	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
 
 	type SSHKeyResponse = components['schemas']['SSHKeyResponse'];
 
@@ -30,28 +29,29 @@
 
 	{#if isOwner}
 		{#if lastCreatedKey}
-			<Alert tone="success" class="mb-8 max-w-md p-5">
-				<p class="mb-1 text-sm font-semibold">Key created</p>
-				<p class="mb-3 text-sm">
-					<span class="font-medium">{lastCreatedKey.name}</span> is ready. Add this public key to
-					<code class="rounded bg-green-100 px-1 text-xs">~/.ssh/authorized_keys</code> on your remote
-					server.
-				</p>
-				<div class="mb-3 flex items-start gap-2">
-					<CodeBlock code={lastCreatedKey.public_key} class="flex-1 bg-white" />
-					<CopyButton text={lastCreatedKey.public_key} defaultLabel="Copy public key" />
-				</div>
-				<div class="flex items-center gap-3">
-					<Button href="/dashboard/servers" size="sm">Go to Servers</Button>
-					<button
-						type="button"
-						class="cursor-pointer text-sm text-muted-foreground hover:text-foreground"
-						onclick={() => (lastCreatedKey = null)}
-					>
-						Dismiss
-					</button>
-				</div>
-			</Alert>
+			<div class="mb-8 flex max-w-md flex-col gap-3">
+				<Alert tone="success">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div class="min-w-0">
+							<p class="text-sm font-semibold">Key created</p>
+							<p class="text-xs">
+								<span class="font-medium">{lastCreatedKey.name}</span> is ready to use.
+							</p>
+						</div>
+						<div class="flex flex-wrap items-center gap-2">
+							<Button href="/dashboard/servers" size="sm">Go to Servers</Button>
+							<button
+								type="button"
+								class="cursor-pointer text-sm text-muted-foreground hover:text-foreground"
+								onclick={() => (lastCreatedKey = null)}
+							>
+								Dismiss
+							</button>
+						</div>
+					</div>
+				</Alert>
+				<PublicKeyHelper publicKey={lastCreatedKey.public_key} announce />
+			</div>
 		{:else}
 			<div class="mb-8 max-w-md">
 				<SSHKeyCreatePanel onsuccess={handleKeyCreated} />
@@ -79,13 +79,12 @@
 									>
 										{expandedKeyId === key.id ? 'Hide' : 'Show'} public key
 									</Button>
-									<CopyButton text={key.public_key} defaultLabel="Copy public key" />
 								{/if}
 							</div>
 						</li>
 						{#if expandedKeyId === key.id && key.public_key}
 							<li class="pb-3">
-								<CodeBlock code={key.public_key} />
+								<PublicKeyHelper publicKey={key.public_key} />
 							</li>
 						{/if}
 					{/each}

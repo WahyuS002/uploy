@@ -1,11 +1,9 @@
 <script lang="ts">
 	import FormField from './FormField.svelte';
-	import CopyButton from './CopyButton.svelte';
+	import PublicKeyHelper from './PublicKeyHelper.svelte';
 	import SSHKeyCreatePanel from './SSHKeyCreatePanel.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
-	import Alert from '$lib/components/ui/Alert.svelte';
-	import CodeBlock from '$lib/components/ui/CodeBlock.svelte';
 	import Dialog from '$lib/components/ui/Dialog.svelte';
 	import DialogContent from '$lib/components/ui/DialogContent.svelte';
 	import DialogHeader from '$lib/components/ui/DialogHeader.svelte';
@@ -68,16 +66,7 @@
 		</FormField>
 
 		{#if controller.selectedKeyPublicKey}
-			<Alert tone="info">
-				<p class="mb-1 text-xs font-medium">
-					Public key (add to <code class="rounded bg-blue-100 px-1">~/.ssh/authorized_keys</code>
-					on remote server):
-				</p>
-				<div class="flex items-start gap-2">
-					<CodeBlock code={controller.selectedKeyPublicKey} class="flex-1 bg-white" />
-					<CopyButton text={controller.selectedKeyPublicKey} defaultLabel="Copy" />
-				</div>
-			</Alert>
+			<PublicKeyHelper publicKey={controller.selectedKeyPublicKey} announce />
 		{/if}
 
 		{#if controller.error}
