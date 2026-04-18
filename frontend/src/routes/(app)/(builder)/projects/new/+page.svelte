@@ -6,6 +6,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
+	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { Icon, type IconSource } from '@steeze-ui/svelte-icon';
 	import {
 		Server,
@@ -121,15 +122,27 @@
 		if (!q) return rows;
 		return rows.filter((row) => row.title.toLowerCase().includes(q));
 	});
+
+	const pan = createCanvasPan({ bounds: 'auto' });
+	const panViewport = pan.viewport;
 </script>
 
-<div class="canvas relative flex w-full flex-1 overflow-hidden rounded-xl border border-border">
-	<div class="canvas-bg" aria-hidden="true"></div>
+<div
+	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border"
+	data-panning={pan.isPanning ? 'true' : 'false'}
+	use:panViewport
+>
+	<div
+		class="canvas-bg"
+		aria-hidden="true"
+		style="background-position: {pan.x - 1}px {pan.y - 1}px;"
+	></div>
 	<div class="canvas-glow" aria-hidden="true"></div>
 
-	<div class="relative z-10 flex w-full overflow-y-auto">
+	<div class="scroll-area relative z-10 flex w-full overflow-x-hidden overflow-y-auto">
 		<div
-			class="m-auto flex min-h-full w-full items-center justify-center px-4 py-8 sm:px-6 sm:py-12"
+			class="stage m-auto flex min-h-full w-full items-center justify-center px-4 py-8 sm:px-6 sm:py-12"
+			style="transform: translate3d({pan.x}px, {pan.y}px, 0);"
 		>
 			{#if !canEdit}
 				<div class="w-full max-w-105">
@@ -260,12 +273,22 @@
 			var(--shadow-panel);
 	}
 
+	@media (pointer: fine) {
+		.viewport {
+			cursor: grab;
+		}
+
+		.viewport[data-panning='true'] {
+			cursor: grabbing;
+			user-select: none;
+		}
+	}
+
 	.canvas-bg {
 		position: absolute;
 		inset: 0;
 		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.08) 1px, transparent 0);
 		background-size: 20px 20px;
-		background-position: -1px -1px;
 		mask-image: radial-gradient(
 			ellipse 80% 70% at 50% 45%,
 			rgba(0, 0, 0, 0.9) 0%,
