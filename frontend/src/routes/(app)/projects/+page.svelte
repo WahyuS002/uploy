@@ -127,7 +127,7 @@
 					]}
 				/>
 				{#if canEdit}
-					<Button href="/dashboard/projects/new" size="sm">
+					<Button href="/projects/new" size="sm">
 						<Icon src={Plus} theme="outline" class="h-4 w-4" />
 						New
 					</Button>
@@ -184,7 +184,7 @@
 				{@const firstEnv = getProjectFirstEnv(project.id)}
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
-					href="/dashboard/projects/{project.id}"
+					href="/projects/{project.id}"
 					class="group overflow-hidden rounded-xl border border-border bg-surface transition-shadow hover:shadow-md"
 				>
 					<div class="px-4 pt-4 pb-3">
@@ -234,7 +234,7 @@
 				{@const firstEnv = getProjectFirstEnv(project.id)}
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
-					href="/dashboard/projects/{project.id}"
+					href="/projects/{project.id}"
 					class="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 transition-shadow hover:shadow-md"
 				>
 					<div class="flex items-center gap-3">

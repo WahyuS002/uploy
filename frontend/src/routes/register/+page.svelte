@@ -32,7 +32,7 @@
 				return;
 			}
 
-			window.location.href = '/dashboard/projects';
+			window.location.href = '/projects';
 		} catch {
 			error = 'Network error';
 		} finally {

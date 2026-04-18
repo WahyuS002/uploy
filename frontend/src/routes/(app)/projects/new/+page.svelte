@@ -45,8 +45,8 @@
 			if (!project) return;
 			const target =
 				starter === 'docker-image'
-					? `/dashboard/projects/${project.id}?starter=docker-image`
-					: `/dashboard/projects/${project.id}`;
+					? `/projects/${project.id}?starter=docker-image`
+					: `/projects/${project.id}`;
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			await goto(target);
 		} catch {
@@ -124,7 +124,7 @@
 			description="Ask a workspace owner or developer to create a project, or request a role change."
 		>
 			{#snippet actions()}
-				<Button href="/dashboard/projects" variant="secondary" size="sm">Back to projects</Button>
+				<Button href="/projects" variant="secondary" size="sm">Back to projects</Button>
 			{/snippet}
 		</EmptyState>
 	{:else}
@@ -190,7 +190,7 @@
 		{/if}
 
 		<div class="mt-8">
-			<Button href="/dashboard/projects" variant="ghost" size="sm">Cancel</Button>
+			<Button href="/projects" variant="ghost" size="sm">Cancel</Button>
 		</div>
 	{/if}
 </section>

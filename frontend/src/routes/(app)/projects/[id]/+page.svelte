@@ -340,7 +340,7 @@
 								You need to connect a server before you can deploy a service.
 								{#if isOwner}
 									<div class="mt-2">
-										<Button href="/dashboard/servers" size="xs" variant="secondary">
+										<Button href="/servers" size="xs" variant="secondary">
 											<Icon src={ServerStack} theme="outline" class="h-3 w-3" />
 											Connect a server
 										</Button>
@@ -410,7 +410,7 @@
 							{@const srv = serverById.get(svc.server_id)}
 							<!-- eslint-disable svelte/no-navigation-without-resolve -->
 							<a
-								href="/dashboard/services/{svc.id}"
+								href="/services/{svc.id}"
 								class="group flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 shadow-sm transition-all hover:border-foreground/40 hover:shadow-md"
 							>
 								<div class="flex items-start justify-between gap-2">

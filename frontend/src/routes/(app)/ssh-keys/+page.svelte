@@ -39,7 +39,7 @@
 							</p>
 						</div>
 						<div class="flex flex-wrap items-center gap-2">
-							<Button href="/dashboard/servers" size="sm">Go to Servers</Button>
+							<Button href="/servers" size="sm">Go to Servers</Button>
 							<button
 								type="button"
 								class="cursor-pointer text-sm text-muted-foreground hover:text-foreground"
