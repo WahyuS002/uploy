@@ -320,7 +320,7 @@ paths:
       security:
         - cookieAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -1739,8 +1739,10 @@ components:
 
     CreateProjectRequest:
       type: object
-      required:
-        - name
+      description: |
+        Request body for creating a project. When `name` is omitted, blank, or
+        whitespace-only, the backend generates a unique Railway-style
+        `adjective-noun` name scoped to the workspace.
       properties:
         name:
           type: string

@@ -34,9 +34,10 @@ func CreateProject(ctx context.Context, name, workspaceID string) (Project, erro
 }
 
 // CreateProjectWithDefaultEnvironment creates a project and its default
-// `production` environment atomically. If the environment insert fails the
-// project insert is rolled back so callers never observe a project without
-// its default environment.
+// `production` environment atomically. If `name` is empty, a unique
+// Railway-style `adjective-noun` name is generated for the workspace. If the
+// environment insert fails the project insert is rolled back so callers never
+// observe a project without its default environment.
 func CreateProjectWithDefaultEnvironment(ctx context.Context, name, workspaceID string) (Project, Environment, error) {
 	tx, err := Pool.Begin(ctx)
 	if err != nil {
@@ -45,6 +46,24 @@ func CreateProjectWithDefaultEnvironment(ctx context.Context, name, workspaceID 
 	defer tx.Rollback(ctx)
 
 	q := Queries.WithTx(tx)
+
+	// Serialize project-name allocation per workspace so two concurrent
+	// create transactions cannot both observe the same candidate as free.
+	// The advisory lock is held for the rest of the transaction and
+	// released on commit/rollback. We always acquire it, even for explicit
+	// client-supplied names, so an auto-generated name in a parallel tx
+	// cannot collide with a manual insert that committed first.
+	if err := q.LockWorkspaceProjectNames(ctx, workspaceID); err != nil {
+		return Project{}, Environment{}, err
+	}
+
+	if name == "" {
+		generated, err := generateUniqueProjectName(ctx, workspaceNameExists(q, workspaceID))
+		if err != nil {
+			return Project{}, Environment{}, err
+		}
+		name = generated
+	}
 
 	pr, err := q.CreateProject(ctx, sqlcgen.CreateProjectParams{
 		Name:        name,

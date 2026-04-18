@@ -12,6 +12,19 @@ SELECT id, name, workspace_id, created_at, updated_at
 FROM projects WHERE workspace_id = $1
 ORDER BY created_at ASC;
 
+-- name: ProjectNameExistsInWorkspace :one
+SELECT EXISTS (
+    SELECT 1 FROM projects
+    WHERE workspace_id = $1 AND name = $2
+) AS exists;
+
+-- name: LockWorkspaceProjectNames :exec
+-- Acquires a transaction-scoped Postgres advisory lock keyed on the workspace
+-- so concurrent project-create transactions in the same workspace serialize
+-- their name-allocation step. The lock is released automatically at COMMIT or
+-- ROLLBACK. Safe to call in any transaction that inserts into `projects`.
+SELECT pg_advisory_xact_lock(hashtextextended('project_name:' || sqlc.arg(workspace_id)::text, 0));
+
 -- name: UpdateProject :one
 UPDATE projects
 SET name = $2, updated_at = NOW()

@@ -25,17 +25,9 @@
 	let busyStarter = $state<Starter | null>(null);
 	let error = $state('');
 
-	function autoProjectName(): string {
-		const d = new Date();
-		const pad = (n: number) => n.toString().padStart(2, '0');
-		const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-		const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-		return `Untitled Project ${date} ${time}`;
-	}
-
 	async function createProject(): Promise<ProjectResponse | null> {
 		const { data, error: err } = await api.POST('/api/projects', {
-			body: { name: autoProjectName() }
+			body: {}
 		});
 		if (err) {
 			error = (err as { error: string }).error ?? 'Failed to create project';

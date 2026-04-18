@@ -92,6 +92,38 @@ func (q *Queries) ListProjectsByWorkspace(ctx context.Context, workspaceID strin
 	return items, nil
 }
 
+const lockWorkspaceProjectNames = `-- name: LockWorkspaceProjectNames :exec
+SELECT pg_advisory_xact_lock(hashtextextended('project_name:' || $1::text, 0))
+`
+
+// Acquires a transaction-scoped Postgres advisory lock keyed on the workspace
+// so concurrent project-create transactions in the same workspace serialize
+// their name-allocation step. The lock is released automatically at COMMIT or
+// ROLLBACK. Safe to call in any transaction that inserts into `projects`.
+func (q *Queries) LockWorkspaceProjectNames(ctx context.Context, workspaceID string) error {
+	_, err := q.db.Exec(ctx, lockWorkspaceProjectNames, workspaceID)
+	return err
+}
+
+const projectNameExistsInWorkspace = `-- name: ProjectNameExistsInWorkspace :one
+SELECT EXISTS (
+    SELECT 1 FROM projects
+    WHERE workspace_id = $1 AND name = $2
+) AS exists
+`
+
+type ProjectNameExistsInWorkspaceParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	Name        string `json:"name"`
+}
+
+func (q *Queries) ProjectNameExistsInWorkspace(ctx context.Context, arg ProjectNameExistsInWorkspaceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, projectNameExistsInWorkspace, arg.WorkspaceID, arg.Name)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const updateProject = `-- name: UpdateProject :one
 UPDATE projects
 SET name = $2, updated_at = NOW()

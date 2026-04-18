@@ -514,8 +514,13 @@ export interface components {
 			/** Format: date-time */
 			updated_at: string;
 		};
+		/**
+		 * @description Request body for creating a project. When `name` is omitted, blank, or
+		 *     whitespace-only, the backend generates a unique Railway-style
+		 *     `adjective-noun` name scoped to the workspace.
+		 */
 		CreateProjectRequest: {
-			name: string;
+			name?: string;
 		};
 		UpdateProjectRequest: {
 			name: string;
@@ -1082,7 +1087,7 @@ export interface operations {
 			path?: never;
 			cookie?: never;
 		};
-		requestBody: {
+		requestBody?: {
 			content: {
 				'application/json': components['schemas']['CreateProjectRequest'];
 			};

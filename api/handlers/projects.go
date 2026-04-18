@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -22,18 +23,17 @@ func (s *Server) CreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req gen.CreateProjectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "invalid request body"})
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "name is required"})
-		return
+	name := ""
+	if req.Name != nil {
+		name = strings.TrimSpace(*req.Name)
 	}
 
-	proj, _, err := db.CreateProjectWithDefaultEnvironment(r.Context(), req.Name, sc.WorkspaceID)
+	proj, _, err := db.CreateProjectWithDefaultEnvironment(r.Context(), name, sc.WorkspaceID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create project"})
 		return

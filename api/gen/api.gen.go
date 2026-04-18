@@ -162,9 +162,11 @@ type CreateEnvironmentRequest struct {
 	Name string `json:"name"`
 }
 
-// CreateProjectRequest defines model for CreateProjectRequest.
+// CreateProjectRequest Request body for creating a project. When `name` is omitted, blank, or
+// whitespace-only, the backend generates a unique Railway-style
+// `adjective-noun` name scoped to the workspace.
 type CreateProjectRequest struct {
-	Name string `json:"name"`
+	Name *string `json:"name,omitempty"`
 }
 
 // CreateSSHKeyRequest defines model for CreateSSHKeyRequest.
