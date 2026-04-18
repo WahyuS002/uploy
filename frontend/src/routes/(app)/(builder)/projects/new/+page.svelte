@@ -5,7 +5,7 @@
 	import type { PageData } from './$types';
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import Textarea from '$lib/components/ui/Textarea.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import { Icon, type IconSource } from '@steeze-ui/svelte-icon';
 	import {
 		Server,
@@ -14,7 +14,7 @@
 		RectangleStack,
 		ChevronRight
 	} from '@steeze-ui/heroicons';
-	import { Archive, Container, Sparkles, SquareFunction, SquareTerminal } from 'lucide-svelte';
+	import { Archive, Container, SquareTerminal } from 'lucide-svelte';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
 
@@ -99,13 +99,6 @@
 			starter: 'docker-image'
 		},
 		{
-			id: 'function',
-			title: 'Function',
-			lucide: SquareFunction,
-			interactive: false,
-			showsChevron: false
-		},
-		{
 			id: 'bucket',
 			title: 'Bucket',
 			lucide: Archive,
@@ -123,7 +116,7 @@
 	];
 </script>
 
-<div class="mx-auto w-full max-w-[720px]">
+<div class="mx-auto w-full max-w-[420px]">
 	{#if !canEdit}
 		<EmptyState
 			icon={Server}
@@ -136,116 +129,96 @@
 		</EmptyState>
 	{:else}
 		<section
-			class="flex flex-col rounded-2xl border border-border bg-surface shadow-sm"
+			class="overflow-hidden rounded-xl border border-border bg-gradient-to-b from-surface to-surface-muted/40 shadow-md"
 			aria-label="Start a new project"
 		>
-			<div class="p-3 sm:p-4">
-				<Textarea
+			<div class="p-1.5 pb-1">
+				<Input
 					bind:value={promptDraft}
 					placeholder="What would you like to create?"
-					rows={2}
-					class="resize-none border-border-input bg-surface-muted/40 px-4 py-3 text-base shadow-none"
+					class="rounded-md p-3 text-base sm:text-sm"
 				/>
 			</div>
 
-			<div class="flex flex-col gap-0.5 px-3 pb-3 sm:px-4 sm:pb-4">
-				<div
-					class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-foreground"
-					aria-disabled="true"
-				>
-					<Sparkles class="h-5 w-5 flex-none text-muted-foreground" strokeWidth={1.75} />
-					<span>Create to-do list function with a database</span>
-				</div>
-				<div
-					class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground opacity-60"
-					aria-disabled="true"
-				>
-					<Sparkles class="h-5 w-5 flex-none" strokeWidth={1.75} />
-					<span>Deploy Redis, Postgres, and a Bucket</span>
-				</div>
-			</div>
-
-			<div class="border-t border-border"></div>
-
-			<ul class="flex flex-col p-2">
-				{#each rows as row (row.id)}
-					{@const busy = row.starter != null && busyStarter === row.starter}
-					{@const pending = busyStarter !== null}
-					{#if row.interactive}
-						<li>
-							<button
-								type="button"
-								onclick={() => row.starter && launch(row.starter)}
-								disabled={pending}
-								class="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:hover:bg-transparent"
+			<div class="py-2">
+				<ul>
+					{#each rows as row (row.id)}
+						{@const busy = row.starter != null && busyStarter === row.starter}
+						{@const pending = busyStarter !== null}
+						{@const gridCols =
+							row.showsChevron || !row.interactive
+								? 'grid-cols-[auto_1fr_auto]'
+								: 'grid-cols-[auto_1fr]'}
+						{#if row.interactive}
+							<li class="mx-2">
+								<button
+									type="button"
+									onclick={() => row.starter && launch(row.starter)}
+									disabled={pending}
+									class="grid w-full cursor-pointer items-center gap-x-4 rounded-lg p-3 text-left text-sm text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground {gridCols}"
+								>
+									<span class="text-lg leading-none">
+										{#if row.lucide}
+											{@const LucideIcon = row.lucide}
+											<LucideIcon class="h-[1em] w-[1em]" strokeWidth={1.5} />
+										{:else if row.icon}
+											<Icon src={row.icon} theme="outline" class="h-[1em] w-[1em]" />
+										{/if}
+									</span>
+									<span class="truncate">{row.title}</span>
+									{#if busy}
+										<svg
+											class="h-4 w-4 animate-spin"
+											xmlns="http://www.w3.org/2000/svg"
+											fill="none"
+											viewBox="0 0 24 24"
+										>
+											<circle
+												class="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												stroke-width="4"
+											/>
+											<path
+												class="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+											/>
+										</svg>
+									{:else if row.showsChevron}
+										<Icon src={ChevronRight} theme="outline" class="h-4 w-4" />
+									{/if}
+								</button>
+							</li>
+						{:else}
+							<li
+								class="mx-2 grid cursor-default items-center gap-x-4 rounded-lg p-3 text-sm text-muted-foreground {gridCols}"
 							>
-								<span class="grid h-5 w-5 flex-none place-content-center">
+								<span class="text-lg leading-none">
 									{#if row.lucide}
 										{@const LucideIcon = row.lucide}
-										<LucideIcon class="h-5 w-5" strokeWidth={1.75} />
+										<LucideIcon class="h-[1em] w-[1em]" strokeWidth={1.5} />
 									{:else if row.icon}
-										<Icon src={row.icon} theme="outline" class="h-5 w-5" />
+										<Icon src={row.icon} theme="outline" class="h-[1em] w-[1em]" />
 									{/if}
 								</span>
-								<span class="flex-1 truncate font-medium">{row.title}</span>
-								{#if busy}
-									<svg
-										class="h-4 w-4 animate-spin text-muted-foreground"
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-									>
-										<circle
-											class="opacity-25"
-											cx="12"
-											cy="12"
-											r="10"
-											stroke="currentColor"
-											stroke-width="4"
-										/>
-										<path
-											class="opacity-75"
-											fill="currentColor"
-											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-										/>
-									</svg>
-								{:else if row.showsChevron}
-									<Icon
-										src={ChevronRight}
-										theme="outline"
-										class="h-4 w-4 flex-none text-muted-foreground"
-									/>
-								{/if}
-							</button>
-						</li>
-					{:else}
-						<li
-							class="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-muted-foreground"
-						>
-							<span class="grid h-5 w-5 flex-none place-content-center">
-								{#if row.lucide}
-									{@const LucideIcon = row.lucide}
-									<LucideIcon class="h-5 w-5" strokeWidth={1.75} />
-								{:else if row.icon}
-									<Icon src={row.icon} theme="outline" class="h-5 w-5" />
-								{/if}
-							</span>
-							<span class="flex-1 truncate">{row.title}</span>
-							{#if row.showsChevron}
-								<Icon src={ChevronRight} theme="outline" class="h-4 w-4 flex-none" />
-							{/if}
-						</li>
-					{/if}
-				{/each}
-			</ul>
+								<span class="truncate">{row.title}</span>
+								<span
+									class="rounded-md bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+								>
+									Soon
+								</span>
+							</li>
+						{/if}
+					{/each}
+				</ul>
+			</div>
 		</section>
 
 		{#if error}
 			<p class="mt-3 text-sm text-danger">{error}</p>
 		{/if}
-
-		<div class="mt-4 flex justify-end">
-			<Button href="/projects" variant="ghost" size="sm">Cancel</Button>
-		</div>
 	{/if}
 </div>
