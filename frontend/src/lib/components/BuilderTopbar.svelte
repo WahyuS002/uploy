@@ -27,13 +27,6 @@
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
 		<a
 			href="/projects"
-			title="Back to projects"
-			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground"
-		>
-			<Icon src={ArrowLeft} theme="outline" class="h-[18px] w-[18px]" />
-		</a>
-		<a
-			href="/projects"
 			class="flex flex-none items-center gap-2 rounded-md px-1 py-1.5 select-none"
 		>
 			<span
