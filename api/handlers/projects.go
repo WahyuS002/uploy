@@ -33,7 +33,7 @@ func (s *Server) CreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proj, err := db.CreateProject(r.Context(), req.Name, sc.WorkspaceID)
+	proj, _, err := db.CreateProjectWithDefaultEnvironment(r.Context(), req.Name, sc.WorkspaceID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create project"})
 		return

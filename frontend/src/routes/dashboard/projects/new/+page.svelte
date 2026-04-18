@@ -3,38 +3,27 @@
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
-	import PageHeader from '$lib/components/app/PageHeader.svelte';
-	import ServerCreateFields from '$lib/components/app/ServerCreateFields.svelte';
-	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import Dialog from '$lib/components/ui/Dialog.svelte';
-	import DialogContent from '$lib/components/ui/DialogContent.svelte';
-	import DialogHeader from '$lib/components/ui/DialogHeader.svelte';
-	import DialogTitle from '$lib/components/ui/DialogTitle.svelte';
-	import DialogFooter from '$lib/components/ui/DialogFooter.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Server, Check, Squares2x2 } from '@steeze-ui/heroicons';
+	import { Icon, type IconSource } from '@steeze-ui/svelte-icon';
+	import {
+		Server,
+		Squares2x2,
+		CodeBracket,
+		CircleStack,
+		RectangleStack
+	} from '@steeze-ui/heroicons';
 	import { Container } from 'lucide-svelte';
 
-	type ServerResponse = components['schemas']['ServerResponse'];
 	type ProjectResponse = components['schemas']['ProjectResponse'];
-	type EnvironmentResponse = components['schemas']['EnvironmentResponse'];
 
 	type Starter = 'empty-project' | 'docker-image';
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
-	let isOwner = $derived(data.workspace?.role === 'owner');
 
-	let servers = $state<ServerResponse[]>([]);
-	let loading = $state(true);
-	let selectedServerId = $state('');
 	let busyStarter = $state<Starter | null>(null);
 	let error = $state('');
-	let serverDialogOpen = $state(false);
-
-	let selectedServer = $derived(servers.find((s) => s.id === selectedServerId));
 
 	function autoProjectName(): string {
 		const d = new Date();
@@ -44,29 +33,7 @@
 		return `Untitled Project ${date} ${time}`;
 	}
 
-	async function load() {
-		loading = true;
-		try {
-			const serversRes = await api.GET('/api/servers');
-			if (serversRes.data) {
-				servers = serversRes.data;
-				if (servers.length === 1) selectedServerId = servers[0].id;
-			}
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function handleServerCreated(server: ServerResponse) {
-		serverDialogOpen = false;
-		await load();
-		selectedServerId = server.id;
-		error = '';
-	}
-
-	const serverController = new ServerCreateController({ onSuccess: handleServerCreated });
-
-	async function ensureProject(): Promise<ProjectResponse | null> {
+	async function createProject(): Promise<ProjectResponse | null> {
 		const { data, error: err } = await api.POST('/api/projects', {
 			body: { name: autoProjectName() }
 		});
@@ -77,33 +44,19 @@
 		return data ?? null;
 	}
 
-	async function ensureEnvironment(projectId: string): Promise<EnvironmentResponse | null> {
-		const existing = await api.GET('/api/projects/{id}/environments', {
-			params: { path: { id: projectId } }
-		});
-		if (existing.data && existing.data.length > 0) {
-			const prod = existing.data.find((e) => e.name === 'production');
-			return prod ?? existing.data[0];
-		}
-		const { data, error: err } = await api.POST('/api/projects/{id}/environments', {
-			params: { path: { id: projectId } },
-			body: { name: 'production' }
-		});
-		if (err) {
-			error = (err as { error: string }).error ?? 'Failed to create environment';
-			return null;
-		}
-		return data ?? null;
-	}
-
-	async function runEmptyProject() {
+	async function launch(starter: Starter) {
+		if (busyStarter) return;
 		error = '';
-		busyStarter = 'empty-project';
+		busyStarter = starter;
 		try {
-			const project = await ensureProject();
+			const project = await createProject();
 			if (!project) return;
+			const target =
+				starter === 'docker-image'
+					? `/dashboard/projects/${project.id}?starter=docker-image`
+					: `/dashboard/projects/${project.id}`;
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			await goto(`/dashboard/projects/${project.id}`);
+			await goto(target);
 		} catch {
 			error = 'Network error';
 		} finally {
@@ -111,49 +64,68 @@
 		}
 	}
 
-	async function runDockerImage() {
-		if (!selectedServerId) return;
-		error = '';
-		busyStarter = 'docker-image';
-		try {
-			const project = await ensureProject();
-			if (!project) return;
-			const envRow = await ensureEnvironment(project.id);
-			if (!envRow) return;
-			const params = new URLSearchParams({
-				starter: 'docker-image',
-				serverId: selectedServerId,
-				environmentId: envRow.id
-			});
-			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			await goto(`/dashboard/projects/${project.id}?${params.toString()}`);
-		} catch {
-			error = 'Network error';
-		} finally {
-			busyStarter = null;
-		}
-	}
+	type StarterCard = {
+		id: Starter | 'coming-soon';
+		title: string;
+		description: string;
+		icon?: IconSource;
+		lucide?: typeof Container;
+		enabled: boolean;
+		onSelect?: () => void;
+	};
 
-	$effect(() => {
-		load();
-	});
+	let cards = $derived<StarterCard[]>([
+		{
+			id: 'docker-image',
+			title: 'Docker Image',
+			description: 'Deploy a prebuilt image from any container registry.',
+			lucide: Container,
+			enabled: true,
+			onSelect: () => launch('docker-image')
+		},
+		{
+			id: 'empty-project',
+			title: 'Empty Project',
+			description: 'Start from scratch and add services later.',
+			icon: Squares2x2,
+			enabled: true,
+			onSelect: () => launch('empty-project')
+		},
+		{
+			id: 'coming-soon',
+			title: 'GitHub Repository',
+			description: 'Build and deploy from a Git repository.',
+			icon: CodeBracket,
+			enabled: false
+		},
+		{
+			id: 'coming-soon',
+			title: 'Database',
+			description: 'Provision a managed database for your services.',
+			icon: CircleStack,
+			enabled: false
+		},
+		{
+			id: 'coming-soon',
+			title: 'Template',
+			description: 'Launch a preconfigured stack from a template.',
+			icon: RectangleStack,
+			enabled: false
+		}
+	]);
 </script>
 
-<section>
-	<PageHeader
-		title="New project"
-		description="Choose a server, then pick how you want to start this project."
-	/>
+<section
+	class="mx-auto flex min-h-[70vh] w-full max-w-3xl flex-col items-center justify-start pt-12"
+>
+	<div class="mb-10 text-center">
+		<h1 class="text-2xl font-semibold text-foreground">Start a new project</h1>
+		<p class="mt-2 text-sm text-muted-foreground">
+			Pick a starter to create your project. You can add more services and environments later.
+		</p>
+	</div>
 
-	{#if loading}
-		<div class="flex flex-col gap-6">
-			<div class="h-32 animate-pulse rounded-xl bg-surface-muted"></div>
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<div class="h-40 animate-pulse rounded-xl bg-surface-muted"></div>
-				<div class="h-40 animate-pulse rounded-xl bg-surface-muted"></div>
-			</div>
-		</div>
-	{:else if !canEdit}
+	{#if !canEdit}
 		<EmptyState
 			icon={Server}
 			title="You don't have permission to create projects"
@@ -163,183 +135,70 @@
 				<Button href="/dashboard/projects" variant="secondary" size="sm">Back to projects</Button>
 			{/snippet}
 		</EmptyState>
-	{:else if servers.length === 0 && isOwner}
-		<EmptyState
-			icon={Server}
-			title="Connect a server to get started"
-			description="Uploy deploys to your own infrastructure. Add your first server, then come back here to start a project."
-		>
-			{#snippet actions()}
-				<Button size="sm" onclick={() => (serverDialogOpen = true)}>Add a server</Button>
-				<Button href="/dashboard/projects" variant="secondary" size="sm">Cancel</Button>
-			{/snippet}
-		</EmptyState>
-	{:else if servers.length === 0}
-		<EmptyState
-			icon={Server}
-			title="No servers available"
-			description="A workspace owner needs to connect a server before you can create a project. Ask an owner to add one."
-		>
-			{#snippet actions()}
-				<Button href="/dashboard/projects" variant="secondary" size="sm">Back to projects</Button>
-			{/snippet}
-		</EmptyState>
 	{:else}
-		<!-- Step 1: Server -->
-		<div class="mb-8">
-			<div class="mb-3 flex items-baseline justify-between">
-				<h3 class="text-sm font-semibold text-foreground">
-					<span
-						class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-primary-foreground"
-						>1</span
-					>
-					Choose a server
-				</h3>
-				{#if isOwner}
-					<button
-						type="button"
-						onclick={() => (serverDialogOpen = true)}
-						class="text-xs text-muted-foreground hover:text-foreground"
-					>
-						+ Add server
-					</button>
-				{/if}
-			</div>
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-				{#each servers as server (server.id)}
-					{@const selected = server.id === selectedServerId}
-					<button
-						type="button"
-						onclick={() => (selectedServerId = server.id)}
-						class="group flex items-start gap-3 rounded-xl border bg-surface p-4 text-left transition-colors {selected
-							? 'border-foreground ring-1 ring-foreground'
-							: 'border-border hover:border-foreground/40'}"
-					>
-						<div class="mt-0.5 grid h-9 w-9 place-content-center rounded-lg bg-surface-muted">
-							<Icon src={Server} theme="outline" class="h-4 w-4 text-foreground" />
+		<div class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+			{#each cards as card, i (i)}
+				{@const disabled = !card.enabled || busyStarter !== null}
+				<button
+					type="button"
+					onclick={card.enabled ? card.onSelect : undefined}
+					{disabled}
+					class="group relative flex items-start gap-3 rounded-xl border border-border bg-surface p-4 text-left transition-all {card.enabled
+						? 'hover:border-foreground/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60'
+						: 'cursor-not-allowed opacity-60'}"
+				>
+					<div class="mt-0.5 grid h-10 w-10 place-content-center rounded-lg bg-surface-muted">
+						{#if card.lucide}
+							{@const LucideIcon = card.lucide}
+							<LucideIcon class="h-5 w-5 text-foreground" strokeWidth={1.75} />
+						{:else if card.icon}
+							<Icon src={card.icon} theme="outline" class="h-5 w-5 text-foreground" />
+						{/if}
+					</div>
+					<div class="min-w-0 flex-1">
+						<div class="flex items-center justify-between gap-2">
+							<span class="font-medium text-foreground">{card.title}</span>
+							{#if !card.enabled}
+								<span
+									class="rounded-md bg-surface-muted px-2 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+								>
+									Coming soon
+								</span>
+							{:else if busyStarter === card.id}
+								<svg
+									class="h-4 w-4 animate-spin text-muted-foreground"
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+								>
+									<circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									/>
+									<path
+										class="opacity-75"
+										fill="currentColor"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+									/>
+								</svg>
+							{/if}
 						</div>
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center justify-between gap-2">
-								<span class="truncate font-medium text-foreground">{server.name}</span>
-								{#if selected}
-									<Icon src={Check} theme="outline" class="h-4 w-4 text-foreground" />
-								{/if}
-							</div>
-							<div class="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-								{server.ssh_user}@{server.host}:{server.port}
-							</div>
-						</div>
-					</button>
-				{/each}
-			</div>
+						<p class="mt-1 text-sm text-muted-foreground">{card.description}</p>
+					</div>
+				</button>
+			{/each}
 		</div>
 
-		<!-- Step 2: Starter -->
-		<div>
-			<h3 class="mb-3 text-sm font-semibold text-foreground">
-				<span
-					class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-primary-foreground"
-					>2</span
-				>
-				Pick a starter
-			</h3>
-			{#if !selectedServerId}
-				<p class="mb-3 text-xs text-muted-foreground">Select a server above to unlock starters.</p>
-			{/if}
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<div
-					class="flex flex-col rounded-xl border border-border bg-surface p-5 transition-opacity {selectedServerId
-						? ''
-						: 'pointer-events-none opacity-50'}"
-				>
-					<div class="mb-4 grid h-10 w-10 place-content-center rounded-lg bg-surface-muted">
-						<Icon src={Squares2x2} theme="outline" class="h-5 w-5 text-foreground" />
-					</div>
-					<h4 class="font-semibold text-foreground">Empty Project</h4>
-					<p class="mt-1 flex-1 text-sm text-muted-foreground">
-						Create an empty project to organise services and environments later.
-					</p>
-					<div class="mt-5">
-						<Button
-							size="sm"
-							onclick={runEmptyProject}
-							loading={busyStarter === 'empty-project'}
-							disabled={!selectedServerId || busyStarter !== null}
-						>
-							{busyStarter === 'empty-project' ? 'Creating...' : 'Create project'}
-						</Button>
-					</div>
-				</div>
+		{#if error}
+			<p class="mt-4 text-sm text-danger">{error}</p>
+		{/if}
 
-				<div
-					class="flex flex-col rounded-xl border border-border bg-surface p-5 transition-opacity {selectedServerId
-						? ''
-						: 'pointer-events-none opacity-50'}"
-				>
-					<div class="mb-4 grid h-10 w-10 place-content-center rounded-lg bg-surface-muted">
-						<Container class="h-5 w-5 text-foreground" strokeWidth={1.75} />
-					</div>
-					<h4 class="font-semibold text-foreground">Docker Image</h4>
-					<p class="mt-1 flex-1 text-sm text-muted-foreground">
-						Deploy a prebuilt image from a registry onto {selectedServer?.name ?? 'your server'}.
-					</p>
-					<div class="mt-5">
-						<Button
-							size="sm"
-							onclick={runDockerImage}
-							loading={busyStarter === 'docker-image'}
-							disabled={!selectedServerId || busyStarter !== null}
-						>
-							{busyStarter === 'docker-image' ? 'Preparing...' : 'Continue'}
-						</Button>
-					</div>
-				</div>
-			</div>
-
-			{#if error}
-				<p class="mt-4 text-sm text-danger">{error}</p>
-			{/if}
+		<div class="mt-8">
+			<Button href="/dashboard/projects" variant="ghost" size="sm">Cancel</Button>
 		</div>
 	{/if}
-
-	<Dialog bind:open={serverDialogOpen}>
-		<DialogContent class="max-w-2xl">
-			<form
-				onsubmit={(e) => {
-					e.preventDefault();
-					serverController.createServer();
-				}}
-			>
-				<DialogHeader>
-					<DialogTitle>Add a server</DialogTitle>
-				</DialogHeader>
-				<div class="px-5 pb-5">
-					<ServerCreateFields controller={serverController} />
-				</div>
-				<DialogFooter>
-					<Button
-						type="button"
-						variant="secondary"
-						disabled={serverController.isVerified || !serverController.canCheckConnection}
-						onclick={serverController.checkConnection}
-					>
-						{#if serverController.checking}
-							Checking...
-						{:else if serverController.isVerified}
-							Connected
-						{:else}
-							Check Connection
-						{/if}
-					</Button>
-					<Button
-						type="submit"
-						loading={serverController.loading}
-						disabled={!serverController.isVerified || !!serverController.keysError}
-					>
-						{serverController.loading ? 'Saving...' : 'Add Server'}
-					</Button>
-				</DialogFooter>
-			</form>
-		</DialogContent>
-	</Dialog>
 </section>

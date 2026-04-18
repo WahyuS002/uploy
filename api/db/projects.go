@@ -7,6 +7,10 @@ import (
 	"github.com/WahyuS002/uploy/db/sqlcgen"
 )
 
+// DefaultEnvironmentName is the name of the environment automatically created
+// alongside every new project.
+const DefaultEnvironmentName = "production"
+
 type Project struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -27,6 +31,48 @@ func CreateProject(ctx context.Context, name, workspaceID string) (Project, erro
 		ID: r.ID, Name: r.Name, WorkspaceID: r.WorkspaceID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}, nil
+}
+
+// CreateProjectWithDefaultEnvironment creates a project and its default
+// `production` environment atomically. If the environment insert fails the
+// project insert is rolled back so callers never observe a project without
+// its default environment.
+func CreateProjectWithDefaultEnvironment(ctx context.Context, name, workspaceID string) (Project, Environment, error) {
+	tx, err := Pool.Begin(ctx)
+	if err != nil {
+		return Project{}, Environment{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	q := Queries.WithTx(tx)
+
+	pr, err := q.CreateProject(ctx, sqlcgen.CreateProjectParams{
+		Name:        name,
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return Project{}, Environment{}, err
+	}
+
+	er, err := q.CreateEnvironment(ctx, sqlcgen.CreateEnvironmentParams{
+		Name:      DefaultEnvironmentName,
+		ProjectID: pr.ID,
+	})
+	if err != nil {
+		return Project{}, Environment{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Project{}, Environment{}, err
+	}
+
+	return Project{
+			ID: pr.ID, Name: pr.Name, WorkspaceID: pr.WorkspaceID,
+			CreatedAt: pr.CreatedAt, UpdatedAt: pr.UpdatedAt,
+		}, Environment{
+			ID: er.ID, Name: er.Name, ProjectID: er.ProjectID,
+			CreatedAt: er.CreatedAt, UpdatedAt: er.UpdatedAt,
+		}, nil
 }
 
 func GetProjectByID(ctx context.Context, id string) (Project, error) {
