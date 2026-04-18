@@ -239,205 +239,218 @@
 </script>
 
 {#if project}
-	<section class="flex flex-col gap-6">
-		<header class="flex flex-wrap items-center justify-between gap-3">
-			<div class="flex items-center gap-3">
-				<h2 class="text-xl font-medium text-foreground">{project.name}</h2>
-				{#if environments.length > 0}
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger
-							class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-muted"
-						>
-							<Icon src={Squares2x2} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
-							<span>{selectedEnv?.name ?? 'Select environment'}</span>
-							<Icon src={ChevronDown} theme="outline" class="h-3 w-3 text-muted-foreground" />
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Portal>
-							<DropdownMenu.Content
-								align="start"
-								sideOffset={6}
-								class="z-50 min-w-48 overflow-hidden rounded-lg border border-border bg-surface p-1 shadow-overlay"
+	<div class="flex w-full justify-center">
+		<section
+			class="w-full max-w-3xl rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-8"
+		>
+			<header class="flex flex-wrap items-center justify-between gap-3">
+				<div class="min-w-0">
+					<h2 class="truncate text-xl font-semibold text-foreground">{project.name}</h2>
+					<p class="mt-1 text-sm text-muted-foreground">
+						Manage environments and services for this project.
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if environments.length > 0}
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger
+								class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-muted"
 							>
-								{#each environments as env (env.id)}
-									<DropdownMenu.Item
-										onSelect={() => (selectedEnvId = env.id)}
-										class="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none data-highlighted:bg-surface-muted"
-									>
-										<span>{env.name}</span>
-										{#if env.id === selectedEnvId}
-											<Icon src={Check} theme="outline" class="h-3.5 w-3.5 text-foreground" />
-										{/if}
-									</DropdownMenu.Item>
-								{/each}
-								{#if canEdit}
-									<DropdownMenu.Separator class="my-1 h-px bg-border" />
-									<DropdownMenu.Item
-										onSelect={openEnvDialog}
-										class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground outline-none data-highlighted:bg-surface-muted data-highlighted:text-foreground"
-									>
-										<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
-										<span>New environment</span>
-									</DropdownMenu.Item>
-								{/if}
-							</DropdownMenu.Content>
-						</DropdownMenu.Portal>
-					</DropdownMenu.Root>
-				{/if}
-			</div>
+								<Icon src={Squares2x2} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
+								<span>{selectedEnv?.name ?? 'Select environment'}</span>
+								<Icon src={ChevronDown} theme="outline" class="h-3 w-3 text-muted-foreground" />
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Portal>
+								<DropdownMenu.Content
+									align="end"
+									sideOffset={6}
+									class="z-50 min-w-48 overflow-hidden rounded-lg border border-border bg-surface p-1 shadow-overlay"
+								>
+									{#each environments as env (env.id)}
+										<DropdownMenu.Item
+											onSelect={() => (selectedEnvId = env.id)}
+											class="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none data-highlighted:bg-surface-muted"
+										>
+											<span>{env.name}</span>
+											{#if env.id === selectedEnvId}
+												<Icon src={Check} theme="outline" class="h-3.5 w-3.5 text-foreground" />
+											{/if}
+										</DropdownMenu.Item>
+									{/each}
+									{#if canEdit}
+										<DropdownMenu.Separator class="my-1 h-px bg-border" />
+										<DropdownMenu.Item
+											onSelect={openEnvDialog}
+											class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground outline-none data-highlighted:bg-surface-muted data-highlighted:text-foreground"
+										>
+											<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+											<span>New environment</span>
+										</DropdownMenu.Item>
+									{/if}
+								</DropdownMenu.Content>
+							</DropdownMenu.Portal>
+						</DropdownMenu.Root>
+					{/if}
 
-			{#if canEdit && selectedEnvId && !showServiceForm}
-				<Button size="sm" onclick={openServiceForm}>
-					<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
-					Add service
-				</Button>
-			{/if}
-		</header>
+					{#if canEdit && selectedEnvId && !showServiceForm}
+						<Button size="sm" onclick={openServiceForm}>
+							<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+							Add service
+						</Button>
+					{/if}
+				</div>
+			</header>
 
-		{#if !loaded}
-			<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-				<div class="h-28 animate-pulse rounded-xl bg-surface-muted"></div>
-				<div class="h-28 animate-pulse rounded-xl bg-surface-muted"></div>
-			</div>
-		{:else if environments.length === 0}
-			<div class="rounded-xl border border-dashed border-border bg-surface-muted/30 p-8">
-				<EmptyState
-					icon={Squares2x2}
-					title="This project has no environments yet"
-					description="Create a production environment to start adding services. You'll be able to add more environments later."
-				>
-					{#snippet actions()}
-						{#if canEdit}
-							<Button size="sm" onclick={createDefaultProduction} loading={creatingEnv}>
-								{creatingEnv ? 'Creating...' : 'Create production environment'}
-							</Button>
-						{/if}
-					{/snippet}
-				</EmptyState>
-				{#if envError}
-					<p class="mt-2 text-center text-sm text-danger">{envError}</p>
-				{/if}
-			</div>
-		{:else}
-			<div
-				class="relative min-h-90 rounded-xl border border-border bg-surface-muted/20 bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] bg-size-[18px_18px] p-6"
-			>
-				{#if canEdit && showServiceForm}
-					<form
-						onsubmit={(e) => {
-							e.preventDefault();
-							createService();
-						}}
-						class="mb-6 flex w-full max-w-md flex-col gap-3 rounded-xl border border-border bg-surface p-5 shadow-sm"
-					>
-						<div class="flex items-baseline justify-between">
-							<h3 class="text-sm font-semibold text-foreground">Add service</h3>
-							<span class="text-xs text-muted-foreground">in {selectedEnv?.name}</span>
-						</div>
-						{#if servers.length === 0}
-							<div
-								class="rounded-md border border-dashed border-border bg-surface-muted/40 p-3 text-xs text-muted-foreground"
-							>
-								You need to connect a server before you can deploy a service.
-								{#if isOwner}
-									<div class="mt-2">
-										<Button href="/servers" size="xs" variant="secondary">
-											<Icon src={ServerStack} theme="outline" class="h-3 w-3" />
-											Connect a server
-										</Button>
-									</div>
-								{/if}
-							</div>
-						{:else}
-							<FormField label="Name">
-								<Input type="text" bind:value={svcName} required />
-							</FormField>
-							<FormField label="Image">
-								<Input type="text" bind:value={svcImage} required />
-							</FormField>
-							<FormField label="Container name">
-								<Input type="text" bind:value={svcContainerName} required />
-							</FormField>
-							<FormField label="Port">
-								<Input type="number" bind:value={svcPort} required />
-							</FormField>
-							<FormField label="Server">
-								<Select
-									items={serverItems}
-									bind:value={svcServerId}
-									required
-									placeholder="Select a server"
-								/>
-							</FormField>
-						{/if}
-
-						{#if svcError}
-							<p class="text-sm text-danger">{svcError}</p>
-						{/if}
-
-						<div class="flex items-center gap-2">
-							{#if servers.length > 0}
-								<Button type="submit" size="sm" loading={creatingService}>
-									{creatingService ? 'Creating...' : 'Create service'}
-								</Button>
-							{/if}
-							<Button type="button" size="sm" variant="secondary" onclick={closeServiceForm}>
-								Cancel
-							</Button>
-						</div>
-					</form>
-				{/if}
-
-				{#if envServices.length === 0}
-					{#if !showServiceForm}
+			<div class="mt-6">
+				{#if !loaded}
+					<div class="flex flex-col gap-2">
+						<div class="h-14 animate-pulse rounded-lg bg-surface-muted"></div>
+						<div class="h-14 animate-pulse rounded-lg bg-surface-muted"></div>
+					</div>
+				{:else if environments.length === 0}
+					<div class="rounded-xl border border-dashed border-border bg-surface-muted/30 p-8">
 						<EmptyState
-							icon={Cube}
-							title="No services in {selectedEnv?.name}"
-							description="Deploy a container to this environment to get started."
+							icon={Squares2x2}
+							title="This project has no environments yet"
+							description="Create a production environment to start adding services. You'll be able to add more environments later."
 						>
 							{#snippet actions()}
 								{#if canEdit}
-									<Button size="sm" onclick={openServiceForm}>
-										<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
-										Add service
+									<Button size="sm" onclick={createDefaultProduction} loading={creatingEnv}>
+										{creatingEnv ? 'Creating...' : 'Create production environment'}
 									</Button>
 								{/if}
 							{/snippet}
 						</EmptyState>
-					{/if}
+						{#if envError}
+							<p class="mt-2 text-center text-sm text-danger">{envError}</p>
+						{/if}
+					</div>
 				{:else}
-					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-						{#each envServices as svc (svc.id)}
-							{@const srv = serverById.get(svc.server_id)}
-							<!-- eslint-disable svelte/no-navigation-without-resolve -->
-							<a
-								href="/services/{svc.id}"
-								class="group flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 shadow-sm transition-all hover:border-foreground/40 hover:shadow-md"
-							>
-								<div class="flex items-start justify-between gap-2">
-									<div class="flex min-w-0 items-center gap-2">
-										<div class="grid h-8 w-8 place-content-center rounded-md bg-surface-muted">
-											<Icon src={Cube} theme="outline" class="h-4 w-4 text-foreground" />
+					{#if canEdit && showServiceForm}
+						<form
+							onsubmit={(e) => {
+								e.preventDefault();
+								createService();
+							}}
+							class="mb-4 flex w-full flex-col gap-3 rounded-xl border border-border bg-surface-muted/40 p-5"
+						>
+							<div class="flex items-baseline justify-between">
+								<h3 class="text-sm font-semibold text-foreground">Add service</h3>
+								<span class="text-xs text-muted-foreground">in {selectedEnv?.name}</span>
+							</div>
+							{#if servers.length === 0}
+								<div
+									class="rounded-md border border-dashed border-border bg-surface p-3 text-xs text-muted-foreground"
+								>
+									You need to connect a server before you can deploy a service.
+									{#if isOwner}
+										<div class="mt-2">
+											<Button href="/servers" size="xs" variant="secondary">
+												<Icon src={ServerStack} theme="outline" class="h-3 w-3" />
+												Connect a server
+											</Button>
 										</div>
-										<span class="truncate font-medium text-foreground">{svc.name}</span>
-									</div>
-								</div>
-								<div class="truncate font-mono text-xs text-muted-foreground">
-									{svc.image}
-								</div>
-								<div class="flex items-center justify-between text-xs text-muted-foreground">
-									<span>Port {svc.port}</span>
-									{#if srv}
-										<span class="truncate">{srv.name}</span>
 									{/if}
 								</div>
-							</a>
-							<!-- eslint-enable svelte/no-navigation-without-resolve -->
-						{/each}
-					</div>
+							{:else}
+								<FormField label="Name">
+									<Input type="text" bind:value={svcName} required />
+								</FormField>
+								<FormField label="Image">
+									<Input type="text" bind:value={svcImage} required />
+								</FormField>
+								<FormField label="Container name">
+									<Input type="text" bind:value={svcContainerName} required />
+								</FormField>
+								<FormField label="Port">
+									<Input type="number" bind:value={svcPort} required />
+								</FormField>
+								<FormField label="Server">
+									<Select
+										items={serverItems}
+										bind:value={svcServerId}
+										required
+										placeholder="Select a server"
+									/>
+								</FormField>
+							{/if}
+
+							{#if svcError}
+								<p class="text-sm text-danger">{svcError}</p>
+							{/if}
+
+							<div class="flex items-center gap-2">
+								{#if servers.length > 0}
+									<Button type="submit" size="sm" loading={creatingService}>
+										{creatingService ? 'Creating...' : 'Create service'}
+									</Button>
+								{/if}
+								<Button type="button" size="sm" variant="secondary" onclick={closeServiceForm}>
+									Cancel
+								</Button>
+							</div>
+						</form>
+					{/if}
+
+					{#if envServices.length === 0}
+						{#if !showServiceForm}
+							<div class="rounded-xl border border-dashed border-border bg-surface-muted/30 p-8">
+								<EmptyState
+									icon={Cube}
+									title="No services in {selectedEnv?.name}"
+									description="Deploy a container to this environment to get started."
+								>
+									{#snippet actions()}
+										{#if canEdit}
+											<Button size="sm" onclick={openServiceForm}>
+												<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+												Add service
+											</Button>
+										{/if}
+									{/snippet}
+								</EmptyState>
+							</div>
+						{/if}
+					{:else}
+						<ul class="flex flex-col divide-y divide-border rounded-xl border border-border">
+							{#each envServices as svc (svc.id)}
+								{@const srv = serverById.get(svc.server_id)}
+								<li>
+									<!-- eslint-disable svelte/no-navigation-without-resolve -->
+									<a
+										href="/services/{svc.id}"
+										class="group flex items-center gap-3 px-4 py-3 transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-surface-muted/60"
+									>
+										<div
+											class="grid h-9 w-9 flex-none place-content-center rounded-md bg-surface-muted"
+										>
+											<Icon src={Cube} theme="outline" class="h-4 w-4 text-foreground" />
+										</div>
+										<div class="min-w-0 flex-1">
+											<div class="truncate font-medium text-foreground">{svc.name}</div>
+											<div class="truncate font-mono text-xs text-muted-foreground">
+												{svc.image}
+											</div>
+										</div>
+										<div
+											class="hidden flex-none items-center gap-3 text-xs text-muted-foreground sm:flex"
+										>
+											<span>Port {svc.port}</span>
+											{#if srv}
+												<span class="max-w-32 truncate">{srv.name}</span>
+											{/if}
+										</div>
+									</a>
+									<!-- eslint-enable svelte/no-navigation-without-resolve -->
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				{/if}
 			</div>
-		{/if}
-	</section>
+		</section>
+	</div>
 
 	<Dialog bind:open={envDialogOpen}>
 		<DialogContent>

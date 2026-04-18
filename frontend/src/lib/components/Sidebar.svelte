@@ -34,7 +34,7 @@
 	<!-- Workspace -->
 	<footer class="flex flex-col px-2">
 		<div class="flex h-10 items-center select-none">
-			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 			<a
 				href="/projects"
 				class="flex min-w-0 flex-1 flex-row items-center gap-2 rounded-md px-2.5 py-2"
@@ -47,6 +47,7 @@
 					>{workspaceName}</span
 				>
 			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		</div>
 	</footer>
 </aside>

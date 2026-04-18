@@ -1,17 +1,15 @@
 <script lang="ts">
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Bell, Cog6Tooth, ArrowRightOnRectangle } from '@steeze-ui/heroicons';
+	import { Bell, Cog6Tooth, ArrowRightOnRectangle, ArrowLeft } from '@steeze-ui/heroicons';
 	import { DropdownMenu } from 'bits-ui';
 	import { logout } from '$lib/auth/logout';
 
-	let { userEmail }: { userEmail: string } = $props();
+	let { userEmail, label }: { userEmail: string; label: string } = $props();
 
 	let loggingOut = $state(false);
 	let logoutError = $state('');
 
 	async function onLogout(event: Event) {
-		// Keep the menu open until the request resolves so the disabled state
-		// is visible; Bits UI otherwise closes on select.
 		event.preventDefault();
 		if (loggingOut) return;
 		loggingOut = true;
@@ -24,17 +22,30 @@
 	}
 </script>
 
-<header
-	class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background pr-4 pl-2"
->
-	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-	<a href="/projects" class="flex flex-none items-center gap-2 rounded-md px-2 py-1.5 select-none">
-		<span
-			class="flex h-7 w-7 items-center justify-center rounded-md bg-foreground text-xs font-bold text-surface"
-			>U</span
+<header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background px-3">
+	<div class="flex flex-none items-center gap-2">
+		<!-- eslint-disable svelte/no-navigation-without-resolve -->
+		<a
+			href="/projects"
+			title="Back to projects"
+			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground"
 		>
-		<span class="text-sm font-semibold tracking-tight text-foreground">Uploy</span>
-	</a>
+			<Icon src={ArrowLeft} theme="outline" class="h-[18px] w-[18px]" />
+		</a>
+		<a
+			href="/projects"
+			class="flex flex-none items-center gap-2 rounded-md px-1 py-1.5 select-none"
+		>
+			<span
+				class="flex h-7 w-7 items-center justify-center rounded-md bg-foreground text-xs font-bold text-surface"
+				>U</span
+			>
+			<span class="text-sm font-semibold tracking-tight text-foreground">Uploy</span>
+		</a>
+		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		<span class="ml-2 hidden h-4 w-px bg-border sm:block"></span>
+		<span class="ml-2 hidden text-sm font-medium text-muted-foreground sm:inline">{label}</span>
+	</div>
 
 	<div class="flex flex-none items-center gap-1.5">
 		<button
