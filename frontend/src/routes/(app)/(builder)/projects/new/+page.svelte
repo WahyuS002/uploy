@@ -137,7 +137,6 @@
 		aria-hidden="true"
 		style="background-position: {pan.x - 1}px {pan.y - 1}px;"
 	></div>
-	<div class="canvas-glow" aria-hidden="true"></div>
 
 	<div class="scroll-area relative z-10 flex w-full overflow-x-hidden overflow-y-auto">
 		<div
@@ -145,7 +144,7 @@
 			style="transform: translate3d({pan.x}px, {pan.y}px, 0);"
 		>
 			{#if !canEdit}
-				<div class="w-full max-w-105">
+				<div class="w-full max-w-105" data-no-pan>
 					<EmptyState
 						icon={Server}
 						title="You don't have permission to create projects"
@@ -157,25 +156,23 @@
 					</EmptyState>
 				</div>
 			{:else}
-				<div class="flex w-full max-w-105 flex-col gap-3">
+				<div class="flex w-full max-w-105 flex-col gap-2" data-no-pan>
 					<section
-						class="palette overflow-hidden rounded-xl border border-border bg-surface"
+						class="panel overflow-hidden rounded-lg border border-border bg-surface"
 						aria-label="Start a new project"
 					>
-						<div class="p-1.5 pb-1">
+						<div class="border-b border-border/70 px-2 py-1.5">
 							<Input
 								bind:value={promptDraft}
 								placeholder="What would you like to create?"
-								class="rounded-md p-3 text-base sm:text-sm"
+								class="border-transparent! bg-transparent! px-2 py-1.5 text-sm focus:shadow-none!"
 							/>
 						</div>
 
-						<div class="py-2">
+						<div class="py-1">
 							{#if filteredRows.length === 0}
-								<div
-									class="mx-2 flex items-center gap-3 rounded-lg px-3 py-4 text-sm text-muted-foreground"
-								>
-									<Icon src={MagnifyingGlass} theme="outline" class="h-4 w-4 flex-none" />
+								<div class="flex items-center gap-2.5 px-4 py-3 text-sm text-muted-foreground">
+									<Icon src={MagnifyingGlass} theme="outline" class="h-3.5 w-3.5 flex-none" />
 									<span>No starters match "{promptDraft}"</span>
 								</div>
 							{:else}
@@ -188,25 +185,25 @@
 												? 'grid-cols-[auto_1fr_auto]'
 												: 'grid-cols-[auto_1fr]'}
 										{#if row.interactive}
-											<li class="mx-2">
+											<li>
 												<button
 													type="button"
 													onclick={() => row.starter && launch(row.starter)}
 													disabled={pending}
-													class="grid w-full cursor-pointer items-center gap-x-4 rounded-lg p-3 text-left text-sm text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground {gridCols}"
+													class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:hover:bg-transparent {gridCols}"
 												>
-													<span class="text-lg leading-none">
+													<span class="text-subtle-foreground">
 														{#if row.lucide}
 															{@const LucideIcon = row.lucide}
-															<LucideIcon class="h-[1em] w-[1em]" strokeWidth={1.5} />
+															<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
 														{:else if row.icon}
-															<Icon src={row.icon} theme="outline" class="h-[1em] w-[1em]" />
+															<Icon src={row.icon} theme="outline" class="h-4 w-4" />
 														{/if}
 													</span>
 													<span class="truncate">{row.title}</span>
 													{#if busy}
 														<svg
-															class="h-4 w-4 animate-spin"
+															class="h-3.5 w-3.5 animate-spin text-subtle-foreground"
 															xmlns="http://www.w3.org/2000/svg"
 															fill="none"
 															viewBox="0 0 24 24"
@@ -226,25 +223,29 @@
 															/>
 														</svg>
 													{:else if row.showsChevron}
-														<Icon src={ChevronRight} theme="outline" class="h-4 w-4" />
+														<Icon
+															src={ChevronRight}
+															theme="outline"
+															class="h-3.5 w-3.5 text-subtle-foreground"
+														/>
 													{/if}
 												</button>
 											</li>
 										{:else}
 											<li
-												class="mx-2 grid cursor-default items-center gap-x-4 rounded-lg p-3 text-sm text-muted-foreground {gridCols}"
+												class="grid cursor-default items-center gap-x-3 px-3 py-2 text-sm text-muted-foreground {gridCols}"
 											>
-												<span class="text-lg leading-none">
+												<span class="text-subtle-foreground">
 													{#if row.lucide}
 														{@const LucideIcon = row.lucide}
-														<LucideIcon class="h-[1em] w-[1em]" strokeWidth={1.5} />
+														<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
 													{:else if row.icon}
-														<Icon src={row.icon} theme="outline" class="h-[1em] w-[1em]" />
+														<Icon src={row.icon} theme="outline" class="h-4 w-4" />
 													{/if}
 												</span>
 												<span class="truncate">{row.title}</span>
 												<span
-													class="rounded-md bg-surface-muted px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+													class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-subtle-foreground uppercase"
 												>
 													Soon
 												</span>
@@ -267,10 +268,8 @@
 
 <style>
 	.canvas {
-		background-color: var(--color-surface);
-		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.6),
-			var(--shadow-panel);
+		background-color: var(--color-background);
+		box-shadow: var(--shadow-panel);
 	}
 
 	@media (pointer: fine) {
@@ -287,41 +286,24 @@
 	.canvas-bg {
 		position: absolute;
 		inset: 0;
-		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.08) 1px, transparent 0);
-		background-size: 20px 20px;
+		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.05) 1px, transparent 0);
+		background-size: 24px 24px;
 		mask-image: radial-gradient(
-			ellipse 80% 70% at 50% 45%,
-			rgba(0, 0, 0, 0.9) 0%,
-			rgba(0, 0, 0, 0.6) 55%,
+			ellipse 85% 75% at 50% 50%,
+			rgba(0, 0, 0, 0.7) 0%,
+			rgba(0, 0, 0, 0.35) 60%,
 			transparent 100%
 		);
 		-webkit-mask-image: radial-gradient(
-			ellipse 80% 70% at 50% 45%,
-			rgba(0, 0, 0, 0.9) 0%,
-			rgba(0, 0, 0, 0.6) 55%,
+			ellipse 85% 75% at 50% 50%,
+			rgba(0, 0, 0, 0.7) 0%,
+			rgba(0, 0, 0, 0.35) 60%,
 			transparent 100%
 		);
 		pointer-events: none;
 	}
 
-	.canvas-glow {
-		position: absolute;
-		inset: 0;
-		background:
-			radial-gradient(
-				circle at 50% 38%,
-				rgba(62, 99, 221, 0.08) 0%,
-				rgba(62, 99, 221, 0.03) 30%,
-				transparent 60%
-			),
-			linear-gradient(180deg, rgba(247, 247, 245, 0) 0%, rgba(238, 237, 233, 0.4) 100%);
-		pointer-events: none;
-	}
-
-	.palette {
-		box-shadow:
-			0 1px 0 rgba(255, 255, 255, 0.8) inset,
-			0 20px 48px -24px rgba(17, 17, 17, 0.22),
-			0 4px 12px -6px rgba(17, 17, 17, 0.08);
+	.panel {
+		box-shadow: var(--shadow-panel);
 	}
 </style>
