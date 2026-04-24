@@ -12,7 +12,7 @@
 
 <div
 	class={cn(
-		'flex items-center justify-end gap-2 rounded-b-xl border-t border-border bg-surface-muted px-5 py-3',
+		'flex items-center justify-end gap-2 rounded-b-xl border-t border-border bg-muted px-5 py-3',
 		className
 	)}
 >

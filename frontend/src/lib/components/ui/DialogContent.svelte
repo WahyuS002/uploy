@@ -25,7 +25,7 @@
 		interactOutsideBehavior={lockedBehavior('close')}
 		escapeKeydownBehavior={lockedBehavior('close')}
 		class={cn(
-			'fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface text-foreground shadow-overlay outline-none',
+			'fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-popover text-popover-foreground shadow-overlay outline-none',
 			className
 		)}
 	>

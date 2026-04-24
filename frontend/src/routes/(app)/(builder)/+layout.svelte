@@ -14,7 +14,7 @@
 	});
 </script>
 
-<div class="flex min-h-screen flex-col bg-chrome">
+<div class="flex min-h-screen flex-col bg-background">
 	<BuilderTopbar userEmail={data.user?.email ?? ''} {label} />
 
 	{#if isCanvas}
@@ -23,7 +23,7 @@
 		</main>
 	{:else}
 		<main
-			class="mx-4 mb-4 flex-1 rounded-lg border border-border-chrome bg-surface px-4 py-8 sm:px-8 sm:py-10 md:px-16 lg:px-32 lg:py-14 xl:px-60"
+			class="mx-4 mb-4 flex-1 rounded-lg border border-border bg-card px-4 py-8 text-card-foreground sm:px-8 sm:py-10 md:px-16 lg:px-32 lg:py-14 xl:px-60"
 		>
 			{@render children()}
 		</main>

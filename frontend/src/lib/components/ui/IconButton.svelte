@@ -10,8 +10,8 @@
 			variants: {
 				variant: {
 					default:
-						'rounded-full border border-border bg-surface text-muted-foreground hover:bg-surface-muted hover:text-foreground',
-					ghost: 'rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground'
+						'rounded-full border border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+					ghost: 'rounded-full text-muted-foreground hover:bg-accent hover:text-accent-foreground'
 				},
 				size: {
 					sm: 'h-6 w-6',
@@ -26,9 +26,9 @@
 				{
 					variant: 'default',
 					selected: true,
-					class: 'border-border-input bg-surface-muted text-foreground'
+					class: 'border-input bg-accent text-accent-foreground'
 				},
-				{ variant: 'ghost', selected: true, class: 'bg-surface-muted text-foreground' }
+				{ variant: 'ghost', selected: true, class: 'bg-accent text-accent-foreground' }
 			],
 			defaultVariants: { variant: 'default', size: 'sm', selected: false }
 		}

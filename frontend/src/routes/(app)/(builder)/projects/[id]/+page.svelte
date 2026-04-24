@@ -241,7 +241,7 @@
 {#if project}
 	<div class="flex w-full justify-center">
 		<section
-			class="w-full max-w-3xl rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-8"
+			class="w-full max-w-3xl rounded-2xl border border-border bg-card p-6 text-card-foreground shadow-sm sm:p-8"
 		>
 			<header class="flex flex-wrap items-center justify-between gap-3">
 				<div class="min-w-0">
@@ -254,7 +254,7 @@
 					{#if environments.length > 0}
 						<DropdownMenu.Root>
 							<DropdownMenu.Trigger
-								class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-muted"
+								class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
 							>
 								<Icon src={Squares2x2} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
 								<span>{selectedEnv?.name ?? 'Select environment'}</span>
@@ -264,12 +264,12 @@
 								<DropdownMenu.Content
 									align="end"
 									sideOffset={6}
-									class="z-50 min-w-48 overflow-hidden rounded-lg border border-border bg-surface p-1 shadow-overlay"
+									class="z-50 min-w-48 overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-overlay"
 								>
 									{#each environments as env (env.id)}
 										<DropdownMenu.Item
 											onSelect={() => (selectedEnvId = env.id)}
-											class="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none data-highlighted:bg-surface-muted"
+											class="flex cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
 										>
 											<span>{env.name}</span>
 											{#if env.id === selectedEnvId}
@@ -281,7 +281,7 @@
 										<DropdownMenu.Separator class="my-1 h-px bg-border" />
 										<DropdownMenu.Item
 											onSelect={openEnvDialog}
-											class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground outline-none data-highlighted:bg-surface-muted data-highlighted:text-foreground"
+											class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
 										>
 											<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
 											<span>New environment</span>
@@ -304,11 +304,11 @@
 			<div class="mt-6">
 				{#if !loaded}
 					<div class="flex flex-col gap-2">
-						<div class="h-14 animate-pulse rounded-lg bg-surface-muted"></div>
-						<div class="h-14 animate-pulse rounded-lg bg-surface-muted"></div>
+						<div class="h-14 animate-pulse rounded-lg bg-muted"></div>
+						<div class="h-14 animate-pulse rounded-lg bg-muted"></div>
 					</div>
 				{:else if environments.length === 0}
-					<div class="rounded-xl border border-dashed border-border bg-surface-muted/30 p-8">
+					<div class="rounded-xl border border-dashed border-border bg-muted/30 p-8">
 						<EmptyState
 							icon={Squares2x2}
 							title="This project has no environments yet"
@@ -323,7 +323,7 @@
 							{/snippet}
 						</EmptyState>
 						{#if envError}
-							<p class="mt-2 text-center text-sm text-danger">{envError}</p>
+							<p class="mt-2 text-center text-sm text-destructive">{envError}</p>
 						{/if}
 					</div>
 				{:else}
@@ -333,7 +333,7 @@
 								e.preventDefault();
 								createService();
 							}}
-							class="mb-4 flex w-full flex-col gap-3 rounded-xl border border-border bg-surface-muted/40 p-5"
+							class="mb-4 flex w-full flex-col gap-3 rounded-xl border border-border bg-muted/40 p-5"
 						>
 							<div class="flex items-baseline justify-between">
 								<h3 class="text-sm font-semibold text-foreground">Add service</h3>
@@ -341,7 +341,7 @@
 							</div>
 							{#if servers.length === 0}
 								<div
-									class="rounded-md border border-dashed border-border bg-surface p-3 text-xs text-muted-foreground"
+									class="rounded-md border border-dashed border-border bg-card p-3 text-xs text-muted-foreground"
 								>
 									You need to connect a server before you can deploy a service.
 									{#if isOwner}
@@ -377,7 +377,7 @@
 							{/if}
 
 							{#if svcError}
-								<p class="text-sm text-danger">{svcError}</p>
+								<p class="text-sm text-destructive">{svcError}</p>
 							{/if}
 
 							<div class="flex items-center gap-2">
@@ -395,7 +395,7 @@
 
 					{#if envServices.length === 0}
 						{#if !showServiceForm}
-							<div class="rounded-xl border border-dashed border-border bg-surface-muted/30 p-8">
+							<div class="rounded-xl border border-dashed border-border bg-muted/30 p-8">
 								<EmptyState
 									icon={Cube}
 									title="No services in {selectedEnv?.name}"
@@ -420,10 +420,10 @@
 									<!-- eslint-disable svelte/no-navigation-without-resolve -->
 									<a
 										href="/services/{svc.id}"
-										class="group flex items-center gap-3 px-4 py-3 transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-surface-muted/60"
+										class="group flex items-center gap-3 px-4 py-3 transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-accent/60 hover:text-accent-foreground"
 									>
 										<div
-											class="grid h-9 w-9 flex-none place-content-center rounded-md bg-surface-muted"
+											class="grid h-9 w-9 flex-none place-content-center rounded-md bg-muted"
 										>
 											<Icon src={Cube} theme="outline" class="h-4 w-4 text-foreground" />
 										</div>
@@ -473,7 +473,7 @@
 						/>
 					</FormField>
 					{#if envError}
-						<p class="mt-2 text-sm text-danger">{envError}</p>
+						<p class="mt-2 text-sm text-destructive">{envError}</p>
 					{/if}
 				</div>
 				<DialogFooter>

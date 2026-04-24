@@ -4,11 +4,11 @@
 	export const cardVariants = cva('', {
 		variants: {
 			variant: {
-				default: 'rounded-xl border border-border bg-surface',
+				default: 'rounded-xl border border-border bg-card text-card-foreground',
 				interactive:
-					'rounded-xl border border-border bg-surface transition-colors hover:border-border-input hover:bg-surface-muted/60',
-				panel: 'rounded-lg border border-border bg-surface',
-				inset: 'rounded-lg bg-surface-muted'
+					'rounded-xl border border-border bg-card text-card-foreground transition-colors hover:border-input hover:bg-accent/60',
+				panel: 'rounded-lg border border-border bg-card text-card-foreground',
+				inset: 'rounded-lg bg-muted text-muted-foreground'
 			}
 		},
 		defaultVariants: { variant: 'default' }

@@ -16,7 +16,7 @@
 	</Tooltip.Trigger>
 	<Tooltip.Portal>
 		<Tooltip.Content
-			class="z-50 rounded-md bg-foreground px-2.5 py-1.5 text-xs text-surface shadow-md"
+			class="z-50 rounded-md bg-primary px-2.5 py-1.5 text-xs text-primary-foreground shadow-md"
 			sideOffset={4}
 		>
 			{text}

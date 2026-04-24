@@ -2,7 +2,7 @@
 	import { cva, type VariantProps } from 'class-variance-authority';
 
 	export const selectTriggerVariants = cva(
-		'inline-flex w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-border-input bg-surface text-foreground hover:bg-surface-muted disabled:opacity-50',
+		'inline-flex w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
 		{
 			variants: {
 				size: {
@@ -62,7 +62,7 @@
 
 	<Select.Portal>
 		<Select.Content
-			class="z-50 max-h-60 w-[var(--bits-select-anchor-width)] min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-lg border border-border bg-surface shadow-overlay"
+			class="z-50 max-h-60 w-[var(--bits-select-anchor-width)] min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-overlay"
 			sideOffset={4}
 		>
 			<Select.Viewport class="p-1">
@@ -71,7 +71,7 @@
 						value={item.value}
 						label={item.label}
 						disabled={item.disabled}
-						class="flex w-full animate-slide-up-fade cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-surface-muted"
+						class="flex w-full animate-slide-up-fade cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground"
 					>
 						{#snippet children({ selected })}
 							<span class="flex-1">{item.label}</span>

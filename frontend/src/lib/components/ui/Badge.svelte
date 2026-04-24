@@ -18,16 +18,16 @@
 				}
 			},
 			compoundVariants: [
-				{ variant: 'soft', tone: 'neutral', class: 'bg-surface-muted text-muted-foreground' },
-				{ variant: 'soft', tone: 'info', class: 'bg-accent-muted text-accent' },
+				{ variant: 'soft', tone: 'neutral', class: 'bg-muted text-muted-foreground' },
+				{ variant: 'soft', tone: 'info', class: 'bg-info-muted text-info' },
 				{ variant: 'soft', tone: 'success', class: 'bg-success-muted text-success' },
 				{ variant: 'soft', tone: 'warning', class: 'bg-warning-muted text-warning' },
-				{ variant: 'soft', tone: 'danger', class: 'bg-danger-muted text-danger' },
+				{ variant: 'soft', tone: 'danger', class: 'bg-destructive/10 text-destructive' },
 				{ variant: 'outline', tone: 'neutral', class: 'border-border text-muted-foreground' },
-				{ variant: 'outline', tone: 'info', class: 'border-accent/25 text-accent' },
+				{ variant: 'outline', tone: 'info', class: 'border-info/25 text-info' },
 				{ variant: 'outline', tone: 'success', class: 'border-success/25 text-success' },
 				{ variant: 'outline', tone: 'warning', class: 'border-warning/25 text-warning' },
-				{ variant: 'outline', tone: 'danger', class: 'border-danger/25 text-danger' }
+				{ variant: 'outline', tone: 'danger', class: 'border-destructive/25 text-destructive' }
 			],
 			defaultVariants: {
 				variant: 'soft',

@@ -31,7 +31,7 @@
 	let hasHeader = $derived(Boolean(header || title || description || actions));
 </script>
 
-<section class={cn('rounded-lg border border-border bg-surface', className)} {...rest}>
+<section class={cn('rounded-lg border border-border bg-card text-card-foreground', className)} {...rest}>
 	{#if hasHeader}
 		<header
 			class={cn(
@@ -62,7 +62,7 @@
 		{@render children()}
 	</div>
 	{#if footer}
-		<footer class="border-t border-border bg-surface-muted px-4 py-3">
+		<footer class="border-t border-border bg-muted px-4 py-3">
 			{@render footer()}
 		</footer>
 	{/if}

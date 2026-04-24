@@ -138,8 +138,8 @@
 		class={cn(
 			'mb-3 rounded-lg border p-3',
 			bannerStatus === 'success' && 'border-success/40 bg-success/10',
-			bannerStatus === 'error' && 'border-danger/40 bg-danger/10',
-			bannerStatus === 'active' && 'border-accent/40 bg-accent/10'
+			bannerStatus === 'error' && 'border-destructive/40 bg-destructive/10',
+			bannerStatus === 'active' && 'border-info/40 bg-info/10'
 		)}
 	>
 		<div class="flex items-center justify-between">
@@ -148,8 +148,8 @@
 					class={cn(
 						'text-xs',
 						bannerStatus === 'success' && 'text-success',
-						bannerStatus === 'error' && 'text-danger',
-						bannerStatus === 'active' && 'animate-pulse text-accent'
+						bannerStatus === 'error' && 'text-destructive',
+						bannerStatus === 'active' && 'animate-pulse text-info'
 					)}
 				>
 					{#if bannerStatus === 'success'}&#10004;{:else if bannerStatus === 'error'}&#10006;{:else}&#9679;{/if}
@@ -158,8 +158,8 @@
 					class={cn(
 						'text-sm font-semibold',
 						bannerStatus === 'success' && 'text-success',
-						bannerStatus === 'error' && 'text-danger',
-						bannerStatus === 'active' && 'text-accent'
+						bannerStatus === 'error' && 'text-destructive',
+						bannerStatus === 'active' && 'text-info'
 					)}
 				>
 					{currentPhase}
@@ -173,7 +173,7 @@
 			<div class="mt-1 text-sm text-muted-foreground">{currentSubtext}</div>
 		{/if}
 		{#if streamError}
-			<div class="mt-1 text-sm text-danger">{streamError}</div>
+			<div class="mt-1 text-sm text-destructive">{streamError}</div>
 		{/if}
 	</div>
 

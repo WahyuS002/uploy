@@ -14,6 +14,6 @@
 	<span class="text-xs text-muted-foreground">{label}</span>
 	{@render children()}
 	{#if error}
-		<p class="text-sm text-danger">{error}</p>
+		<p class="text-sm text-destructive">{error}</p>
 	{/if}
 </label>

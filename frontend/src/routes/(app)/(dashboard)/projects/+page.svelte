@@ -89,13 +89,13 @@
 			<div class="flex items-center gap-2">
 				<Select.Root type="single" bind:value={sortBy} items={sortOptions}>
 					<Select.Trigger
-						class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 text-sm text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+						class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
 					>
 						<ListFilter class="h-4 w-4" strokeWidth={1.75} />
 					</Select.Trigger>
 					<Select.Portal>
 						<Select.Content
-							class="z-50 min-w-[160px] rounded-lg border border-border bg-surface p-1 shadow-md"
+							class="z-50 min-w-[160px] rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md"
 							sideOffset={4}
 						>
 							<Select.Viewport>
@@ -103,7 +103,7 @@
 									<Select.Item
 										value={option.value}
 										label={option.label}
-										class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none select-none data-[highlighted]:bg-surface-muted"
+										class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"
 									>
 										{#snippet children({ selected })}
 											<span class="inline-flex h-4 w-4 items-center justify-center">
@@ -141,14 +141,14 @@
 		{#if viewMode === 'grid'}
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 				{#each [0, 1, 2, 3, 4, 5] as i (i)}
-					<div class="overflow-hidden rounded-xl border border-border bg-surface">
+					<div class="overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
 						<div class="px-4 pt-4 pb-3">
-							<div class="h-4 w-32 animate-pulse rounded bg-surface-muted"></div>
+							<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
 						</div>
-						<div class="mx-4 mb-3 h-28 animate-pulse rounded-lg bg-surface-muted"></div>
+						<div class="mx-4 mb-3 h-28 animate-pulse rounded-lg bg-muted"></div>
 						<div class="flex items-center gap-2 border-t border-border px-4 py-3">
-							<div class="h-2 w-2 animate-pulse rounded-full bg-surface-muted"></div>
-							<div class="h-3 w-20 animate-pulse rounded bg-surface-muted"></div>
+							<div class="h-2 w-2 animate-pulse rounded-full bg-muted"></div>
+							<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
 						</div>
 					</div>
 				{/each}
@@ -157,16 +157,16 @@
 			<div class="flex flex-col gap-2">
 				{#each [0, 1, 2, 3, 4] as i (i)}
 					<div
-						class="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3"
+						class="flex items-center justify-between rounded-lg border border-border bg-card text-card-foreground px-4 py-3"
 					>
 						<div class="flex items-center gap-3">
-							<div class="h-9 w-9 animate-pulse rounded-lg bg-surface-muted"></div>
+							<div class="h-9 w-9 animate-pulse rounded-lg bg-muted"></div>
 							<div class="flex flex-col gap-1.5">
-								<div class="h-4 w-32 animate-pulse rounded bg-surface-muted"></div>
-								<div class="h-3 w-24 animate-pulse rounded bg-surface-muted"></div>
+								<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
+								<div class="h-3 w-24 animate-pulse rounded bg-muted"></div>
 							</div>
 						</div>
-						<div class="h-3 w-20 animate-pulse rounded bg-surface-muted"></div>
+						<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
 					</div>
 				{/each}
 			</div>
@@ -185,7 +185,7 @@
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
 					href="/projects/{project.id}"
-					class="group overflow-hidden rounded-xl border border-border bg-surface transition-shadow hover:shadow-md"
+					class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground transition-shadow hover:shadow-md"
 				>
 					<div class="px-4 pt-4 pb-3">
 						<h3 class="font-semibold text-foreground group-hover:text-black">{project.name}</h3>
@@ -235,7 +235,7 @@
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
 					href="/projects/{project.id}"
-					class="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 transition-shadow hover:shadow-md"
+					class="flex items-center justify-between rounded-lg border border-border bg-card text-card-foreground px-4 py-3 transition-shadow hover:shadow-md"
 				>
 					<div class="flex items-center gap-3">
 						<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900">

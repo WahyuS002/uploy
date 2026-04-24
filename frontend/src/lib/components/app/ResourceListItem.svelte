@@ -16,7 +16,7 @@
 	<a
 		{href}
 		class={cn(
-			'flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition-shadow hover:shadow-md',
+			'flex items-center gap-3 rounded-lg border border-border bg-card text-card-foreground p-3 transition-shadow hover:shadow-md',
 			className
 		)}
 	>
@@ -25,7 +25,7 @@
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 {:else}
 	<div
-		class={cn('flex items-center gap-3 rounded-lg border border-border bg-surface p-3', className)}
+		class={cn('flex items-center gap-3 rounded-lg border border-border bg-card text-card-foreground p-3', className)}
 	>
 		{@render children()}
 	</div>

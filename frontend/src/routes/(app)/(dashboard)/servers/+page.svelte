@@ -82,7 +82,7 @@
 						<td class="py-2">
 							<StatusBadge status={server.proxy_status} />
 							{#if server.proxy_last_error}
-								<p class="mt-0.5 text-xs text-danger" title={server.proxy_last_error}>
+								<p class="mt-0.5 text-xs text-destructive" title={server.proxy_last_error}>
 									{server.proxy_last_error.length > 50
 										? server.proxy_last_error.slice(0, 50) + '...'
 										: server.proxy_last_error}

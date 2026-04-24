@@ -19,7 +19,7 @@
 <div class={cn('flex flex-col items-center px-6 py-12 text-center', className)}>
 	{#if displayIcon}
 		<div
-			class="mb-5 grid h-12 w-12 place-content-center rounded-xl bg-surface-muted text-muted-foreground"
+			class="mb-5 grid h-12 w-12 place-content-center rounded-xl bg-muted text-muted-foreground"
 		>
 			<Icon src={displayIcon} theme="outline" class="h-5 w-5" />
 		</div>

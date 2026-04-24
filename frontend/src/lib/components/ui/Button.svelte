@@ -7,10 +7,10 @@
 			variants: {
 				variant: {
 					primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
-					secondary: 'border border-border bg-surface text-foreground hover:bg-surface-muted',
-					subtle: 'bg-surface-muted text-foreground hover:bg-surface-sunken',
-					ghost: 'text-foreground hover:bg-surface-muted',
-					danger: 'bg-danger text-white hover:bg-danger/90'
+					secondary: 'border border-border bg-card text-card-foreground hover:bg-accent hover:text-accent-foreground',
+					subtle: 'bg-muted text-foreground hover:bg-secondary hover:text-secondary-foreground',
+					ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground',
+					danger: 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
 				},
 				size: {
 					xs: 'h-7 gap-1.5 px-2.5 text-xs',

@@ -94,7 +94,7 @@
 		</FormField>
 
 		{#if error}
-			<p class="text-sm text-danger">{error}</p>
+			<p class="text-sm text-destructive">{error}</p>
 		{/if}
 
 		<Button type="submit" {loading} class="w-full">
@@ -114,14 +114,14 @@
 {:else}
 	<p class="mb-4 text-sm text-muted-foreground">
 		Generate an SSH key to connect Uploy to your servers. You'll add the public key to
-		<code class="rounded bg-surface-muted px-1 py-0.5 font-mono text-[11px]"
+		<code class="rounded bg-muted px-1 py-0.5 font-mono text-[11px]"
 			>~/.ssh/authorized_keys</code
 		>
 		on your remote server after generating.
 	</p>
 
 	{#if error}
-		<p class="mb-3 text-sm text-danger">{error}</p>
+		<p class="mb-3 text-sm text-destructive">{error}</p>
 	{/if}
 
 	<Button {loading} class="mb-3 w-full" onclick={quickGenerate}>

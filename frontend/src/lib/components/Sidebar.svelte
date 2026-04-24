@@ -16,7 +16,7 @@
 	}
 </script>
 
-<aside class="mb-4 flex w-48 flex-col bg-chrome-sidebar">
+<aside class="mb-4 flex w-48 flex-col bg-sidebar text-sidebar-foreground">
 	<!-- Navigation -->
 	<nav class="flex-1 overflow-y-auto px-2 pt-14 pb-2">
 		<div class="flex flex-col gap-px">
@@ -40,7 +40,7 @@
 				class="flex min-w-0 flex-1 flex-row items-center gap-2 rounded-md px-2.5 py-2"
 			>
 				<span
-					class="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-surface"
+					class="flex h-5 w-5 flex-none items-center justify-center rounded-full bg-sidebar-primary text-[10px] font-bold text-sidebar-primary-foreground"
 					>U</span
 				>
 				<span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground"

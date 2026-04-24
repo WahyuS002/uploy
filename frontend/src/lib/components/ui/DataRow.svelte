@@ -10,11 +10,11 @@
 					dense: 'py-2'
 				},
 				interactive: {
-					true: 'cursor-pointer hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+					true: 'cursor-pointer hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 					false: ''
 				},
 				selected: {
-					true: 'bg-surface-muted',
+					true: 'bg-accent text-accent-foreground',
 					false: ''
 				}
 			},

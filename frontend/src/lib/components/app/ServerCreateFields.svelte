@@ -23,8 +23,8 @@
 
 {#if controller.keysLoading}
 	<div class="flex flex-col gap-3">
-		<div class="h-10 animate-pulse rounded-lg bg-surface-muted"></div>
-		<div class="h-10 animate-pulse rounded-lg bg-surface-muted"></div>
+		<div class="h-10 animate-pulse rounded-lg bg-muted"></div>
+		<div class="h-10 animate-pulse rounded-lg bg-muted"></div>
 	</div>
 {:else}
 	<div class="flex flex-col gap-3">
@@ -53,7 +53,7 @@
 			/>
 			{#if controller.keysError}
 				<div class="mt-1.5 flex items-center gap-2">
-					<p class="text-sm text-danger">{controller.keysError}</p>
+					<p class="text-sm text-destructive">{controller.keysError}</p>
 					<button
 						type="button"
 						class="cursor-pointer text-sm text-foreground underline hover:no-underline"
@@ -70,7 +70,7 @@
 		{/if}
 
 		{#if controller.error}
-			<p class="text-sm text-danger">{controller.error}</p>
+			<p class="text-sm text-destructive">{controller.error}</p>
 		{/if}
 	</div>
 {/if}

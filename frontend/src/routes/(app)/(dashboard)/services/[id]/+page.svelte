@@ -191,7 +191,7 @@
 				<div class="mb-3 flex flex-col gap-1">
 					{#each domains as domain (domain.id)}
 						<div
-							class="flex items-center gap-3 rounded-lg border border-border bg-surface p-2 text-sm"
+							class="flex items-center gap-3 rounded-lg border border-border bg-card p-2 text-sm"
 						>
 							<a
 								href="https://{domain.domain}"
@@ -205,7 +205,7 @@
 							{/if}
 							<StatusBadge status={domain.status} />
 							{#if domain.last_error}
-								<span class="text-xs text-danger" title={domain.last_error}>
+								<span class="text-xs text-destructive" title={domain.last_error}>
 									{domain.last_error.length > 40
 										? domain.last_error.slice(0, 40) + '...'
 										: domain.last_error}
@@ -214,7 +214,7 @@
 							{#if canEdit}
 								<button
 									onclick={() => deleteDomain(domain.id)}
-									class="ml-auto cursor-pointer text-danger hover:text-red-700"
+									class="ml-auto cursor-pointer text-destructive hover:text-destructive/80"
 								>
 									&times;
 								</button>
@@ -240,7 +240,7 @@
 					</Button>
 				</form>
 				{#if domainError}
-					<p class="mt-1 text-sm text-danger">{domainError}</p>
+					<p class="mt-1 text-sm text-destructive">{domainError}</p>
 				{/if}
 				<Alert tone="neutral" class="mt-2 text-xs">
 					<p class="font-medium text-foreground">DNS setup required before deploying:</p>
@@ -268,7 +268,7 @@
 					</Alert>
 				{/if}
 				{#if deployError}
-					<p class="mb-2 text-sm text-danger">{deployError}</p>
+					<p class="mb-2 text-sm text-destructive">{deployError}</p>
 				{/if}
 				<Button onclick={deploy} loading={deploying}>
 					{deploying ? 'Deploying...' : 'Deploy'}
@@ -295,7 +295,7 @@
 				<div class="flex flex-col gap-1">
 					{#each deployments as dep (dep.id)}
 						<div
-							class="flex items-center gap-3 rounded-lg border border-border bg-surface p-2 text-sm"
+							class="flex items-center gap-3 rounded-lg border border-border bg-card p-2 text-sm"
 						>
 							<span class="font-mono text-xs text-muted-foreground">{dep.id.slice(0, 12)}</span>
 							<StatusBadge status={dep.status} class="font-bold" />
@@ -332,7 +332,7 @@
 				</form>
 
 				{#if envError}
-					<p class="mb-2 text-sm text-danger">{envError}</p>
+					<p class="mb-2 text-sm text-destructive">{envError}</p>
 				{/if}
 
 				{#if envs.length === 0}
@@ -341,14 +341,14 @@
 					<div class="flex flex-col gap-1">
 						{#each envs as env (env.key)}
 							<div
-								class="flex items-center gap-2 rounded-lg border border-border bg-surface p-2 font-mono text-sm"
+								class="flex items-center gap-2 rounded-lg border border-border bg-card p-2 font-mono text-sm"
 							>
 								<span class="font-bold text-foreground">{env.key}</span>
 								<span class="text-muted-foreground">=</span>
 								<span class="flex-1 text-muted-foreground">{env.value}</span>
 								<button
 									onclick={() => deleteEnv(env.key)}
-									class="cursor-pointer text-danger hover:text-red-700"
+									class="cursor-pointer text-destructive hover:text-destructive/80"
 								>
 									&times;
 								</button>

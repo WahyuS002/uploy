@@ -131,7 +131,7 @@
 </script>
 
 <div
-	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border-chrome"
+	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border"
 	data-panning={pan.isPanning ? 'true' : 'false'}
 	use:panViewport
 >
@@ -165,7 +165,7 @@
 				{:else}
 					<div class="flex w-full max-w-105 flex-col gap-2" data-no-pan>
 						<section
-							class="panel overflow-hidden rounded-lg border border-border bg-surface"
+							class="panel overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
 							aria-label="Start a new project"
 						>
 							<div class="border-b border-border/70 px-2 py-1.5">
@@ -197,9 +197,9 @@
 														type="button"
 														onclick={() => row.starter && launch(row.starter)}
 														disabled={pending}
-														class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:hover:bg-transparent {gridCols}"
+														class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent {gridCols}"
 													>
-														<span class="text-subtle-foreground">
+														<span class="text-muted-foreground/70">
 															{#if row.lucide}
 																{@const LucideIcon = row.lucide}
 																<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
@@ -210,7 +210,7 @@
 														<span class="truncate">{row.title}</span>
 														{#if busy}
 															<svg
-																class="h-3.5 w-3.5 animate-spin text-subtle-foreground"
+																class="h-3.5 w-3.5 animate-spin text-muted-foreground/70"
 																xmlns="http://www.w3.org/2000/svg"
 																fill="none"
 																viewBox="0 0 24 24"
@@ -233,7 +233,7 @@
 															<Icon
 																src={ChevronRight}
 																theme="outline"
-																class="h-3.5 w-3.5 text-subtle-foreground"
+																class="h-3.5 w-3.5 text-muted-foreground/70"
 															/>
 														{/if}
 													</button>
@@ -242,7 +242,7 @@
 												<li
 													class="grid cursor-default items-center gap-x-3 px-3 py-2 text-sm text-muted-foreground {gridCols}"
 												>
-													<span class="text-subtle-foreground">
+													<span class="text-muted-foreground/70">
 														{#if row.lucide}
 															{@const LucideIcon = row.lucide}
 															<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
@@ -252,7 +252,7 @@
 													</span>
 													<span class="truncate">{row.title}</span>
 													<span
-														class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-subtle-foreground uppercase"
+														class="rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase"
 													>
 														Soon
 													</span>
@@ -265,7 +265,7 @@
 						</section>
 
 						{#if error}
-							<p class="text-sm text-danger">{error}</p>
+							<p class="text-sm text-destructive">{error}</p>
 						{/if}
 					</div>
 				{/if}
@@ -314,7 +314,7 @@
 
 <style>
 	.canvas {
-		background-color: var(--color-workspace);
+		background-color: var(--muted);
 		box-shadow: var(--shadow-panel);
 	}
 
@@ -360,8 +360,8 @@
 			align-items: center;
 			gap: 0.125rem;
 			padding: 0.25rem;
-			background: var(--color-surface);
-			border: 1px solid var(--color-border);
+			background: var(--card);
+			border: 1px solid var(--border);
 			border-radius: var(--radius-md);
 			box-shadow: var(--shadow-panel);
 			cursor: default;
@@ -377,7 +377,7 @@
 			border-radius: var(--radius-sm);
 			font-size: 0.75rem;
 			font-variant-numeric: tabular-nums;
-			color: var(--color-muted-foreground);
+			color: var(--muted-foreground);
 			background: transparent;
 			cursor: pointer;
 			transition:
@@ -386,14 +386,14 @@
 		}
 
 		.tool-btn:hover:not(:disabled) {
-			background: var(--color-surface-muted);
-			color: var(--color-foreground);
+			background: var(--accent);
+			color: var(--accent-foreground);
 		}
 
 		.tool-btn:focus-visible {
 			outline: none;
-			box-shadow: 0 0 0 2px var(--color-ring);
-			color: var(--color-foreground);
+			box-shadow: 0 0 0 2px var(--ring);
+			color: var(--foreground);
 		}
 
 		.tool-btn:disabled {
@@ -409,7 +409,7 @@
 			width: 1px;
 			height: 1rem;
 			margin: 0 0.125rem;
-			background: var(--color-border);
+			background: var(--border);
 		}
 	}
 </style>
