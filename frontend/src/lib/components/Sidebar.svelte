@@ -16,7 +16,7 @@
 	}
 </script>
 
-<aside class="mb-4 flex w-48 flex-col bg-background">
+<aside class="mb-4 flex w-48 flex-col bg-chrome-sidebar">
 	<!-- Navigation -->
 	<nav class="flex-1 overflow-y-auto px-2 pt-14 pb-2">
 		<div class="flex flex-col gap-px">

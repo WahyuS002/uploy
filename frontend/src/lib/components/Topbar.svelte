@@ -25,7 +25,7 @@
 </script>
 
 <header
-	class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background pr-4 pl-2"
+	class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-chrome pr-4 pl-2"
 >
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a href="/projects" class="flex flex-none items-center gap-2 rounded-md px-2 py-1.5 select-none">
@@ -40,21 +40,21 @@
 		<button
 			type="button"
 			title="Notifications"
-			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-chrome-hover hover:text-foreground"
 		>
 			<Icon src={Bell} theme="outline" class="h-[18px] w-[18px]" />
 		</button>
 		<button
 			type="button"
 			title="Settings"
-			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-chrome-hover hover:text-foreground"
 		>
 			<Icon src={Cog6Tooth} theme="outline" class="h-[18px] w-[18px]" />
 		</button>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger
 				title={userEmail}
-				class="ml-1 grid h-9 w-9 flex-none cursor-pointer place-content-center rounded-full bg-gray-300 text-xs font-medium text-gray-700 outline-none hover:bg-gray-400 focus-visible:ring-2 focus-visible:ring-foreground/40"
+				class="ml-1 grid h-9 w-9 flex-none cursor-pointer place-content-center rounded-full bg-chrome-active text-xs font-medium text-muted-foreground outline-none hover:bg-border-chrome hover:text-foreground focus-visible:ring-2 focus-visible:ring-foreground/40"
 			>
 				{userEmail.charAt(0).toUpperCase()}
 			</DropdownMenu.Trigger>

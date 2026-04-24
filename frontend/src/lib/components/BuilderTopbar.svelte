@@ -22,7 +22,7 @@
 	}
 </script>
 
-<header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background px-3">
+<header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-chrome px-3">
 	<div class="flex flex-none items-center gap-2">
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
 		<a
@@ -36,7 +36,7 @@
 			<span class="text-sm font-semibold tracking-tight text-foreground">Uploy</span>
 		</a>
 		<!-- eslint-enable svelte/no-navigation-without-resolve -->
-		<span class="ml-2 hidden h-4 w-px bg-border sm:block"></span>
+		<span class="ml-2 hidden h-4 w-px bg-border-chrome sm:block"></span>
 		<span class="ml-2 hidden text-sm font-medium text-muted-foreground sm:inline">{label}</span>
 	</div>
 
@@ -44,21 +44,21 @@
 		<button
 			type="button"
 			title="Notifications"
-			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-chrome-hover hover:text-foreground"
 		>
 			<Icon src={Bell} theme="outline" class="h-[18px] w-[18px]" />
 		</button>
 		<button
 			type="button"
 			title="Settings"
-			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+			class="grid h-9 w-9 cursor-pointer place-content-center rounded-full text-muted-foreground hover:bg-chrome-hover hover:text-foreground"
 		>
 			<Icon src={Cog6Tooth} theme="outline" class="h-[18px] w-[18px]" />
 		</button>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger
 				title={userEmail}
-				class="ml-1 grid h-9 w-9 flex-none cursor-pointer place-content-center rounded-full bg-gray-300 text-xs font-medium text-gray-700 outline-none hover:bg-gray-400 focus-visible:ring-2 focus-visible:ring-foreground/40"
+				class="ml-1 grid h-9 w-9 flex-none cursor-pointer place-content-center rounded-full bg-chrome-active text-xs font-medium text-muted-foreground outline-none hover:bg-border-chrome hover:text-foreground focus-visible:ring-2 focus-visible:ring-foreground/40"
 			>
 				{userEmail.charAt(0).toUpperCase()}
 			</DropdownMenu.Trigger>

@@ -131,14 +131,15 @@
 </script>
 
 <div
-	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border"
+	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border-chrome"
 	data-panning={pan.isPanning ? 'true' : 'false'}
 	use:panViewport
 >
 	<div
 		class="canvas-bg"
 		aria-hidden="true"
-		style="background-size: {20 * pan.scale}px {20 * pan.scale}px; background-position: {pan.x - pan.scale}px {pan.y - pan.scale}px;"
+		style="background-size: {20 * pan.scale}px {20 * pan.scale}px; background-position: {pan.x -
+			pan.scale}px {pan.y - pan.scale}px;"
 	></div>
 
 	<div class="scroll-area relative z-10 flex w-full overflow-x-hidden overflow-y-auto">
@@ -150,53 +151,96 @@
 				style="transform: translate3d({pan.x}px, {pan.y}px, 0) scale({pan.scale});"
 			>
 				{#if !canEdit}
-				<div class="w-full max-w-105" data-no-pan>
-					<EmptyState
-						icon={Server}
-						title="You don't have permission to create projects"
-						description="Ask a workspace owner or developer to create a project, or request a role change."
-					>
-						{#snippet actions()}
-							<Button href="/projects" variant="secondary" size="sm">Back to projects</Button>
-						{/snippet}
-					</EmptyState>
-				</div>
-			{:else}
-				<div class="flex w-full max-w-105 flex-col gap-2" data-no-pan>
-					<section
-						class="panel overflow-hidden rounded-lg border border-border bg-surface"
-						aria-label="Start a new project"
-					>
-						<div class="border-b border-border/70 px-2 py-1.5">
-							<Input
-								bind:value={promptDraft}
-								placeholder="What would you like to create?"
-								class="border-transparent! bg-transparent! px-2 py-1.5 text-sm focus:shadow-none!"
-							/>
-						</div>
+					<div class="w-full max-w-105" data-no-pan>
+						<EmptyState
+							icon={Server}
+							title="You don't have permission to create projects"
+							description="Ask a workspace owner or developer to create a project, or request a role change."
+						>
+							{#snippet actions()}
+								<Button href="/projects" variant="secondary" size="sm">Back to projects</Button>
+							{/snippet}
+						</EmptyState>
+					</div>
+				{:else}
+					<div class="flex w-full max-w-105 flex-col gap-2" data-no-pan>
+						<section
+							class="panel overflow-hidden rounded-lg border border-border bg-surface"
+							aria-label="Start a new project"
+						>
+							<div class="border-b border-border/70 px-2 py-1.5">
+								<Input
+									bind:value={promptDraft}
+									placeholder="What would you like to create?"
+									class="border-transparent! bg-transparent! px-2 py-1.5 text-sm focus:shadow-none!"
+								/>
+							</div>
 
-						<div class="py-1">
-							{#if filteredRows.length === 0}
-								<div class="flex items-center gap-2.5 px-4 py-3 text-sm text-muted-foreground">
-									<Icon src={MagnifyingGlass} theme="outline" class="h-3.5 w-3.5 flex-none" />
-									<span>No starters match "{promptDraft}"</span>
-								</div>
-							{:else}
-								<ul>
-									{#each filteredRows as row (row.id)}
-										{@const busy = row.starter != null && busyStarter === row.starter}
-										{@const pending = busyStarter !== null}
-										{@const gridCols =
-											row.showsChevron || !row.interactive
-												? 'grid-cols-[auto_1fr_auto]'
-												: 'grid-cols-[auto_1fr]'}
-										{#if row.interactive}
-											<li>
-												<button
-													type="button"
-													onclick={() => row.starter && launch(row.starter)}
-													disabled={pending}
-													class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:hover:bg-transparent {gridCols}"
+							<div class="py-1">
+								{#if filteredRows.length === 0}
+									<div class="flex items-center gap-2.5 px-4 py-3 text-sm text-muted-foreground">
+										<Icon src={MagnifyingGlass} theme="outline" class="h-3.5 w-3.5 flex-none" />
+										<span>No starters match "{promptDraft}"</span>
+									</div>
+								{:else}
+									<ul>
+										{#each filteredRows as row (row.id)}
+											{@const busy = row.starter != null && busyStarter === row.starter}
+											{@const pending = busyStarter !== null}
+											{@const gridCols =
+												row.showsChevron || !row.interactive
+													? 'grid-cols-[auto_1fr_auto]'
+													: 'grid-cols-[auto_1fr]'}
+											{#if row.interactive}
+												<li>
+													<button
+														type="button"
+														onclick={() => row.starter && launch(row.starter)}
+														disabled={pending}
+														class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:hover:bg-transparent {gridCols}"
+													>
+														<span class="text-subtle-foreground">
+															{#if row.lucide}
+																{@const LucideIcon = row.lucide}
+																<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
+															{:else if row.icon}
+																<Icon src={row.icon} theme="outline" class="h-4 w-4" />
+															{/if}
+														</span>
+														<span class="truncate">{row.title}</span>
+														{#if busy}
+															<svg
+																class="h-3.5 w-3.5 animate-spin text-subtle-foreground"
+																xmlns="http://www.w3.org/2000/svg"
+																fill="none"
+																viewBox="0 0 24 24"
+															>
+																<circle
+																	class="opacity-25"
+																	cx="12"
+																	cy="12"
+																	r="10"
+																	stroke="currentColor"
+																	stroke-width="4"
+																/>
+																<path
+																	class="opacity-75"
+																	fill="currentColor"
+																	d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+																/>
+															</svg>
+														{:else if row.showsChevron}
+															<Icon
+																src={ChevronRight}
+																theme="outline"
+																class="h-3.5 w-3.5 text-subtle-foreground"
+															/>
+														{/if}
+													</button>
+												</li>
+											{:else}
+												<li
+													class="grid cursor-default items-center gap-x-3 px-3 py-2 text-sm text-muted-foreground {gridCols}"
 												>
 													<span class="text-subtle-foreground">
 														{#if row.lucide}
@@ -207,67 +251,24 @@
 														{/if}
 													</span>
 													<span class="truncate">{row.title}</span>
-													{#if busy}
-														<svg
-															class="h-3.5 w-3.5 animate-spin text-subtle-foreground"
-															xmlns="http://www.w3.org/2000/svg"
-															fill="none"
-															viewBox="0 0 24 24"
-														>
-															<circle
-																class="opacity-25"
-																cx="12"
-																cy="12"
-																r="10"
-																stroke="currentColor"
-																stroke-width="4"
-															/>
-															<path
-																class="opacity-75"
-																fill="currentColor"
-																d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-															/>
-														</svg>
-													{:else if row.showsChevron}
-														<Icon
-															src={ChevronRight}
-															theme="outline"
-															class="h-3.5 w-3.5 text-subtle-foreground"
-														/>
-													{/if}
-												</button>
-											</li>
-										{:else}
-											<li
-												class="grid cursor-default items-center gap-x-3 px-3 py-2 text-sm text-muted-foreground {gridCols}"
-											>
-												<span class="text-subtle-foreground">
-													{#if row.lucide}
-														{@const LucideIcon = row.lucide}
-														<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
-													{:else if row.icon}
-														<Icon src={row.icon} theme="outline" class="h-4 w-4" />
-													{/if}
-												</span>
-												<span class="truncate">{row.title}</span>
-												<span
-													class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-subtle-foreground uppercase"
-												>
-													Soon
-												</span>
-											</li>
-										{/if}
-									{/each}
-								</ul>
-							{/if}
-						</div>
-					</section>
+													<span
+														class="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-subtle-foreground uppercase"
+													>
+														Soon
+													</span>
+												</li>
+											{/if}
+										{/each}
+									</ul>
+								{/if}
+							</div>
+						</section>
 
-					{#if error}
-						<p class="text-sm text-danger">{error}</p>
-					{/if}
-				</div>
-			{/if}
+						{#if error}
+							<p class="text-sm text-danger">{error}</p>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -313,7 +314,7 @@
 
 <style>
 	.canvas {
-		background-color: var(--color-background);
+		background-color: var(--color-workspace);
 		box-shadow: var(--shadow-panel);
 	}
 
@@ -331,7 +332,7 @@
 	.canvas-bg {
 		position: absolute;
 		inset: 0;
-		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.07) 1px, transparent 0);
+		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.06) 1px, transparent 0);
 		background-size: 20px 20px;
 		pointer-events: none;
 	}
@@ -379,7 +380,9 @@
 			color: var(--color-muted-foreground);
 			background: transparent;
 			cursor: pointer;
-			transition: background-color 120ms ease-out, color 120ms ease-out;
+			transition:
+				background-color 120ms ease-out,
+				color 120ms ease-out;
 		}
 
 		.tool-btn:hover:not(:disabled) {

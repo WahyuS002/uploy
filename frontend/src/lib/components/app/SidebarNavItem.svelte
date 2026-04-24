@@ -16,8 +16,8 @@
 	{href}
 	class="flex h-9 flex-row items-center rounded-[9px] transition-colors
 		{active
-		? 'bg-primary-muted text-primary'
-		: 'text-muted-foreground hover:bg-gray-100 hover:text-gray-950'}"
+		? 'bg-chrome-active text-foreground'
+		: 'text-muted-foreground hover:bg-chrome-hover hover:text-foreground'}"
 >
 	<div class="grid h-9 w-9 flex-none place-content-center">
 		<Icon src={icon} theme={active ? 'solid' : 'outline'} class="h-4 w-4" />
