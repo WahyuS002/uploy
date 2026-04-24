@@ -14,7 +14,10 @@
 		CircleStack,
 		RectangleStack,
 		ChevronRight,
-		MagnifyingGlass
+		MagnifyingGlass,
+		Minus,
+		Plus,
+		ArrowsPointingIn
 	} from '@steeze-ui/heroicons';
 	import { Archive, Container, SquareTerminal } from 'lucide-svelte';
 
@@ -135,15 +138,18 @@
 	<div
 		class="canvas-bg"
 		aria-hidden="true"
-		style="background-position: {pan.x - 1}px {pan.y - 1}px;"
+		style="background-size: {20 * pan.scale}px {20 * pan.scale}px; background-position: {pan.x - pan.scale}px {pan.y - pan.scale}px;"
 	></div>
 
 	<div class="scroll-area relative z-10 flex w-full overflow-x-hidden overflow-y-auto">
 		<div
 			class="stage m-auto flex min-h-full w-full items-center justify-center px-4 py-8 sm:px-6 sm:py-12"
-			style="transform: translate3d({pan.x}px, {pan.y}px, 0);"
 		>
-			{#if !canEdit}
+			<div
+				class="world flex w-full items-center justify-center"
+				style="transform: translate3d({pan.x}px, {pan.y}px, 0) scale({pan.scale});"
+			>
+				{#if !canEdit}
 				<div class="w-full max-w-105" data-no-pan>
 					<EmptyState
 						icon={Server}
@@ -262,7 +268,46 @@
 					{/if}
 				</div>
 			{/if}
+			</div>
 		</div>
+	</div>
+
+	<div class="toolbar" data-no-pan aria-label="Canvas controls">
+		<button
+			type="button"
+			class="tool-btn"
+			onclick={() => pan.zoomOut()}
+			disabled={pan.scale <= 0.8}
+			aria-label="Zoom out"
+		>
+			<Icon src={Minus} theme="outline" class="h-3.5 w-3.5" />
+		</button>
+		<button
+			type="button"
+			class="tool-btn zoom-label"
+			onclick={() => pan.resetZoom()}
+			aria-label="Reset zoom to 100%"
+		>
+			{Math.round(pan.scale * 100)}%
+		</button>
+		<button
+			type="button"
+			class="tool-btn"
+			onclick={() => pan.zoomIn()}
+			disabled={pan.scale >= 1.4}
+			aria-label="Zoom in"
+		>
+			<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+		</button>
+		<span class="divider" aria-hidden="true"></span>
+		<button
+			type="button"
+			class="tool-btn"
+			onclick={() => pan.recenter()}
+			aria-label="Recenter canvas"
+		>
+			<Icon src={ArrowsPointingIn} theme="outline" class="h-3.5 w-3.5" />
+		</button>
 	</div>
 </div>
 
@@ -286,24 +331,82 @@
 	.canvas-bg {
 		position: absolute;
 		inset: 0;
-		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.05) 1px, transparent 0);
-		background-size: 24px 24px;
-		mask-image: radial-gradient(
-			ellipse 85% 75% at 50% 50%,
-			rgba(0, 0, 0, 0.7) 0%,
-			rgba(0, 0, 0, 0.35) 60%,
-			transparent 100%
-		);
-		-webkit-mask-image: radial-gradient(
-			ellipse 85% 75% at 50% 50%,
-			rgba(0, 0, 0, 0.7) 0%,
-			rgba(0, 0, 0, 0.35) 60%,
-			transparent 100%
-		);
+		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.07) 1px, transparent 0);
+		background-size: 20px 20px;
 		pointer-events: none;
+	}
+
+	.world {
+		transform-origin: center center;
+		will-change: transform;
 	}
 
 	.panel {
 		box-shadow: var(--shadow-panel);
+	}
+
+	.toolbar {
+		display: none;
+	}
+
+	@media (pointer: fine) {
+		.toolbar {
+			position: absolute;
+			bottom: 0.75rem;
+			left: 0.75rem;
+			z-index: 20;
+			display: inline-flex;
+			align-items: center;
+			gap: 0.125rem;
+			padding: 0.25rem;
+			background: var(--color-surface);
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-md);
+			box-shadow: var(--shadow-panel);
+			cursor: default;
+		}
+
+		.tool-btn {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 1.75rem;
+			height: 1.75rem;
+			padding: 0 0.375rem;
+			border-radius: var(--radius-sm);
+			font-size: 0.75rem;
+			font-variant-numeric: tabular-nums;
+			color: var(--color-muted-foreground);
+			background: transparent;
+			cursor: pointer;
+			transition: background-color 120ms ease-out, color 120ms ease-out;
+		}
+
+		.tool-btn:hover:not(:disabled) {
+			background: var(--color-surface-muted);
+			color: var(--color-foreground);
+		}
+
+		.tool-btn:focus-visible {
+			outline: none;
+			box-shadow: 0 0 0 2px var(--color-ring);
+			color: var(--color-foreground);
+		}
+
+		.tool-btn:disabled {
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+
+		.zoom-label {
+			min-width: 2.5rem;
+		}
+
+		.divider {
+			width: 1px;
+			height: 1rem;
+			margin: 0 0.125rem;
+			background: var(--color-border);
+		}
 	}
 </style>

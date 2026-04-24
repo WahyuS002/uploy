@@ -9,10 +9,14 @@ type CanvasPanOptions = {
 
 const DEFAULT_IGNORE = 'input, textarea, select, button, a, label, [data-no-pan]';
 const DEFAULT_GUTTER = 96;
+const ZOOM_STEP = 0.1;
+const ZOOM_MIN = 0.8;
+const ZOOM_MAX = 1.4;
 
 export function createCanvasPan(options: CanvasPanOptions = {}) {
 	let x = $state(0);
 	let y = $state(0);
+	let scale = $state(1);
 	let isPanning = $state(false);
 
 	const ignoreSelector = options.ignoreSelector ?? DEFAULT_IGNORE;
@@ -34,6 +38,14 @@ export function createCanvasPan(options: CanvasPanOptions = {}) {
 	function clamp(value: number, max: number) {
 		if (max <= 0) return 0;
 		return Math.max(-max, Math.min(max, value));
+	}
+
+	function clampZoom(value: number) {
+		return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
+	}
+
+	function roundZoom(value: number) {
+		return Math.round(value * 100) / 100;
 	}
 
 	function viewport(node: HTMLElement) {
@@ -130,12 +142,29 @@ export function createCanvasPan(options: CanvasPanOptions = {}) {
 		get y() {
 			return y;
 		},
+		get scale() {
+			return scale;
+		},
 		get isPanning() {
 			return isPanning;
+		},
+		zoomIn() {
+			scale = roundZoom(clampZoom(scale + ZOOM_STEP));
+		},
+		zoomOut() {
+			scale = roundZoom(clampZoom(scale - ZOOM_STEP));
+		},
+		resetZoom() {
+			scale = 1;
+		},
+		recenter() {
+			x = 0;
+			y = 0;
 		},
 		reset() {
 			x = 0;
 			y = 0;
+			scale = 1;
 		}
 	};
 }
