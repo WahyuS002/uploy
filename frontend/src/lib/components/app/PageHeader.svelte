@@ -28,7 +28,5 @@
 		{/if}
 	</div>
 {:else if actions}
-	<div class="mb-6">
-		{@render actions()}
-	</div>
+	{@render actions()}
 {/if}

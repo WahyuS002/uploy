@@ -17,7 +17,6 @@
 		ListBullet,
 		Check,
 		Cube,
-		Server,
 		BarsArrowUp,
 		Funnel
 	} from '@steeze-ui/heroicons';
@@ -96,11 +95,11 @@
 	});
 </script>
 
-<section>
+<section class="flex flex-1 flex-col">
 	<PageHeader title="Projects" icon={Squares2x2}>
 		{#snippet actions()}
 			<div
-				class="flex w-full flex-wrap items-center justify-between gap-3 border-b border-border py-3"
+				class="flex w-full flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3"
 			>
 				<div class="flex flex-wrap items-center gap-1.5">
 					<SelectAction.Root type="single" bind:value={sortBy} items={sortOptions}>
@@ -194,10 +193,22 @@
 		{/if}
 	{:else if projects.length === 0}
 		<EmptyState
-			icons={[Squares2x2, Cube, Server, Plus]}
+			variant="canvas"
+			icon={Cube}
 			title="No projects yet"
-			description="Create your first project to start organizing services, environments, and deployments."
-		/>
+			description={canEdit
+				? 'Create your first project to get started.'
+				: 'Ask a workspace owner or developer to create the first project.'}
+		>
+			{#snippet actions()}
+				{#if canEdit}
+					<Button href="/projects/new" variant="primary" size="sm">
+						<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+						Create project
+					</Button>
+				{/if}
+			{/snippet}
+		</EmptyState>
 	{:else if viewMode === 'grid'}
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			{#each sortedProjects() as project (project.id)}
