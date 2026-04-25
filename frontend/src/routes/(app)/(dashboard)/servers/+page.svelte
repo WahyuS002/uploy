@@ -22,7 +22,7 @@
 </script>
 
 <section>
-	<PageHeader title="Servers" />
+	<PageHeader title="Servers" icon={Server} />
 
 	{#if isOwner}
 		<div class="mb-8 max-w-md">

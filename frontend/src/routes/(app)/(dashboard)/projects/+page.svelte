@@ -84,7 +84,7 @@
 </script>
 
 <section>
-	<PageHeader title="Projects">
+	<PageHeader title="Projects" icon={Squares2x2}>
 		{#snippet actions()}
 			<div class="flex items-center gap-2">
 				<Select.Root type="single" bind:value={sortBy} items={sortOptions}>
@@ -157,7 +157,7 @@
 			<div class="flex flex-col gap-2">
 				{#each [0, 1, 2, 3, 4] as i (i)}
 					<div
-						class="flex items-center justify-between rounded-lg border border-border bg-card text-card-foreground px-4 py-3"
+						class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground"
 					>
 						<div class="flex items-center gap-3">
 							<div class="h-9 w-9 animate-pulse rounded-lg bg-muted"></div>
@@ -235,7 +235,7 @@
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
 					href="/projects/{project.id}"
-					class="flex items-center justify-between rounded-lg border border-border bg-card text-card-foreground px-4 py-3 transition-shadow hover:shadow-md"
+					class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground transition-shadow hover:shadow-md"
 				>
 					<div class="flex items-center gap-3">
 						<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900">

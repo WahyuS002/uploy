@@ -5,13 +5,12 @@
 	let { data, children } = $props();
 </script>
 
-<div class="flex min-h-screen flex-col bg-background">
-	<Topbar userEmail={data.user?.email ?? ''} />
+<div class="flex min-h-screen bg-white">
+	<Sidebar workspaceName={data.workspace?.name ?? 'Uploy'} workspaceRole={data.workspace?.role} />
 
-	<div class="flex flex-1">
-		<Sidebar workspaceName={data.workspace?.name ?? 'Uploy'} />
-
-		<main class="mx-4 mb-4 flex-1 rounded-lg border border-border bg-card px-60 py-14 text-card-foreground">
+	<div class="flex min-w-0 flex-1 flex-col">
+		<Topbar userEmail={data.user?.email ?? ''} />
+		<main class="flex-1 px-8 py-10 text-foreground">
 			{@render children()}
 		</main>
 	</div>

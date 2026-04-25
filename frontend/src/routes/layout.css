@@ -5,7 +5,7 @@
 @plugin '@tailwindcss/typography';
 
 :root {
-	--background: #f7f8fa;
+	--background: #fbfbfb;
 	--foreground: #1a1b1e;
 	--card: #ffffff;
 	--card-foreground: #1a1b1e;
@@ -21,14 +21,14 @@
 	--accent-foreground: #1a1b1e;
 	--destructive: #c7342f;
 	--destructive-foreground: #ffffff;
-	--border: #e3e5e8;
+	--border: #eeeff1;
 	--input: #d6d8dc;
 	--ring: #202124;
 	--sidebar: #efeff0;
 	--sidebar-foreground: #1a1b1e;
 	--sidebar-primary: #202124;
 	--sidebar-primary-foreground: #ffffff;
-	--sidebar-accent: #e5e6e9;
+	--sidebar-accent: #eeeff1;
 	--sidebar-accent-foreground: #1a1b1e;
 	--sidebar-border: #dde1e6;
 	--sidebar-ring: #202124;

@@ -3,6 +3,7 @@
 	import { Bell, Cog6Tooth, ArrowRightOnRectangle } from '@steeze-ui/heroicons';
 	import { DropdownMenu } from 'bits-ui';
 	import { logout } from '$lib/auth/logout';
+	import { topbar } from '$lib/stores/topbar.svelte';
 
 	let { userEmail }: { userEmail: string } = $props();
 
@@ -25,16 +26,20 @@
 </script>
 
 <header
-	class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background pr-4 pl-2"
+	class="flex h-14 w-full flex-none items-center justify-between gap-4 border-b border-border bg-white px-4"
 >
-	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-	<a href="/projects" class="flex flex-none items-center gap-2 rounded-md px-2 py-1.5 select-none">
-		<span
-			class="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
-			>U</span
-		>
-		<span class="text-sm font-semibold tracking-tight text-foreground">Uploy</span>
-	</a>
+	<div class="flex min-w-0 flex-1 items-center gap-2">
+		{#if topbar.state.icon}
+			<Icon
+				src={topbar.state.icon}
+				theme="outline"
+				class="h-4 w-4 flex-none text-muted-foreground"
+			/>
+		{/if}
+		{#if topbar.state.title}
+			<h1 class="truncate text-sm font-medium text-foreground">{topbar.state.title}</h1>
+		{/if}
+	</div>
 
 	<div class="flex flex-none items-center gap-1.5">
 		<button
