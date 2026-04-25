@@ -10,7 +10,7 @@
 
 	<div class="flex min-w-0 flex-1 flex-col">
 		<Topbar userEmail={data.user?.email ?? ''} />
-		<main class="flex-1 px-8 py-10 text-foreground">
+		<main class="flex-1 text-foreground">
 			{@render children()}
 		</main>
 	</div>

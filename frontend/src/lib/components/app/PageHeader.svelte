@@ -20,15 +20,15 @@
 	});
 </script>
 
-{#if description || actions}
+{#if description}
 	<div class="mb-6 flex min-h-8 items-center justify-between gap-4">
-		<div class="min-w-0">
-			{#if description}
-				<p class="text-sm text-muted-foreground">{description}</p>
-			{/if}
-		</div>
+		<p class="min-w-0 text-sm text-muted-foreground">{description}</p>
 		{#if actions}
 			{@render actions()}
 		{/if}
+	</div>
+{:else if actions}
+	<div class="mb-6">
+		{@render actions()}
 	</div>
 {/if}
