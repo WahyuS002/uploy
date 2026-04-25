@@ -96,7 +96,7 @@
 </script>
 
 <section class="flex flex-1 flex-col">
-	<PageHeader title="Projects" icon={Squares2x2}>
+	<PageHeader>
 		{#snippet actions()}
 			<div
 				class="flex w-full flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3"

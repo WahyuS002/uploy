@@ -2,8 +2,6 @@
 	import { invalidateAll } from '$app/navigation';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
-	import PageHeader from '$lib/components/app/PageHeader.svelte';
-	import { Key } from '@steeze-ui/heroicons';
 	import PublicKeyHelper from '$lib/components/app/PublicKeyHelper.svelte';
 	import SSHKeyCreatePanel from '$lib/components/app/SSHKeyCreatePanel.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -26,8 +24,6 @@
 </script>
 
 <section>
-	<PageHeader title="SSH Keys" icon={Key} />
-
 	{#if isOwner}
 		{#if lastCreatedKey}
 			<div class="mb-8 flex max-w-md flex-col gap-3">

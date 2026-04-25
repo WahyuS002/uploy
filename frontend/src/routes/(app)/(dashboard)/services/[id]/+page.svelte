@@ -4,7 +4,6 @@
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
-	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -22,7 +21,7 @@
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
 
-	let svc = $state<ServiceResponse | null>(null);
+	let svc = $derived<ServiceResponse | null>(data.service ?? null);
 	let domains = $state<ServiceDomainResponse[]>([]);
 	let envs = $state<ServiceEnvResponse[]>([]);
 	let envsLoaded = $state(false);
@@ -43,13 +42,6 @@
 	let envError = $state('');
 
 	const svcId = $page.params.id as string;
-
-	async function loadService() {
-		const { data } = await api.GET('/api/services/{id}', {
-			params: { path: { id: svcId } }
-		});
-		if (data) svc = data;
-	}
 
 	async function loadDomains() {
 		const { data } = await api.GET('/api/services/{id}/domains', {
@@ -163,7 +155,6 @@
 	}
 
 	$effect(() => {
-		loadService();
 		loadDomains();
 		loadEnvs();
 		loadDeployments();
@@ -172,8 +163,6 @@
 
 {#if svc}
 	<section>
-		<PageHeader title={svc.name} />
-
 		<div class="mb-4 text-sm text-muted-foreground">
 			<p>Image: {svc.image}</p>
 			<p>Container: {svc.container_name}</p>

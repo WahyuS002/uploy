@@ -2,10 +2,13 @@
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { Bell, Cog6Tooth, ArrowRightOnRectangle } from '@steeze-ui/heroicons';
 	import { DropdownMenu } from 'bits-ui';
+	import { page } from '$app/state';
 	import { logout } from '$lib/auth/logout';
-	import { topbar } from '$lib/stores/topbar.svelte';
+	import { getDashboardTopbarMeta } from './topbar-meta';
 
 	let { userEmail }: { userEmail: string } = $props();
+
+	let meta = $derived(getDashboardTopbarMeta(page.route.id, page.data));
 
 	let loggingOut = $state(false);
 	let logoutError = $state('');
@@ -29,15 +32,11 @@
 	class="flex h-14 w-full flex-none items-center justify-between gap-4 border-b border-border bg-white px-4"
 >
 	<div class="flex min-w-0 flex-1 items-center gap-2">
-		{#if topbar.state.icon}
-			<Icon
-				src={topbar.state.icon}
-				theme="outline"
-				class="h-4 w-4 flex-none text-muted-foreground"
-			/>
+		{#if meta.icon}
+			<Icon src={meta.icon} theme="outline" class="h-4 w-4 flex-none text-muted-foreground" />
 		{/if}
-		{#if topbar.state.title}
-			<h1 class="truncate text-sm font-medium text-foreground">{topbar.state.title}</h1>
+		{#if meta.title}
+			<h1 class="truncate text-sm font-medium text-foreground">{meta.title}</h1>
 		{/if}
 	</div>
 

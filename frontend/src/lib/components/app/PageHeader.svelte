@@ -1,23 +1,12 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { IconSource } from '@steeze-ui/svelte-icon';
-	import { topbar } from '$lib/stores/topbar.svelte';
 
 	type Props = {
-		title: string;
-		icon?: IconSource;
 		description?: string;
 		actions?: Snippet;
 	};
 
-	let { title, icon, description, actions }: Props = $props();
-
-	$effect(() => {
-		topbar.set({ title, icon });
-		return () => {
-			topbar.clear();
-		};
-	});
+	let { description, actions }: Props = $props();
 </script>
 
 {#if description}

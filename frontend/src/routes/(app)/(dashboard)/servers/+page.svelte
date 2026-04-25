@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
-	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import ServerCreateFields from '$lib/components/app/ServerCreateFields.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
@@ -22,8 +21,6 @@
 </script>
 
 <section>
-	<PageHeader title="Servers" icon={Server} />
-
 	{#if isOwner}
 		<div class="mb-8 max-w-md">
 			<form
