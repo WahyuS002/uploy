@@ -440,8 +440,8 @@
 		height: 28px;
 		padding: 0 12px 0 10px;
 		border-radius: 8px;
-		background: #2a7cf2;
-		color: #ffffff;
+		background: lab(12.7212% 0.103362 -2.22102);
+		color: lab(96.1596% -0.0828803 -1.13571);
 		font-size: 14px;
 		line-height: 20px;
 		font-weight: 500;
@@ -450,18 +450,35 @@
 		cursor: pointer;
 		box-shadow:
 			0 1px 0 rgba(17, 17, 17, 0.04),
-			0 1px 2px rgba(42, 124, 242, 0.35),
-			inset 0 1px 0 rgba(255, 255, 255, 0.18);
-		transition: background 120ms ease;
+			0 1px 2px rgba(17, 17, 17, 0.22),
+			inset 0 0 0 1px lab(37.426% -1.09151 -9.33263),
+			inset 0 1px 0 rgba(255, 255, 255, 0.06);
+		transition:
+			background-color 120ms ease,
+			box-shadow 120ms ease,
+			color 120ms ease;
 	}
 
 	.toolbar :global(.cta-blue:hover) {
-		background: #1f6cdc;
+		background: lab(25.9077% -0.872329 -6.43952);
+		color: lab(99.9987% 0.0337958 0.000309944);
 	}
 
 	.toolbar :global(.cta-blue:focus-visible) {
+		background: lab(25.9077% -0.872329 -6.43952);
+		color: lab(99.9987% 0.0337958 0.000309944);
 		outline: 2px solid var(--ring);
 		outline-offset: 2px;
+	}
+
+	.toolbar :global(.cta-blue:active) {
+		background: lab(37.426% -1.09151 -9.33263);
+		color: lab(99.9987% 0.0337958 0.000309944);
+		box-shadow:
+			0 1px 0 rgba(17, 17, 17, 0.04),
+			0 1px 2px rgba(17, 17, 17, 0.18),
+			inset 0 0 0 1px lab(37.426% -1.09151 -9.33263),
+			inset 0 1px 0 rgba(255, 255, 255, 0.04);
 	}
 
 	:global(.menu) {
