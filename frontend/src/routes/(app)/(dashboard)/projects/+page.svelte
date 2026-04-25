@@ -3,8 +3,13 @@
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
-	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import { Select, ToggleGroup } from 'bits-ui';
+	import {
+		Button,
+		EmptyState,
+		SelectAction,
+		SegmentedToggle,
+		pillVariants
+	} from '$lib/components/ui';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import {
 		Plus,
@@ -95,55 +100,57 @@
 	<PageHeader title="Projects" icon={Squares2x2}>
 		{#snippet actions()}
 			<div
-				class="toolbar flex w-full flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3"
+				class="flex w-full flex-wrap items-center justify-between gap-3 border-b border-border py-3"
 			>
 				<div class="flex flex-wrap items-center gap-1.5">
-					<Select.Root type="single" bind:value={sortBy} items={sortOptions}>
-						<Select.Trigger class="sort-pill" title="Sort projects">
-							<Icon src={BarsArrowUp} theme="outline" class="pill-icon" />
-							<span class="label-prefix">Sorted by</span>
+					<SelectAction.Root type="single" bind:value={sortBy} items={sortOptions}>
+						<SelectAction.Trigger title="Sort projects">
+							<Icon src={BarsArrowUp} theme="outline" class="h-3.5 w-3.5" />
+							<span class="text-muted-foreground">Sorted by</span>
 							<span>{sortLabelValue}</span>
-						</Select.Trigger>
-						<Select.Portal>
-							<Select.Content class="menu" sideOffset={6} align="start">
-								<Select.Viewport>
-									{#each sortOptions as option (option.value)}
-										<Select.Item value={option.value} label={option.label} class="menu-item">
-											{#snippet children({ selected })}
-												<span class="check-slot">
-													{#if selected}
-														<Icon src={Check} theme="outline" class="h-3 w-3" />
-													{/if}
-												</span>
-												{option.label}
-											{/snippet}
-										</Select.Item>
-									{/each}
-								</Select.Viewport>
-							</Select.Content>
-						</Select.Portal>
-					</Select.Root>
-					<span class="divider" aria-hidden="true"></span>
-					<button type="button" class="filter-pill" title="Filter (coming soon)" disabled>
-						<Icon src={Funnel} theme="outline" class="pill-icon" />
+						</SelectAction.Trigger>
+						<SelectAction.Portal>
+							<SelectAction.Content align="start">
+								{#each sortOptions as option (option.value)}
+									<SelectAction.Item value={option.value} label={option.label}>
+										{#snippet children({ selected })}
+											<span class="inline-flex h-3.5 w-3.5 items-center justify-center">
+												{#if selected}
+													<Icon src={Check} theme="outline" class="h-3 w-3" />
+												{/if}
+											</span>
+											{option.label}
+										{/snippet}
+									</SelectAction.Item>
+								{/each}
+							</SelectAction.Content>
+						</SelectAction.Portal>
+					</SelectAction.Root>
+					<span class="mx-1 inline-block h-4 w-px bg-border" aria-hidden="true"></span>
+					<button
+						type="button"
+						title="Filter (coming soon)"
+						disabled
+						class={pillVariants({ state: 'placeholder' })}
+					>
+						<Icon src={Funnel} theme="outline" class="h-3.5 w-3.5" />
 						<span>Filter</span>
 					</button>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
-					<ToggleGroup.Root type="single" bind:value={viewMode} class="view-shell">
-						<ToggleGroup.Item value="grid" title="Grid view" class="view-item">
-							<Icon src={Squares2x2} theme="outline" class="pill-icon" />
-						</ToggleGroup.Item>
-						<ToggleGroup.Item value="list" title="List view" class="view-item">
-							<Icon src={ListBullet} theme="outline" class="pill-icon" />
-						</ToggleGroup.Item>
-					</ToggleGroup.Root>
+					<SegmentedToggle.Root bind:value={viewMode}>
+						<SegmentedToggle.Item value="grid" title="Grid view">
+							<Icon src={Squares2x2} theme="outline" class="h-3.5 w-3.5" />
+						</SegmentedToggle.Item>
+						<SegmentedToggle.Item value="list" title="List view">
+							<Icon src={ListBullet} theme="outline" class="h-3.5 w-3.5" />
+						</SegmentedToggle.Item>
+					</SegmentedToggle.Root>
 					{#if canEdit}
-						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-						<a href="/projects/new" class="cta-blue">
-							<Icon src={Plus} theme="outline" class="pill-icon" />
-							<span>Add record</span>
-						</a>
+						<Button href="/projects/new" variant="primary" size="sm">
+							<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+							Add record
+						</Button>
 					{/if}
 				</div>
 			</div>
@@ -293,232 +300,3 @@
 		</div>
 	{/if}
 </section>
-
-<style>
-	.toolbar :global(.pill-icon) {
-		width: 14px;
-		height: 14px;
-		flex: none;
-	}
-
-	.toolbar :global(.sort-pill) {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 28px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 8px;
-		background: #f6f7f8;
-		box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.06);
-		color: #1a1b1e;
-		font-size: 14px;
-		line-height: 20px;
-		font-weight: 500;
-		letter-spacing: -0.01em;
-		cursor: pointer;
-		transition: background 120ms ease;
-	}
-
-	.toolbar :global(.sort-pill:hover) {
-		background: #eeeff1;
-	}
-
-	.toolbar :global(.sort-pill .label-prefix) {
-		color: #72757a;
-		font-weight: 500;
-	}
-
-	.toolbar :global(.sort-pill:focus-visible) {
-		outline: 2px solid var(--ring);
-		outline-offset: 2px;
-	}
-
-	.toolbar :global(.filter-pill) {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 28px;
-		padding: 0 10px;
-		border: 0;
-		border-radius: 8px;
-		background: transparent;
-		color: #72757a;
-		font-size: 14px;
-		line-height: 20px;
-		font-weight: 500;
-		letter-spacing: -0.01em;
-		cursor: pointer;
-		transition: background 120ms ease;
-	}
-
-	.toolbar :global(.filter-pill::before) {
-		content: '';
-		position: absolute;
-		inset: 0;
-		border-radius: 8px;
-		border: 1px dashed #d6d8dc;
-		pointer-events: none;
-	}
-
-	.toolbar :global(.filter-pill:hover) {
-		background: #eeeff1;
-	}
-
-	.toolbar :global(.filter-pill:disabled) {
-		cursor: not-allowed;
-		opacity: 0.75;
-	}
-
-	.toolbar :global(.filter-pill:disabled:hover) {
-		background: transparent;
-	}
-
-	.toolbar :global(.filter-pill:focus-visible) {
-		outline: 2px solid var(--ring);
-		outline-offset: 2px;
-	}
-
-	.toolbar .divider {
-		display: inline-block;
-		width: 1px;
-		height: 18px;
-		background: #e3e5e8;
-		margin: 0 2px;
-	}
-
-	.toolbar :global(.view-shell) {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-		height: 28px;
-		padding: 2px;
-		background: #ffffff;
-		border-radius: 8px;
-		box-shadow:
-			0 1px 2px rgba(17, 17, 17, 0.04),
-			0 0 0 1px rgba(17, 17, 17, 0.05);
-	}
-
-	.toolbar :global(.view-item) {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 24px;
-		border: 0;
-		border-radius: 6px;
-		background: transparent;
-		color: #9ca0a6;
-		cursor: pointer;
-		transition:
-			color 120ms ease,
-			background 120ms ease,
-			box-shadow 120ms ease;
-	}
-
-	.toolbar :global(.view-item:hover) {
-		color: #1a1b1e;
-	}
-
-	.toolbar :global(.view-item[data-state='on']) {
-		color: #1a1b1e;
-		background: #f6f7f8;
-		box-shadow: inset 0 0 0 1px rgba(17, 17, 17, 0.06);
-	}
-
-	.toolbar :global(.view-item:focus-visible) {
-		outline: 2px solid var(--ring);
-		outline-offset: 2px;
-	}
-
-	.toolbar :global(.cta-blue) {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 28px;
-		padding: 0 12px 0 10px;
-		border-radius: 8px;
-		background: lab(12.7212% 0.103362 -2.22102);
-		color: lab(96.1596% -0.0828803 -1.13571);
-		font-size: 14px;
-		line-height: 20px;
-		font-weight: 500;
-		letter-spacing: -0.01em;
-		text-decoration: none;
-		cursor: pointer;
-		box-shadow:
-			0 1px 0 rgba(17, 17, 17, 0.04),
-			0 1px 2px rgba(17, 17, 17, 0.22),
-			inset 0 0 0 1px lab(37.426% -1.09151 -9.33263),
-			inset 0 1px 0 rgba(255, 255, 255, 0.06);
-		transition:
-			background-color 120ms ease,
-			box-shadow 120ms ease,
-			color 120ms ease;
-	}
-
-	.toolbar :global(.cta-blue:hover) {
-		background: lab(25.9077% -0.872329 -6.43952);
-		color: lab(99.9987% 0.0337958 0.000309944);
-	}
-
-	.toolbar :global(.cta-blue:focus-visible) {
-		background: lab(25.9077% -0.872329 -6.43952);
-		color: lab(99.9987% 0.0337958 0.000309944);
-		outline: 2px solid var(--ring);
-		outline-offset: 2px;
-	}
-
-	.toolbar :global(.cta-blue:active) {
-		background: lab(37.426% -1.09151 -9.33263);
-		color: lab(99.9987% 0.0337958 0.000309944);
-		box-shadow:
-			0 1px 0 rgba(17, 17, 17, 0.04),
-			0 1px 2px rgba(17, 17, 17, 0.18),
-			inset 0 0 0 1px lab(37.426% -1.09151 -9.33263),
-			inset 0 1px 0 rgba(255, 255, 255, 0.04);
-	}
-
-	:global(.menu) {
-		z-index: 50;
-		min-width: 200px;
-		padding: 4px;
-		background: #ffffff;
-		border-radius: 8px;
-		box-shadow:
-			0 0 0 1px rgba(17, 17, 17, 0.05),
-			0 12px 32px -16px rgba(17, 17, 17, 0.18),
-			0 2px 6px rgba(17, 17, 17, 0.04);
-	}
-
-	:global(.menu-item) {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 6px 8px;
-		border-radius: 6px;
-		font-size: 14px;
-		line-height: 20px;
-		font-weight: 500;
-		letter-spacing: -0.01em;
-		color: #1a1b1e;
-		cursor: pointer;
-		outline: none;
-		user-select: none;
-	}
-
-	:global(.menu-item[data-highlighted]) {
-		background: #f2f4f7;
-	}
-
-	:global(.menu-item .check-slot) {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 14px;
-		height: 14px;
-		color: #1a1b1e;
-	}
-</style>

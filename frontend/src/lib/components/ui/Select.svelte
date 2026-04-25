@@ -1,5 +1,6 @@
 <script lang="ts" module>
 	import { cva, type VariantProps } from 'class-variance-authority';
+	import { pillVariants } from './pillVariants.js';
 
 	export const selectTriggerVariants = cva(
 		'inline-flex w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
@@ -13,6 +14,16 @@
 			defaultVariants: { size: 'md' }
 		}
 	);
+
+	export const selectMenuVariants = cva(
+		'z-50 min-w-50 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-overlay'
+	);
+
+	export const selectMenuItemVariants = cva(
+		'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium tracking-[-0.01em] text-foreground outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground'
+	);
+
+	export const selectActionTriggerVariants = pillVariants;
 
 	export type SelectSize = VariantProps<typeof selectTriggerVariants>['size'];
 </script>

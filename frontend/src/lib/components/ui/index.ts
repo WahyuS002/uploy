@@ -16,9 +16,24 @@ export type { BadgeTone, BadgeVariant } from './Badge.svelte';
 export { default as Alert } from './Alert.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
 export { default as CodeBlock } from './CodeBlock.svelte';
-export { default as Select, selectTriggerVariants } from './Select.svelte';
+export {
+	default as Select,
+	selectTriggerVariants,
+	selectMenuVariants,
+	selectMenuItemVariants,
+	selectActionTriggerVariants
+} from './Select.svelte';
 export type { SelectSize } from './Select.svelte';
-export { default as ToggleGroup } from './ToggleGroup.svelte';
+export {
+	default as ToggleGroup,
+	toggleGroupRootVariants,
+	toggleGroupItemVariants
+} from './ToggleGroup.svelte';
+export type { ToggleGroupVariant } from './ToggleGroup.svelte';
+export { pillVariants } from './pillVariants.js';
+export type { PillState } from './pillVariants.js';
+export { SelectAction } from './SelectAction.js';
+export { SegmentedToggle } from './SegmentedToggle.js';
 export { default as Collapsible } from './Collapsible.svelte';
 export { default as Tooltip } from './Tooltip.svelte';
 export { default as Dialog } from './Dialog.svelte';
