@@ -15,7 +15,7 @@
 				},
 				size: {
 					default: 'h-10 px-4 py-2',
-					sm: 'h-8 px-3 text-xs'
+					sm: 'h-7 px-3 text-xs'
 				}
 			},
 			defaultVariants: { variant: 'primary', size: 'default' }
