@@ -157,123 +157,81 @@
 	</PageHeader>
 
 	<!-- Content -->
-	{#if loading}
-		{#if viewMode === 'grid'}
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				{#each [0, 1, 2, 3, 4, 5] as i (i)}
-					<div class="overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
-						<div class="px-4 pt-4 pb-3">
-							<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
-						</div>
-						<div class="mx-4 mb-3 h-28 animate-pulse rounded-lg bg-muted"></div>
-						<div class="flex items-center gap-2 border-t border-border px-4 py-3">
-							<div class="h-2 w-2 animate-pulse rounded-full bg-muted"></div>
-							<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
-						</div>
-					</div>
-				{/each}
-			</div>
-		{:else}
-			<div class="flex flex-col gap-2">
-				{#each [0, 1, 2, 3, 4] as i (i)}
-					<div
-						class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground"
-					>
-						<div class="flex items-center gap-3">
-							<div class="h-9 w-9 animate-pulse rounded-lg bg-muted"></div>
-							<div class="flex flex-col gap-1.5">
+	<div class="flex flex-1 flex-col px-4 pt-4">
+		{#if loading}
+			{#if viewMode === 'grid'}
+				<div class="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+					{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as i (i)}
+						<div
+							class="overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
+						>
+							<div class="px-4 pt-4 pb-3">
 								<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
-								<div class="h-3 w-24 animate-pulse rounded bg-muted"></div>
+							</div>
+							<div class="mx-4 mb-3 h-28 animate-pulse rounded-lg bg-muted"></div>
+							<div class="flex items-center gap-2 border-t border-border px-4 py-3">
+								<div class="h-2 w-2 animate-pulse rounded-full bg-muted"></div>
+								<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
 							</div>
 						</div>
-						<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
-					</div>
-				{/each}
-			</div>
-		{/if}
-	{:else if projects.length === 0}
-		<EmptyState
-			variant="canvas"
-			icon={Cube}
-			title="No projects yet"
-			description={canEdit
-				? 'Create your first project to get started.'
-				: 'Ask a workspace owner or developer to create the first project.'}
-		>
-			{#snippet actions()}
-				{#if canEdit}
-					<Button href="/projects/new" variant="primary" size="sm">
-						<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
-						Create project
-					</Button>
-				{/if}
-			{/snippet}
-		</EmptyState>
-	{:else if viewMode === 'grid'}
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-			{#each sortedProjects() as project (project.id)}
-				{@const svcCount = getProjectServiceCount(project.id)}
-				{@const firstEnv = getProjectFirstEnv(project.id)}
-				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<a
-					href="/projects/{project.id}"
-					class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground transition-shadow hover:shadow-md"
-				>
-					<div class="px-4 pt-4 pb-3">
-						<h3 class="font-semibold text-foreground group-hover:text-black">{project.name}</h3>
-					</div>
-					<div
-						class="relative mx-4 mb-3 flex h-28 items-center justify-center rounded-lg bg-gray-900"
-						style="background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 12px 12px;"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-8 w-8 text-gray-600"
-							viewBox="0 0 20 20"
-							fill="currentColor"
+					{/each}
+				</div>
+			{:else}
+				<div class="flex flex-col gap-2">
+					{#each [0, 1, 2, 3, 4] as i (i)}
+						<div
+							class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground"
 						>
-							<path
-								fill-rule="evenodd"
-								d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
-								clip-rule="evenodd"
-							/>
-						</svg>
-					</div>
-					<div
-						class="flex items-center gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground"
+							<div class="flex items-center gap-3">
+								<div class="h-9 w-9 animate-pulse rounded-lg bg-muted"></div>
+								<div class="flex flex-col gap-1.5">
+									<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
+									<div class="h-3 w-24 animate-pulse rounded bg-muted"></div>
+								</div>
+							</div>
+							<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{:else if projects.length === 0}
+			<EmptyState
+				variant="canvas"
+				icon={Cube}
+				title="No projects yet"
+				description={canEdit
+					? 'Create your first project to get started.'
+					: 'Ask a workspace owner or developer to create the first project.'}
+			>
+				{#snippet actions()}
+					{#if canEdit}
+						<Button href="/projects/new" variant="primary" size="sm">
+							<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+							Create project
+						</Button>
+					{/if}
+				{/snippet}
+			</EmptyState>
+		{:else if viewMode === 'grid'}
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+				{#each sortedProjects() as project (project.id)}
+					{@const svcCount = getProjectServiceCount(project.id)}
+					{@const firstEnv = getProjectFirstEnv(project.id)}
+					<!-- eslint-disable svelte/no-navigation-without-resolve -->
+					<a
+						href="/projects/{project.id}"
+						class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground transition-shadow hover:shadow-md"
 					>
-						{#if firstEnv}
-							<span class="flex items-center gap-1">
-								<span
-									class="inline-block h-2 w-2 rounded-full {svcCount > 0
-										? 'bg-success'
-										: 'bg-gray-300'}"
-								></span>
-								{firstEnv.name}
-							</span>
-							<span class="text-gray-300">&middot;</span>
-						{/if}
-						<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
-					</div>
-				</a>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-			{/each}
-		</div>
-	{:else}
-		<div class="flex flex-col gap-2">
-			{#each sortedProjects() as project (project.id)}
-				{@const svcCount = getProjectServiceCount(project.id)}
-				{@const firstEnv = getProjectFirstEnv(project.id)}
-				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<a
-					href="/projects/{project.id}"
-					class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground transition-shadow hover:shadow-md"
-				>
-					<div class="flex items-center gap-3">
-						<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900">
+						<div class="px-4 pt-4 pb-3">
+							<h3 class="font-semibold text-foreground group-hover:text-black">{project.name}</h3>
+						</div>
+						<div
+							class="relative mx-4 mb-3 flex h-28 items-center justify-center rounded-lg bg-gray-900"
+							style="background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 12px 12px;"
+						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
-								class="h-4 w-4 text-gray-400"
+								class="h-8 w-8 text-gray-600"
 								viewBox="0 0 20 20"
 								fill="currentColor"
 							>
@@ -284,30 +242,76 @@
 								/>
 							</svg>
 						</div>
-						<div>
-							<h3 class="font-semibold text-foreground">{project.name}</h3>
-							<p class="text-xs text-muted-foreground">
-								Updated {new Date(project.updated_at).toLocaleDateString()}
-							</p>
+						<div
+							class="flex items-center gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground"
+						>
+							{#if firstEnv}
+								<span class="flex items-center gap-1">
+									<span
+										class="inline-block h-2 w-2 rounded-full {svcCount > 0
+											? 'bg-success'
+											: 'bg-gray-300'}"
+									></span>
+									{firstEnv.name}
+								</span>
+								<span class="text-gray-300">&middot;</span>
+							{/if}
+							<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
 						</div>
-					</div>
-					<div class="flex items-center gap-3 text-xs text-muted-foreground">
-						{#if firstEnv}
-							<span class="flex items-center gap-1">
-								<span
-									class="inline-block h-2 w-2 rounded-full {svcCount > 0
-										? 'bg-success'
-										: 'bg-gray-300'}"
-								></span>
-								{firstEnv.name}
-							</span>
-							<span class="text-gray-300">&middot;</span>
-						{/if}
-						<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
-					</div>
-				</a>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-			{/each}
-		</div>
-	{/if}
+					</a>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				{/each}
+			</div>
+		{:else}
+			<div class="flex flex-col gap-2">
+				{#each sortedProjects() as project (project.id)}
+					{@const svcCount = getProjectServiceCount(project.id)}
+					{@const firstEnv = getProjectFirstEnv(project.id)}
+					<!-- eslint-disable svelte/no-navigation-without-resolve -->
+					<a
+						href="/projects/{project.id}"
+						class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground transition-shadow hover:shadow-md"
+					>
+						<div class="flex items-center gap-3">
+							<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4 text-gray-400"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</div>
+							<div>
+								<h3 class="font-semibold text-foreground">{project.name}</h3>
+								<p class="text-xs text-muted-foreground">
+									Updated {new Date(project.updated_at).toLocaleDateString()}
+								</p>
+							</div>
+						</div>
+						<div class="flex items-center gap-3 text-xs text-muted-foreground">
+							{#if firstEnv}
+								<span class="flex items-center gap-1">
+									<span
+										class="inline-block h-2 w-2 rounded-full {svcCount > 0
+											? 'bg-success'
+											: 'bg-gray-300'}"
+									></span>
+									{firstEnv.name}
+								</span>
+								<span class="text-gray-300">&middot;</span>
+							{/if}
+							<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
+						</div>
+					</a>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				{/each}
+			</div>
+		{/if}
+	</div>
 </section>
