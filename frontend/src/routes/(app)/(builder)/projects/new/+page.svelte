@@ -165,7 +165,7 @@
 				{:else}
 					<div class="flex w-full max-w-105 flex-col gap-2" data-no-pan>
 						<section
-							class="panel overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
+							class="panel overflow-hidden rounded-lg border border-gray-200 bg-card text-card-foreground"
 							aria-label="Start a new project"
 						>
 							<div class="border-b border-border/70 px-2 py-1.5">
@@ -314,7 +314,7 @@
 
 <style>
 	.canvas {
-		background-color: var(--muted);
+		background-color: var(--background);
 		box-shadow: var(--shadow-panel);
 	}
 
@@ -332,7 +332,11 @@
 	.canvas-bg {
 		position: absolute;
 		inset: 0;
-		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.06) 1px, transparent 0);
+		background-image: radial-gradient(
+			circle at 1px 1px,
+			rgba(26, 27, 30, 0.125) 1px,
+			transparent 0
+		);
 		background-size: 20px 20px;
 		pointer-events: none;
 	}

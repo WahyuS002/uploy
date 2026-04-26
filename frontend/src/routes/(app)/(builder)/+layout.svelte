@@ -14,7 +14,7 @@
 	});
 </script>
 
-<div class="flex min-h-screen flex-col bg-background">
+<div class="flex min-h-screen flex-col bg-white">
 	<BuilderTopbar userEmail={data.user?.email ?? ''} {label} />
 
 	{#if isCanvas}
