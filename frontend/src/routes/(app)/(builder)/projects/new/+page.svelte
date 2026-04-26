@@ -34,12 +34,15 @@
 		error = '';
 		busyStarter = starter;
 		try {
+			const minHold =
+				starter === 'empty-project' ? new Promise((resolve) => setTimeout(resolve, 2000)) : null;
 			const project = await createProject();
 			if (!project) return;
 			const target =
 				starter === 'docker-image'
 					? `/projects/${project.id}?starter=docker-image`
 					: `/projects/${project.id}`;
+			if (minHold) await minHold;
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			await goto(target);
 		} catch {

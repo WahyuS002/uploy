@@ -101,7 +101,9 @@
 					{@const busy = row.starter != null && busyStarter === row.starter}
 					{@const pending = busyStarter !== null}
 					{@const gridCols =
-						row.showsChevron || !interactive ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[auto_1fr]'}
+						row.showsChevron || !interactive || busy
+							? 'grid-cols-[auto_1fr_auto]'
+							: 'grid-cols-[auto_1fr]'}
 					{#if interactive}
 						<li>
 							<button
