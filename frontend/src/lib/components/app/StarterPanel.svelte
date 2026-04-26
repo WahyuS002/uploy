@@ -100,6 +100,7 @@
 					{@const interactive = isInteractive(row)}
 					{@const busy = row.starter != null && busyStarter === row.starter}
 					{@const pending = busyStarter !== null}
+					{@const dimmed = pending && !busy}
 					{@const gridCols =
 						row.showsChevron || !interactive || busy
 							? 'grid-cols-[auto_1fr_auto]'
@@ -110,7 +111,10 @@
 								type="button"
 								onclick={() => row.starter && onSelect(row.starter)}
 								disabled={pending}
-								class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent {gridCols}"
+								aria-busy={busy ? 'true' : undefined}
+								class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent {dimmed
+									? 'opacity-50'
+									: ''} {gridCols}"
 							>
 								<span class="text-muted-foreground/70">
 									{#if row.lucide}
