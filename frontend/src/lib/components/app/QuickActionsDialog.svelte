@@ -1,0 +1,162 @@
+<script lang="ts">
+	import { Dialog as BitsDialog, Command } from 'bits-ui';
+	import { Icon } from '@steeze-ui/svelte-icon';
+	import { MagnifyingGlass } from '@steeze-ui/heroicons';
+	import { goto } from '$app/navigation';
+	import { QUICK_ACTIONS, filterByRole, groupActions, type QuickAction } from './quick-actions';
+
+	type Props = {
+		open: boolean;
+		workspaceRole?: string;
+	};
+
+	let { open = $bindable(false), workspaceRole }: Props = $props();
+
+	let visible = $derived(filterByRole(QUICK_ACTIONS, workspaceRole));
+	let groups = $derived(groupActions(visible));
+	let groupOrder: ReadonlyArray<keyof typeof groups> = ['Navigate', 'Create'] as const;
+
+	function runAction(action: QuickAction) {
+		open = false;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		goto(action.href);
+	}
+</script>
+
+<BitsDialog.Root bind:open>
+	<BitsDialog.Portal>
+		<BitsDialog.Overlay
+			class="fixed inset-0 z-50 bg-foreground/25 backdrop-blur-[1px] data-[state=closed]:animate-[qa-overlay-out_120ms_ease-in] data-[state=open]:animate-[qa-overlay-in_120ms_ease-out]"
+		/>
+		<BitsDialog.Content
+			interactOutsideBehavior="close"
+			escapeKeydownBehavior="close"
+			class="fixed top-[18vh] left-1/2 z-50 w-[min(92vw,720px)] -translate-x-1/2 overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-overlay outline-none data-[state=closed]:animate-[qa-content-out_140ms_ease-in] data-[state=open]:animate-[qa-content-in_160ms_ease-out]"
+		>
+			<BitsDialog.Title class="sr-only">Quick actions</BitsDialog.Title>
+			<BitsDialog.Description class="sr-only">
+				Search and run navigation or create commands.
+			</BitsDialog.Description>
+
+			<Command.Root loop label="Quick actions" class="flex flex-col rounded-2xl bg-popover">
+				<div class="flex items-center gap-2 border-b border-border px-4">
+					<Icon
+						src={MagnifyingGlass}
+						theme="outline"
+						class="h-4 w-4 flex-none text-muted-foreground"
+					/>
+					<Command.Input
+						placeholder="Search quick actions..."
+						class="h-12 w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+					/>
+				</div>
+
+				<Command.List class="max-h-[360px] overflow-y-auto p-2">
+					<Command.Viewport>
+						<Command.Empty class="px-3 py-8 text-center text-sm text-muted-foreground">
+							No matching actions.
+						</Command.Empty>
+
+						{#each groupOrder as groupName (groupName)}
+							{#if groups[groupName].length > 0}
+								<Command.Group value={groupName} class="mb-1 last:mb-0">
+									<Command.GroupHeading
+										class="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+									>
+										{groupName}
+									</Command.GroupHeading>
+									<Command.GroupItems>
+										{#each groups[groupName] as action (action.id)}
+											<Command.Item
+												value={action.label}
+												keywords={action.keywords}
+												onSelect={() => runAction(action)}
+												class="flex h-9 cursor-pointer items-center gap-2.5 rounded-md px-2 text-sm text-foreground outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+											>
+												<Icon
+													src={action.icon}
+													theme="outline"
+													class="h-4 w-4 flex-none text-muted-foreground"
+												/>
+												<span class="min-w-0 flex-1 truncate">{action.label}</span>
+											</Command.Item>
+										{/each}
+									</Command.GroupItems>
+								</Command.Group>
+							{/if}
+						{/each}
+					</Command.Viewport>
+				</Command.List>
+
+				<div
+					class="flex items-center justify-end gap-3 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground"
+				>
+					<span class="flex items-center gap-1">
+						<kbd
+							class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-background px-1 font-sans text-[10px] text-foreground"
+							>↑</kbd
+						>
+						<kbd
+							class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-background px-1 font-sans text-[10px] text-foreground"
+							>↓</kbd
+						>
+						to navigate
+					</span>
+					<span class="flex items-center gap-1">
+						<kbd
+							class="inline-flex h-5 items-center justify-center rounded border border-border bg-background px-1.5 font-sans text-[10px] text-foreground"
+							>Enter</kbd
+						>
+						to select
+					</span>
+					<span class="flex items-center gap-1">
+						<kbd
+							class="inline-flex h-5 items-center justify-center rounded border border-border bg-background px-1.5 font-sans text-[10px] text-foreground"
+							>Esc</kbd
+						>
+						to close
+					</span>
+				</div>
+			</Command.Root>
+		</BitsDialog.Content>
+	</BitsDialog.Portal>
+</BitsDialog.Root>
+
+<style>
+	@keyframes -global-qa-overlay-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+	@keyframes -global-qa-overlay-out {
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0;
+		}
+	}
+	@keyframes -global-qa-content-in {
+		from {
+			opacity: 0;
+			transform: translate(-50%, -4px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translate(-50%, 0) scale(1);
+		}
+	}
+	@keyframes -global-qa-content-out {
+		from {
+			opacity: 1;
+			transform: translate(-50%, 0) scale(1);
+		}
+		to {
+			opacity: 0;
+			transform: translate(-50%, -4px) scale(0.98);
+		}
+	}
+</style>
