@@ -350,9 +350,9 @@
 	</Button>
 {/snippet}
 
-<div class="relative flex h-full min-h-0 w-full flex-1 gap-3">
+<div class="relative flex min-h-0 w-full flex-1 gap-3">
 	<div
-		class="canvas viewport relative flex flex-1 overflow-hidden rounded-xl border border-gray-200"
+		class="canvas viewport relative flex min-h-0 flex-1 overflow-hidden rounded-xl border border-gray-200"
 		data-panning={pan.isPanning ? 'true' : 'false'}
 		use:panViewport
 	>
@@ -363,7 +363,9 @@
 				pan.scale}px {pan.y - pan.scale}px;"
 		></div>
 
-		<div class="scroll-area relative z-10 flex w-full overflow-x-hidden overflow-y-auto">
+		<div
+			class="scroll-area relative z-10 flex min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto"
+		>
 			<div
 				class="stage m-auto flex min-h-full w-full items-center justify-center px-4 py-8 sm:px-6 sm:py-12"
 			>
@@ -509,7 +511,7 @@
 
 	{#if selectedService}
 		<aside
-			class="side-panel absolute inset-0 z-30 flex w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:relative md:inset-auto md:z-auto md:w-[420px] md:max-w-[440px] md:min-w-[320px] md:flex-none"
+			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:relative md:inset-auto md:z-auto md:w-[420px] md:max-w-[440px] md:min-w-[320px] md:flex-none"
 		>
 			<header class="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
 				<div class="min-w-0">
