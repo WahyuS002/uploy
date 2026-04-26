@@ -31,7 +31,7 @@
 	</div>
 	<nav class="flex-1 overflow-y-auto px-2 pt-3 pb-2">
 		<SidebarQuickActions {workspaceRole} />
-		<div class="flex flex-col gap-px">
+		<div class="flex flex-col gap-px pt-0.5">
 			{#each navItems as item (item.href)}
 				<SidebarNavItem
 					href={item.href}
