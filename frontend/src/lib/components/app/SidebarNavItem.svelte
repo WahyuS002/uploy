@@ -14,14 +14,12 @@
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 <a
 	{href}
-	class="flex h-9 flex-row items-center rounded-[9px] transition-colors
+	class="flex h-9 items-center gap-1.5 rounded-[9px] px-2 text-sm leading-5 transition-[background-color,color] duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none
 		{active
-		? 'bg-sidebar-accent text-sidebar-accent-foreground'
-		: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
+		? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+		: 'font-medium text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'}"
 >
-	<div class="grid h-9 w-9 flex-none place-content-center">
-		<Icon src={icon} theme={active ? 'solid' : 'outline'} class="h-4 w-4" />
-	</div>
-	<span class="min-w-0 flex-1 truncate text-sm {active ? 'font-medium' : ''}">{label}</span>
+	<Icon src={icon} theme={active ? 'solid' : 'outline'} class="h-3.5 w-3.5 flex-none" />
+	<span class="min-w-0 flex-1 truncate">{label}</span>
 </a>
 <!-- eslint-enable svelte/no-navigation-without-resolve -->

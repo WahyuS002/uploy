@@ -1,4 +1,5 @@
 <script lang="ts">
+	import '@fontsource-variable/inter';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 
