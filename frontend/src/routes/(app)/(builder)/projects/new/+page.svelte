@@ -6,9 +6,17 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
+	import { toast } from '$lib/components/ui/toast/toast-service.svelte.js';
 	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Server, Minus, Plus, ArrowsPointingIn } from '@steeze-ui/heroicons';
+	import {
+		Server,
+		Minus,
+		Plus,
+		ArrowsPointingIn,
+		Clock,
+		ExclamationCircle
+	} from '@steeze-ui/heroicons';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
 
@@ -33,20 +41,66 @@
 		if (busyStarter) return;
 		error = '';
 		busyStarter = starter;
+
+		const isEmpty = starter === 'empty-project';
+		let pendingId: string | null = null;
+		if (isEmpty) {
+			pendingId = toast.neutral({
+				title: 'Creating empty project...',
+				description: 'Please wait a moment.',
+				icon: { kind: 'heroicon', src: Clock }
+			});
+		}
+
 		try {
-			const minHold =
-				starter === 'empty-project' ? new Promise((resolve) => setTimeout(resolve, 2000)) : null;
-			const project = await createProject();
-			if (!project) return;
+			const minHold = isEmpty ? new Promise((resolve) => setTimeout(resolve, 2000)) : null;
+
+			let project: ProjectResponse | null = null;
+			try {
+				project = await createProject();
+			} catch {
+				error = 'Network error';
+			}
+
+			if (!project) {
+				if (pendingId) {
+					toast.dismiss(pendingId);
+					pendingId = null;
+				}
+				if (isEmpty) {
+					toast.error({
+						title: 'Failed to create project',
+						description: error || 'Please try again.',
+						icon: { kind: 'heroicon', src: ExclamationCircle },
+						duration: 6000
+					});
+				}
+				return;
+			}
+
+			if (minHold) await minHold;
+			if (pendingId) {
+				toast.dismiss(pendingId);
+				pendingId = null;
+			}
+
 			const target =
 				starter === 'docker-image'
 					? `/projects/${project.id}?starter=docker-image`
 					: `/projects/${project.id}`;
-			if (minHold) await minHold;
+
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			await goto(target);
-		} catch {
-			error = 'Network error';
+			await goto(target, {
+				state: isEmpty
+					? {
+							toastFlash: {
+								tone: 'success',
+								title: 'Project created successfully',
+								description: 'Ready to build.'
+							}
+						}
+					: undefined
+			});
 		} finally {
 			busyStarter = null;
 		}

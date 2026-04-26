@@ -5,7 +5,13 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			toastFlash?: {
+				tone?: 'neutral' | 'success' | 'error';
+				title: string;
+				description?: string;
+			};
+		}
 		// interface Platform {}
 	}
 }

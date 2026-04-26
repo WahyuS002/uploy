@@ -7,6 +7,7 @@
 	import FormField from '$lib/components/app/FormField.svelte';
 	import ServiceWorkspace from '$lib/components/app/ServiceWorkspace.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
+	import { toast } from '$lib/components/ui/toast/toast-service.svelte.js';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
@@ -28,6 +29,7 @@
 		ServerStack,
 		Squares2x2,
 		Check,
+		CheckCircle,
 		XMark,
 		Minus,
 		ArrowsPointingIn
@@ -231,6 +233,22 @@
 		replaceState(cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : ''), page.state);
 	}
 
+	function consumeToastFlash() {
+		const flash = page.state.toastFlash;
+		if (!flash) return;
+		toast.show({
+			tone: flash.tone ?? 'success',
+			title: flash.title,
+			description: flash.description,
+			icon: { kind: 'heroicon', src: CheckCircle },
+			duration: 4500
+		});
+		const nextState = { ...page.state };
+		delete nextState.toastFlash;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		replaceState(page.url.pathname + page.url.search, nextState);
+	}
+
 	function handleStarterSelect(starter: Starter) {
 		if (starter === 'docker-image') openServiceDialog();
 	}
@@ -264,6 +282,7 @@
 			services = svcs;
 			selectedEnvId = pickDefaultEnvironment(envs);
 			loaded = true;
+			if (proj) consumeToastFlash();
 			applyStarter();
 		})();
 
