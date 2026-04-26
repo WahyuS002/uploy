@@ -4,10 +4,12 @@
 	import SSHKeyCreatePanel from './SSHKeyCreatePanel.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
-	import Dialog from '$lib/components/ui/Dialog.svelte';
-	import DialogContent from '$lib/components/ui/DialogContent.svelte';
-	import DialogHeader from '$lib/components/ui/DialogHeader.svelte';
-	import DialogTitle from '$lib/components/ui/DialogTitle.svelte';
+	import {
+		Dialog,
+		DialogContent,
+		DialogHeader,
+		DialogTitle
+	} from '$lib/components/ui/dialog';
 	import type { ServerCreateController } from './server-create-form.svelte';
 
 	type Props = {

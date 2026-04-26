@@ -13,11 +13,13 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
-	import Dialog from '$lib/components/ui/Dialog.svelte';
-	import DialogContent from '$lib/components/ui/DialogContent.svelte';
-	import DialogHeader from '$lib/components/ui/DialogHeader.svelte';
-	import DialogTitle from '$lib/components/ui/DialogTitle.svelte';
-	import DialogFooter from '$lib/components/ui/DialogFooter.svelte';
+	import {
+		Dialog,
+		DialogContent,
+		DialogHeader,
+		DialogFooter,
+		DialogTitle
+	} from '$lib/components/ui/dialog';
 	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { useBuilderTopbar } from '$lib/components/builder-topbar-context';
 	import { DropdownMenu } from 'bits-ui';
