@@ -22,7 +22,12 @@
 	}: Props = $props();
 </script>
 
-<div class={cn('overflow-hidden rounded-lg border border-border bg-card text-card-foreground', className)}>
+<div
+	class={cn(
+		'overflow-hidden rounded-lg border border-border bg-card text-card-foreground',
+		className
+	)}
+>
 	{#if announce}
 		<span class="sr-only" role="status" aria-live="polite">Public key ready to copy.</span>
 	{/if}
@@ -34,9 +39,7 @@
 					{description}
 				{:else}
 					Add to
-					<code class="rounded bg-muted px-1 py-0.5 font-mono text-[11px]"
-						>{destinationPath}</code
-					>
+					<code class="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">{destinationPath}</code>
 					on your remote server.
 				{/if}
 			</p>

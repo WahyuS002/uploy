@@ -31,7 +31,10 @@
 	let hasHeader = $derived(Boolean(header || title || description || actions));
 </script>
 
-<section class={cn('rounded-lg border border-border bg-card text-card-foreground', className)} {...rest}>
+<section
+	class={cn('rounded-lg border border-border bg-card text-card-foreground', className)}
+	{...rest}
+>
 	{#if hasHeader}
 		<header
 			class={cn(
