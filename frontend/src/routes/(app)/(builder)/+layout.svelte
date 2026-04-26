@@ -9,9 +9,14 @@
 	let { data, children } = $props();
 
 	let routeId = $derived(page.route.id ?? '');
-	let isCanvas = $derived(routeId.endsWith('/projects/new') || routeId.endsWith('/projects/[id]'));
+	let isCanvas = $derived(
+		routeId.endsWith('/projects/new') ||
+			routeId.endsWith('/projects/new/image') ||
+			routeId.endsWith('/projects/[id]')
+	);
 
 	let defaultLabel = $derived.by(() => {
+		if (routeId.endsWith('/projects/new/image')) return 'New project / Docker Image';
 		if (routeId.endsWith('/projects/new')) return 'New project';
 		if (routeId.endsWith('/projects/[id]')) return 'Project builder';
 		return '';

@@ -6,6 +6,13 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
+	import Dialog from '$lib/components/ui/Dialog.svelte';
+	import DialogContent from '$lib/components/ui/DialogContent.svelte';
+	import DialogHeader from '$lib/components/ui/DialogHeader.svelte';
+	import DialogTitle from '$lib/components/ui/DialogTitle.svelte';
+	import DialogDescription from '$lib/components/ui/DialogDescription.svelte';
+	import DialogFooter from '$lib/components/ui/DialogFooter.svelte';
+	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { toast } from '$lib/components/ui/toast/toast-service.svelte.js';
 	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
@@ -15,16 +22,27 @@
 		Plus,
 		ArrowsPointingIn,
 		Clock,
-		ExclamationCircle
+		ExclamationCircle,
+		ServerStack,
+		Check
 	} from '@steeze-ui/heroicons';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
+	type ServerResponse = components['schemas']['ServerResponse'];
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
+	let isOwner = $derived(data.workspace?.role === 'owner');
 
 	let busyStarter = $state<Starter | null>(null);
 	let error = $state('');
+
+	let serverDialogOpen = $state(false);
+	let servers = $state<ServerResponse[]>([]);
+	let serversLoaded = $state(false);
+	let serversLoading = $state(false);
+	let serversError = $state('');
+	let pickedServerId = $state<string | null>(null);
 
 	async function createProject(): Promise<ProjectResponse | null> {
 		const { data, error: err } = await api.POST('/api/projects', {
@@ -37,23 +55,53 @@
 		return data ?? null;
 	}
 
-	async function launch(starter: Starter) {
-		if (busyStarter) return;
-		error = '';
-		busyStarter = starter;
-
-		const isEmpty = starter === 'empty-project';
-		let pendingId: string | null = null;
-		if (isEmpty) {
-			pendingId = toast.neutral({
-				title: 'Creating empty project...',
-				description: 'Please wait a moment.',
-				icon: { kind: 'heroicon', src: Clock }
-			});
+	async function ensureServersLoaded() {
+		if (serversLoaded || serversLoading) return;
+		serversLoading = true;
+		serversError = '';
+		try {
+			const { data, error: err } = await api.GET('/api/servers');
+			if (err) {
+				serversError = (err as { error: string }).error ?? 'Failed to load servers';
+				return;
+			}
+			servers = data ?? [];
+			serversLoaded = true;
+		} catch {
+			serversError = 'Network error';
+		} finally {
+			serversLoading = false;
 		}
+	}
+
+	async function openServerPicker() {
+		pickedServerId = null;
+		serverDialogOpen = true;
+		await ensureServersLoaded();
+		if (serversLoaded && servers.length > 0) pickedServerId = servers[0].id;
+	}
+
+	function retryLoadServers() {
+		serversError = '';
+		void ensureServersLoaded();
+	}
+
+	async function confirmServerPick() {
+		if (!pickedServerId) return;
+		serverDialogOpen = false;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		await goto(`/projects/new/image?server_id=${encodeURIComponent(pickedServerId)}`);
+	}
+
+	async function launchEmptyProject() {
+		const pendingId = toast.neutral({
+			title: 'Creating empty project...',
+			description: 'Please wait a moment.',
+			icon: { kind: 'heroicon', src: Clock }
+		});
 
 		try {
-			const minHold = isEmpty ? new Promise((resolve) => setTimeout(resolve, 2000)) : null;
+			const minHold = new Promise((resolve) => setTimeout(resolve, 2000));
 
 			let project: ProjectResponse | null = null;
 			try {
@@ -63,47 +111,54 @@
 			}
 
 			if (!project) {
-				if (pendingId) {
-					toast.dismiss(pendingId);
-					pendingId = null;
-				}
-				if (isEmpty) {
-					toast.error({
-						title: 'Failed to create project',
-						description: error || 'Please try again.',
-						icon: { kind: 'heroicon', src: ExclamationCircle },
-						duration: 6000
-					});
-				}
+				toast.dismiss(pendingId);
+				toast.error({
+					title: 'Failed to create project',
+					description: error || 'Please try again.',
+					icon: { kind: 'heroicon', src: ExclamationCircle },
+					duration: 6000
+				});
 				return;
 			}
 
-			if (minHold) await minHold;
-			if (pendingId) {
-				toast.dismiss(pendingId);
-				pendingId = null;
-			}
-
-			const target =
-				starter === 'docker-image'
-					? `/projects/${project.id}?starter=docker-image`
-					: `/projects/${project.id}`;
+			await minHold;
+			toast.dismiss(pendingId);
 
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
-			await goto(target, {
-				state: isEmpty
-					? {
-							toastFlash: {
-								tone: 'success',
-								title: 'Project created successfully',
-								description: 'Ready to build.'
-							}
-						}
-					: undefined
+			await goto(`/projects/${project.id}`, {
+				state: {
+					toastFlash: {
+						tone: 'success',
+						title: 'Project created successfully',
+						description: 'Ready to build.'
+					}
+				}
 			});
 		} finally {
 			busyStarter = null;
 		}
+	}
+
+	async function launch(starter: Starter) {
+		if (busyStarter) return;
+		error = '';
+		busyStarter = starter;
+
+		if (starter === 'empty-project') {
+			await launchEmptyProject();
+			return;
+		}
+
+		if (starter === 'docker-image') {
+			try {
+				await openServerPicker();
+			} finally {
+				busyStarter = null;
+			}
+			return;
+		}
+
+		busyStarter = null;
 	}
 
 	const pan = createCanvasPan({ bounds: 'auto' });
@@ -197,6 +252,93 @@
 		</button>
 	</div>
 </div>
+
+<Dialog bind:open={serverDialogOpen}>
+	<DialogContent>
+		<DialogHeader>
+			<DialogTitle>Pick a server</DialogTitle>
+			<DialogDescription>
+				Choose where to deploy this Docker image. You can connect more servers from the Servers
+				page.
+			</DialogDescription>
+		</DialogHeader>
+		<div class="px-5 pb-5">
+			{#if serversLoading && !serversLoaded}
+				<div class="flex items-center justify-center py-6">
+					<Spinner class="h-5 w-5 text-muted-foreground" />
+				</div>
+			{:else if serversError}
+				<div
+					class="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive"
+				>
+					<div class="font-medium">Couldn't load servers</div>
+					<div class="mt-0.5 text-destructive/80">{serversError}</div>
+					<div class="mt-2">
+						<Button type="button" size="xs" variant="secondary" onclick={retryLoadServers}>
+							Retry
+						</Button>
+					</div>
+				</div>
+			{:else if servers.length === 0}
+				<div
+					class="rounded-md border border-dashed border-border bg-card p-3 text-xs text-muted-foreground"
+				>
+					{#if isOwner}
+						No servers connected yet. Add one to deploy a Docker image.
+						<div class="mt-2">
+							<Button href="/servers" size="xs" variant="secondary">
+								<Icon src={ServerStack} theme="outline" class="h-3 w-3" />
+								Add server
+							</Button>
+						</div>
+					{:else}
+						No servers connected yet. Ask a workspace owner to connect a server before deploying.
+					{/if}
+				</div>
+			{:else}
+				<ul class="flex flex-col gap-1">
+					{#each servers as server (server.id)}
+						{@const selected = server.id === pickedServerId}
+						<li>
+							<button
+								type="button"
+								onclick={() => (pickedServerId = server.id)}
+								class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors {selected
+									? 'border-foreground bg-accent text-accent-foreground'
+									: 'border-border hover:bg-accent hover:text-accent-foreground'}"
+							>
+								<div class="min-w-0">
+									<div class="truncate text-sm font-medium text-foreground">{server.name}</div>
+									<div class="truncate font-mono text-[11px] text-muted-foreground">
+										{server.host}:{server.port}
+									</div>
+								</div>
+								{#if selected}
+									<Icon src={Check} theme="outline" class="h-3.5 w-3.5 text-foreground" />
+								{/if}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+		<DialogFooter>
+			<Button
+				type="button"
+				variant="secondary"
+				size="sm"
+				onclick={() => (serverDialogOpen = false)}
+			>
+				Cancel
+			</Button>
+			{#if servers.length > 0}
+				<Button type="button" size="sm" onclick={confirmServerPick} disabled={!pickedServerId}>
+					Continue
+				</Button>
+			{/if}
+		</DialogFooter>
+	</DialogContent>
+</Dialog>
 
 <style>
 	.canvas {

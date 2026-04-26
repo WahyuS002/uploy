@@ -151,6 +151,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/projects/from-image': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Create a project, default environment, and Docker image service atomically */
+		post: operations['createProjectFromImage'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/projects/{id}': {
 		parameters: {
 			query?: never;
@@ -524,6 +541,18 @@ export interface components {
 		};
 		UpdateProjectRequest: {
 			name: string;
+		};
+		CreateProjectFromImageRequest: {
+			server_id: string;
+			/** @description Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`. */
+			image: string;
+			/** @description Container port the service listens on. */
+			port: number;
+		};
+		CreateProjectFromImageResponse: {
+			project: components['schemas']['ProjectResponse'];
+			environment: components['schemas']['EnvironmentResponse'];
+			service: components['schemas']['ServiceResponse'];
 		};
 		EnvironmentResponse: {
 			id: string;
@@ -1122,6 +1151,75 @@ export interface operations {
 			};
 			/** @description Insufficient permissions */
 			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Internal server error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	createProjectFromImage: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateProjectFromImageRequest'];
+			};
+		};
+		responses: {
+			/** @description Project, environment, and service created */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CreateProjectFromImageResponse'];
+				};
+			};
+			/** @description Invalid request */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Container name already in use on this server */
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};

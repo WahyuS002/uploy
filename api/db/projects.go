@@ -94,6 +94,84 @@ func CreateProjectWithDefaultEnvironment(ctx context.Context, name, workspaceID 
 		}, nil
 }
 
+// CreateProjectWithDefaultEnvironmentAndService creates a project, its
+// default `production` environment, and a single application service in one
+// transaction. If any step fails the project insert is rolled back so callers
+// never observe a half-built project (e.g. project + env without the service
+// the user explicitly asked for).
+func CreateProjectWithDefaultEnvironmentAndService(
+	ctx context.Context,
+	workspaceID string,
+	svcName, image, containerName string,
+	port int32,
+	serverID, kind string,
+) (Project, Environment, Service, error) {
+	tx, err := Pool.Begin(ctx)
+	if err != nil {
+		return Project{}, Environment{}, Service{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	q := Queries.WithTx(tx)
+
+	if err := q.LockWorkspaceProjectNames(ctx, workspaceID); err != nil {
+		return Project{}, Environment{}, Service{}, err
+	}
+
+	name, err := generateUniqueProjectName(ctx, workspaceNameExists(q, workspaceID))
+	if err != nil {
+		return Project{}, Environment{}, Service{}, err
+	}
+
+	pr, err := q.CreateProject(ctx, sqlcgen.CreateProjectParams{
+		Name:        name,
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return Project{}, Environment{}, Service{}, err
+	}
+
+	er, err := q.CreateEnvironment(ctx, sqlcgen.CreateEnvironmentParams{
+		Name:      DefaultEnvironmentName,
+		ProjectID: pr.ID,
+	})
+	if err != nil {
+		return Project{}, Environment{}, Service{}, err
+	}
+
+	sr, err := q.CreateService(ctx, sqlcgen.CreateServiceParams{
+		Name:          svcName,
+		Image:         image,
+		ContainerName: containerName,
+		Port:          port,
+		ServerID:      serverID,
+		WorkspaceID:   workspaceID,
+		Kind:          kind,
+		ProjectID:     pr.ID,
+		EnvironmentID: er.ID,
+	})
+	if err != nil {
+		return Project{}, Environment{}, Service{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return Project{}, Environment{}, Service{}, err
+	}
+
+	return Project{
+			ID: pr.ID, Name: pr.Name, WorkspaceID: pr.WorkspaceID,
+			CreatedAt: pr.CreatedAt, UpdatedAt: pr.UpdatedAt,
+		}, Environment{
+			ID: er.ID, Name: er.Name, ProjectID: er.ProjectID,
+			CreatedAt: er.CreatedAt, UpdatedAt: er.UpdatedAt,
+		}, Service{
+			ID: sr.ID, Name: sr.Name, Image: sr.Image, ContainerName: sr.ContainerName,
+			Port: sr.Port, ServerID: sr.ServerID, WorkspaceID: sr.WorkspaceID,
+			Kind: sr.Kind, ProjectID: sr.ProjectID, EnvironmentID: sr.EnvironmentID,
+			CreatedAt: sr.CreatedAt, UpdatedAt: sr.UpdatedAt,
+		}, nil
+}
+
 func GetProjectByID(ctx context.Context, id string) (Project, error) {
 	r, err := Queries.GetProjectByID(ctx, id)
 	if err != nil {

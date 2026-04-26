@@ -383,6 +383,56 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/projects/from-image:
+    post:
+      operationId: createProjectFromImage
+      summary: Create a project, default environment, and Docker image service atomically
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectFromImageRequest"
+      responses:
+        "201":
+          description: Project, environment, and service created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateProjectFromImageResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Container name already in use on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/projects/{id}:
     get:
       operationId: getProject
@@ -1754,6 +1804,36 @@ components:
       properties:
         name:
           type: string
+
+    CreateProjectFromImageRequest:
+      type: object
+      required:
+        - server_id
+        - image
+        - port
+      properties:
+        server_id:
+          type: string
+        image:
+          type: string
+          description: Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`.
+        port:
+          type: integer
+          description: Container port the service listens on.
+
+    CreateProjectFromImageResponse:
+      type: object
+      required:
+        - project
+        - environment
+        - service
+      properties:
+        project:
+          $ref: "#/components/schemas/ProjectResponse"
+        environment:
+          $ref: "#/components/schemas/EnvironmentResponse"
+        service:
+          $ref: "#/components/schemas/ServiceResponse"
 
     EnvironmentResponse:
       type: object

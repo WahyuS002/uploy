@@ -162,6 +162,23 @@ type CreateEnvironmentRequest struct {
 	Name string `json:"name"`
 }
 
+// CreateProjectFromImageRequest defines model for CreateProjectFromImageRequest.
+type CreateProjectFromImageRequest struct {
+	// Image Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`.
+	Image string `json:"image"`
+
+	// Port Container port the service listens on.
+	Port     int    `json:"port"`
+	ServerId string `json:"server_id"`
+}
+
+// CreateProjectFromImageResponse defines model for CreateProjectFromImageResponse.
+type CreateProjectFromImageResponse struct {
+	Environment EnvironmentResponse `json:"environment"`
+	Project     ProjectResponse     `json:"project"`
+	Service     ServiceResponse     `json:"service"`
+}
+
 // CreateProjectRequest Request body for creating a project. When `name` is omitted, blank, or
 // whitespace-only, the backend generates a unique Railway-style
 // `adjective-noun` name scoped to the workspace.
@@ -404,6 +421,9 @@ type CreateDeploymentJSONRequestBody = DeployRequest
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
 
+// CreateProjectFromImageJSONRequestBody defines body for CreateProjectFromImage for application/json ContentType.
+type CreateProjectFromImageJSONRequestBody = CreateProjectFromImageRequest
+
 // UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
 type UpdateProjectJSONRequestBody = UpdateProjectRequest
 
@@ -466,6 +486,9 @@ type ServerInterface interface {
 	// Create a new project
 	// (POST /api/projects)
 	CreateProject(w http.ResponseWriter, r *http.Request)
+	// Create a project, default environment, and Docker image service atomically
+	// (POST /api/projects/from-image)
+	CreateProjectFromImage(w http.ResponseWriter, r *http.Request)
 	// Delete a project
 	// (DELETE /api/projects/{id})
 	DeleteProject(w http.ResponseWriter, r *http.Request, id string)
@@ -711,6 +734,26 @@ func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateProject(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProjectFromImage operation middleware
+func (siw *ServerInterfaceWrapper) CreateProjectFromImage(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProjectFromImage(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1693,6 +1736,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/deployments/{id}/logs", wrapper.GetDeploymentLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects", wrapper.ListProjects)
 	m.HandleFunc("POST "+options.BaseURL+"/api/projects", wrapper.CreateProject)
+	m.HandleFunc("POST "+options.BaseURL+"/api/projects/from-image", wrapper.CreateProjectFromImage)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/projects/{id}", wrapper.DeleteProject)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}", wrapper.GetProject)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/projects/{id}", wrapper.UpdateProject)
