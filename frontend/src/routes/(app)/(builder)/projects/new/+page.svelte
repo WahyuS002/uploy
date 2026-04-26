@@ -131,14 +131,14 @@
 </script>
 
 <div
-	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border"
+	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-gray-200"
 	data-panning={pan.isPanning ? 'true' : 'false'}
 	use:panViewport
 >
 	<div
 		class="canvas-bg"
 		aria-hidden="true"
-		style="background-size: {20 * pan.scale}px {20 * pan.scale}px; background-position: {pan.x -
+		style="background-size: {12 * pan.scale}px {12 * pan.scale}px; background-position: {pan.x -
 			pan.scale}px {pan.y - pan.scale}px;"
 	></div>
 
@@ -337,7 +337,7 @@
 			rgba(26, 27, 30, 0.125) 1px,
 			transparent 0
 		);
-		background-size: 20px 20px;
+		background-size: 12px 12px;
 		pointer-events: none;
 	}
 
