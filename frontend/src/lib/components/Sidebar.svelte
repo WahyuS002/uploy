@@ -23,7 +23,7 @@
 </script>
 
 <aside
-	class="flex h-screen w-56 flex-none flex-col border-r border-border bg-background text-sidebar-foreground"
+	class="flex h-screen w-64 flex-none flex-col border-r border-border bg-background text-sidebar-foreground"
 >
 	<div class="flex h-14 flex-col justify-center border-b border-border px-2">
 		<SidebarWorkspaceMenu {workspaceName} {workspaceRole} />
