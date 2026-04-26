@@ -159,41 +159,32 @@
 	<!-- Content -->
 	<div class="flex flex-1 flex-col px-4 pt-4">
 		{#if loading}
-			{#if viewMode === 'grid'}
-				<div class="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-					{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as i (i)}
-						<div
-							class="overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
-						>
-							<div class="px-4 pt-4 pb-3">
-								<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
-							</div>
-							<div class="mx-4 mb-3 h-28 animate-pulse rounded-lg bg-muted"></div>
-							<div class="flex items-center gap-2 border-t border-border px-4 py-3">
-								<div class="h-2 w-2 animate-pulse rounded-full bg-muted"></div>
-								<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
-							</div>
-						</div>
-					{/each}
+			<div
+				class="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
+			>
+				<div
+					class="text-current icon-container icon-sm animate-spin text-lg"
+					aria-hidden="true"
+					style="animation-timing-function: linear; animation-duration: 1.2s;"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1em"
+						height="1em"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path
+							d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"
+						></path>
+					</svg>
 				</div>
-			{:else}
-				<div class="flex flex-col gap-2">
-					{#each [0, 1, 2, 3, 4] as i (i)}
-						<div
-							class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground"
-						>
-							<div class="flex items-center gap-3">
-								<div class="h-9 w-9 animate-pulse rounded-lg bg-muted"></div>
-								<div class="flex flex-col gap-1.5">
-									<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
-									<div class="h-3 w-24 animate-pulse rounded bg-muted"></div>
-								</div>
-							</div>
-							<div class="h-3 w-20 animate-pulse rounded bg-muted"></div>
-						</div>
-					{/each}
-				</div>
-			{/if}
+				<span>Loading projects</span>
+			</div>
 		{:else if projects.length === 0}
 			<EmptyState
 				variant="canvas"
