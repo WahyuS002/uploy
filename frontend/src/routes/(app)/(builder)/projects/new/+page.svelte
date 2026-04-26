@@ -273,7 +273,7 @@
 <Dialog bind:open={serverDialogOpen}>
 	<DialogContent
 		showCloseButton={false}
-		class="inset-y-auto top-[14vh] mt-0 mb-0 w-[min(92vw,560px)] max-w-none overflow-hidden rounded-2xl"
+		class="inset-y-auto top-[18vh] mt-0 mb-0 w-[min(92vw,560px)] max-w-none overflow-hidden rounded-2xl"
 	>
 		<DialogHeader class="border-b border-border px-5 pt-4 pr-5 pb-3">
 			<DialogTitle class="text-sm">Pick a server</DialogTitle>

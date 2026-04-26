@@ -3,12 +3,7 @@
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { MagnifyingGlass } from '@steeze-ui/heroicons';
 	import { goto } from '$app/navigation';
-	import {
-		Dialog,
-		DialogContent,
-		DialogTitle,
-		DialogDescription
-	} from '$lib/components/ui/dialog';
+	import { Dialog, DialogContent, DialogTitle, DialogDescription } from '$lib/components/ui/dialog';
 	import { QUICK_ACTIONS, filterByRole, groupActions, type QuickAction } from './quick-actions';
 
 	type Props = {
