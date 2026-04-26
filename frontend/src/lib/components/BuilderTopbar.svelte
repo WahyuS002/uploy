@@ -1,10 +1,18 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Bell, Cog6Tooth, ArrowRightOnRectangle, ArrowLeft } from '@steeze-ui/heroicons';
+	import { Bell, Cog6Tooth, ArrowRightOnRectangle } from '@steeze-ui/heroicons';
 	import { DropdownMenu } from 'bits-ui';
 	import { logout } from '$lib/auth/logout';
 
-	let { userEmail, label }: { userEmail: string; label: string } = $props();
+	type Props = {
+		userEmail: string;
+		label?: string;
+		leading?: Snippet;
+		action?: Snippet;
+	};
+
+	let { userEmail, label = '', leading, action }: Props = $props();
 
 	let loggingOut = $state(false);
 	let logoutError = $state('');
@@ -23,7 +31,7 @@
 </script>
 
 <header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-white px-3">
-	<div class="flex flex-none items-center gap-2">
+	<div class="flex min-w-0 flex-1 items-center gap-2">
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
 		<a
 			href="/projects"
@@ -37,10 +45,21 @@
 		</a>
 		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		<span class="ml-2 hidden h-4 w-px bg-border sm:block"></span>
-		<span class="ml-2 hidden text-sm font-medium text-muted-foreground sm:inline">{label}</span>
+		{#if leading}
+			<div class="ml-2 flex min-w-0 flex-1 items-center gap-2">
+				{@render leading()}
+			</div>
+		{:else if label}
+			<span class="ml-2 hidden text-sm font-medium text-muted-foreground sm:inline">{label}</span>
+		{/if}
 	</div>
 
 	<div class="flex flex-none items-center gap-1.5">
+		{#if action}
+			<div class="mr-1 flex items-center">
+				{@render action()}
+			</div>
+		{/if}
 		<button
 			type="button"
 			title="Notifications"

@@ -1,21 +1,39 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import BuilderTopbar from '$lib/components/BuilderTopbar.svelte';
+	import {
+		provideBuilderTopbar,
+		type BuilderTopbarState
+	} from '$lib/components/builder-topbar-context';
 
 	let { data, children } = $props();
 
 	let routeId = $derived(page.route.id ?? '');
-	let isCanvas = $derived(routeId.endsWith('/projects/new'));
+	let isCanvas = $derived(routeId.endsWith('/projects/new') || routeId.endsWith('/projects/[id]'));
 
-	let label = $derived.by(() => {
+	let defaultLabel = $derived.by(() => {
 		if (routeId.endsWith('/projects/new')) return 'New project';
 		if (routeId.endsWith('/projects/[id]')) return 'Project builder';
 		return '';
 	});
+
+	const topbar: BuilderTopbarState = $state({
+		label: '',
+		leading: null,
+		action: null
+	});
+	provideBuilderTopbar(topbar);
+
+	let resolvedLabel = $derived(topbar.label || defaultLabel);
 </script>
 
 <div class="flex min-h-screen flex-col bg-white">
-	<BuilderTopbar userEmail={data.user?.email ?? ''} {label} />
+	<BuilderTopbar
+		userEmail={data.user?.email ?? ''}
+		label={resolvedLabel}
+		leading={topbar.leading ?? undefined}
+		action={topbar.action ?? undefined}
+	/>
 
 	{#if isCanvas}
 		<main class="mx-3 mb-3 flex min-h-0 flex-1 overflow-hidden sm:mx-4 sm:mb-4">
