@@ -15,6 +15,7 @@ export { default as Badge, badgeVariants } from './Badge.svelte';
 export type { BadgeTone, BadgeVariant } from './Badge.svelte';
 export { default as Alert } from './Alert.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
+export { default as Spinner } from './Spinner.svelte';
 export { default as CodeBlock } from './CodeBlock.svelte';
 export {
 	default as Select,
