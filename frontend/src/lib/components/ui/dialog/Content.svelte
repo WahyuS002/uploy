@@ -21,7 +21,9 @@
 	}: Props = $props();
 
 	let interact = $derived<'close' | 'ignore'>(
-		dismissible ? ((interactOutsideBehavior as 'close' | 'ignore' | undefined) ?? 'close') : 'ignore'
+		dismissible
+			? ((interactOutsideBehavior as 'close' | 'ignore' | undefined) ?? 'close')
+			: 'ignore'
 	);
 	let escape = $derived<'close' | 'ignore'>(
 		dismissible ? ((escapeKeydownBehavior as 'close' | 'ignore' | undefined) ?? 'close') : 'ignore'

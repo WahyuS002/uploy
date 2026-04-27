@@ -15,7 +15,8 @@ export class ServerCreateController {
 	private onSuccess?: (server: ServerResponse) => void;
 
 	keys = $state<SSHKeyResponse[]>([]);
-	keysLoading = $state(true);
+	keysLoading = $state(false);
+	keysLoaded = $state(false);
 	keysError = $state('');
 	sshKeyDialogOpen = $state(false);
 
@@ -58,7 +59,23 @@ export class ServerCreateController {
 		this.onSuccess = opts.onSuccess;
 	}
 
-	loadKeys = async () => {
+	reset = () => {
+		this.name = '';
+		this.host = '';
+		this.port = 22;
+		this.sshUser = 'root';
+		this.sshKeyId = '';
+		this.selectValue = '';
+		this.error = '';
+		this.verified = null;
+		this.checking = false;
+		this.loading = false;
+		this.sshKeyDialogOpen = false;
+	};
+
+	loadKeys = async (force = false) => {
+		if (this.keysLoading) return;
+		if (this.keysLoaded && !force && !this.keysError) return;
 		this.keysLoading = true;
 		this.keysError = '';
 		try {
@@ -68,6 +85,7 @@ export class ServerCreateController {
 				return;
 			}
 			if (res.data) this.keys = res.data;
+			this.keysLoaded = true;
 		} catch {
 			this.keysError = 'Network error loading SSH keys';
 		} finally {
@@ -87,7 +105,7 @@ export class ServerCreateController {
 
 	handleKeyCreated = async (key: SSHKeyResponse) => {
 		this.sshKeyDialogOpen = false;
-		await this.loadKeys();
+		await this.loadKeys(true);
 		this.sshKeyId = key.id;
 		this.selectValue = key.id;
 	};
