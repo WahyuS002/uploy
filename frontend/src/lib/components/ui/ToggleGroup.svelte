@@ -5,8 +5,7 @@
 		variants: {
 			variant: {
 				subtle: 'border border-border bg-muted p-0.5',
-				segmented:
-					'h-7 bg-white p-0.5 shadow-[0_1px_2px_rgba(17,17,17,0.04),0_0_0_1px_rgba(17,17,17,0.05)]'
+				segmented: 'h-7 border border-border bg-card p-0.5'
 			}
 		},
 		defaultVariants: { variant: 'subtle' }
@@ -19,7 +18,7 @@
 				variant: {
 					subtle: 'h-7 rounded-[5px] px-2 text-sm',
 					segmented:
-						'h-6 w-7 rounded-md text-muted-foreground hover:text-foreground data-[state=on]:bg-[#f6f7f8] data-[state=on]:text-foreground data-[state=on]:shadow-[inset_0_0_0_1px_rgba(17,17,17,0.06)]'
+						'h-6 w-7 rounded-md text-muted-foreground hover:text-foreground data-[state=on]:bg-accent data-[state=on]:text-foreground'
 				}
 			},
 			defaultVariants: { variant: 'subtle' }

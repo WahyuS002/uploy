@@ -129,7 +129,7 @@
 </script>
 
 <div
-	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-gray-200"
+	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border"
 	data-panning={pan.isPanning ? 'true' : 'false'}
 	use:panViewport
 >
@@ -210,7 +210,7 @@
 					<div class="w-full max-w-105" data-no-pan>
 						<form
 							onsubmit={submit}
-							class="card flex flex-col gap-4 rounded-xl border border-gray-200 bg-card p-5 text-card-foreground"
+							class="card flex flex-col gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground"
 						>
 							<header class="flex items-start gap-3">
 								<span

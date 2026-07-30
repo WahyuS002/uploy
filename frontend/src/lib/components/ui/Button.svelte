@@ -7,9 +7,9 @@
 			variants: {
 				variant: {
 					primary:
-						'bg-[#1a1b1e] text-white shadow-[0_1px_0_rgba(17,17,17,0.04),0_1px_2px_rgba(17,17,17,0.22),inset_0_0_0_1px_#3a3d42,inset_0_1px_0_rgba(255,255,255,0.06)] hover:bg-[#2c3037] focus-visible:bg-[#2c3037] active:bg-[#45494f] active:shadow-[0_1px_0_rgba(17,17,17,0.04),0_1px_2px_rgba(17,17,17,0.18),inset_0_0_0_1px_#45494f,inset_0_1px_0_rgba(255,255,255,0.04)]',
+						'bg-primary text-primary-foreground hover:bg-[#333333] focus-visible:bg-[#333333] active:bg-[#404040]',
 					secondary:
-						'border border-border bg-card text-card-foreground hover:bg-accent hover:text-accent-foreground',
+						'border border-border bg-card text-secondary-foreground hover:bg-accent hover:text-accent-foreground',
 					ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground',
 					destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
 				},

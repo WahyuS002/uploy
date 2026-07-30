@@ -5,10 +5,9 @@ export const pillVariants = cva(
 	{
 		variants: {
 			state: {
-				applied:
-					'bg-[#f6f7f8] text-foreground shadow-[inset_0_0_0_1px_rgba(17,17,17,0.06)] hover:bg-[#eeeff1]',
+				applied: 'border border-border bg-card text-foreground hover:bg-accent',
 				placeholder:
-					'border border-dashed border-input bg-transparent text-muted-foreground hover:bg-[#eeeff1] disabled:hover:bg-transparent'
+					'border border-dashed border-input bg-transparent text-muted-foreground hover:bg-accent disabled:hover:bg-transparent'
 			}
 		},
 		defaultVariants: { state: 'applied' }

@@ -32,7 +32,7 @@
 	let resolvedLabel = $derived(topbar.label || defaultLabel);
 </script>
 
-<div class="flex min-h-screen flex-col bg-white">
+<div class="flex min-h-screen flex-col bg-background">
 	<BuilderTopbar
 		userEmail={data.user?.email ?? ''}
 		label={resolvedLabel}

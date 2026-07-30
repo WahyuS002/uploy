@@ -29,7 +29,7 @@
 </script>
 
 <header
-	class="flex h-14 w-full flex-none items-center justify-between gap-4 border-b border-border bg-white px-4"
+	class="flex h-14 w-full flex-none items-center justify-between gap-4 border-b border-border bg-background px-4"
 >
 	<div class="flex min-w-0 flex-1 items-center gap-2">
 		{#if meta.icon}

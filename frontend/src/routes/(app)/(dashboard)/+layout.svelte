@@ -5,7 +5,7 @@
 	let { data, children } = $props();
 </script>
 
-<div class="flex min-h-screen bg-white">
+<div class="flex min-h-screen bg-background">
 	<Sidebar workspaceName={data.workspace?.name ?? 'Uploy'} workspaceRole={data.workspace?.role} />
 
 	<div class="flex min-w-0 flex-1 flex-col">

@@ -30,7 +30,7 @@
 	}
 </script>
 
-<header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-white px-3">
+<header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background px-3">
 	<div class="flex min-w-0 flex-1 items-center gap-2">
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
 		<a

@@ -193,15 +193,17 @@
 						class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground transition-shadow hover:shadow-md"
 					>
 						<div class="px-4 pt-4 pb-3">
-							<h3 class="font-semibold text-foreground group-hover:text-black">{project.name}</h3>
+							<h3 class="font-semibold text-foreground group-hover:text-foreground">
+								{project.name}
+							</h3>
 						</div>
 						<div
-							class="relative mx-4 mb-3 flex h-28 items-center justify-center rounded-lg bg-gray-900"
+							class="relative mx-4 mb-3 flex h-28 items-center justify-center rounded-lg bg-[#171717]"
 							style="background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 12px 12px;"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
-								class="h-8 w-8 text-gray-600"
+								class="h-8 w-8 text-[#4d4d4d]"
 								viewBox="0 0 20 20"
 								fill="currentColor"
 							>
@@ -220,11 +222,11 @@
 									<span
 										class="inline-block h-2 w-2 rounded-full {svcCount > 0
 											? 'bg-success'
-											: 'bg-gray-300'}"
+											: 'bg-input'}"
 									></span>
 									{firstEnv.name}
 								</span>
-								<span class="text-gray-300">&middot;</span>
+								<span class="text-input">&middot;</span>
 							{/if}
 							<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
 						</div>
@@ -243,10 +245,10 @@
 						class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground transition-shadow hover:shadow-md"
 					>
 						<div class="flex items-center gap-3">
-							<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900">
+							<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-[#171717]">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
-									class="h-4 w-4 text-gray-400"
+									class="h-4 w-4 text-[#a8a8a8]"
 									viewBox="0 0 20 20"
 									fill="currentColor"
 								>
@@ -270,11 +272,11 @@
 									<span
 										class="inline-block h-2 w-2 rounded-full {svcCount > 0
 											? 'bg-success'
-											: 'bg-gray-300'}"
+											: 'bg-input'}"
 									></span>
 									{firstEnv.name}
 								</span>
-								<span class="text-gray-300">&middot;</span>
+								<span class="text-input">&middot;</span>
 							{/if}
 							<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
 						</div>

@@ -178,7 +178,7 @@
 	</div>
 
 	<!-- Log Panel -->
-	<div class="max-h-100 overflow-y-auto rounded-lg bg-[#1a1a1a] p-4 font-mono text-white">
+	<div class="max-h-100 overflow-y-auto rounded-lg bg-[#171717] p-4 font-mono text-white">
 		{#each logs as log (log.order)}
 			<p class={cn('m-0', log.type === 'stderr' ? 'text-[#ff6b6b]' : 'text-white')}>
 				{log.output}

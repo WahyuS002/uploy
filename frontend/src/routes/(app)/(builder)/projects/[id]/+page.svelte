@@ -373,7 +373,7 @@
 
 <div class="relative flex min-h-0 w-full flex-1 gap-3">
 	<div
-		class="canvas viewport relative flex min-h-0 flex-1 overflow-hidden rounded-xl border border-gray-200"
+		class="canvas viewport relative flex min-h-0 flex-1 overflow-hidden rounded-xl border border-border"
 		data-panning={pan.isPanning ? 'true' : 'false'}
 		use:panViewport
 	>

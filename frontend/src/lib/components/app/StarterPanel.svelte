@@ -77,7 +77,7 @@
 </script>
 
 <section
-	class="panel overflow-hidden rounded-lg border border-gray-200 bg-card text-card-foreground"
+	class="panel overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
 	aria-label="Start a new resource"
 >
 	<div class="border-b border-border/70 px-2 py-1.5">
