@@ -4,8 +4,6 @@ import type { components } from '$lib/api/v1';
 type SSHKeyResponse = components['schemas']['SSHKeyResponse'];
 type ServerResponse = components['schemas']['ServerResponse'];
 
-export const CREATE_NEW_SSH_KEY = '__create_new__';
-
 type Options = {
 	onSuccess?: (server: ServerResponse) => void;
 };
@@ -25,14 +23,11 @@ export class ServerCreateController {
 	port = $state(22);
 	sshUser = $state('root');
 	sshKeyId = $state('');
-	selectValue = $state('');
 	error = $state('');
 	loading = $state(false);
 
 	checking = $state(false);
 	verified = $state<{ host: string; port: number; sshUser: string; sshKeyId: string } | null>(null);
-
-	selectedKeyPublicKey = $derived(this.keys.find((k) => k.id === this.sshKeyId)?.public_key ?? '');
 
 	isVerified = $derived(
 		this.verified !== null &&
@@ -50,10 +45,7 @@ export class ServerCreateController {
 			!this.keysError
 	);
 
-	keyItems = $derived([
-		{ value: CREATE_NEW_SSH_KEY, label: 'Create new SSH key' },
-		...this.keys.map((k) => ({ value: k.id, label: k.name }))
-	]);
+	keyItems = $derived(this.keys.map((k) => ({ value: k.id, label: k.name })));
 
 	constructor(opts: Options = {}) {
 		this.onSuccess = opts.onSuccess;
@@ -65,7 +57,6 @@ export class ServerCreateController {
 		this.port = 22;
 		this.sshUser = 'root';
 		this.sshKeyId = '';
-		this.selectValue = '';
 		this.error = '';
 		this.verified = null;
 		this.checking = false;
@@ -86,6 +77,8 @@ export class ServerCreateController {
 			}
 			if (res.data) this.keys = res.data;
 			this.keysLoaded = true;
+			// Only one key to pick from: preselect it so the public key is visible right away.
+			if (!this.sshKeyId && this.keys.length === 1) this.sshKeyId = this.keys[0].id;
 		} catch {
 			this.keysError = 'Network error loading SSH keys';
 		} finally {
@@ -93,21 +86,10 @@ export class ServerCreateController {
 		}
 	};
 
-	handleKeySelectChange = (value: string) => {
-		if (value === CREATE_NEW_SSH_KEY) {
-			this.sshKeyDialogOpen = true;
-			this.selectValue = this.sshKeyId;
-			return;
-		}
-		this.selectValue = value;
-		this.sshKeyId = value;
-	};
-
 	handleKeyCreated = async (key: SSHKeyResponse) => {
 		this.sshKeyDialogOpen = false;
 		await this.loadKeys(true);
 		this.sshKeyId = key.id;
-		this.selectValue = key.id;
 	};
 
 	checkConnection = async () => {
@@ -163,7 +145,6 @@ export class ServerCreateController {
 			this.port = 22;
 			this.sshUser = 'root';
 			this.sshKeyId = '';
-			this.selectValue = '';
 			this.verified = null;
 			if (data) this.onSuccess?.(data);
 		} catch {

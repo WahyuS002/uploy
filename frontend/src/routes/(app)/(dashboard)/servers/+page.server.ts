@@ -5,9 +5,15 @@ import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ fetch }) => {
 	const api = createApiClient(fetch, env.API_BASE_URL);
-	const serversRes = await api.GET('/api/servers');
+	const [serversRes, keysRes] = await Promise.all([
+		api.GET('/api/servers'),
+		api.GET('/api/ssh-keys')
+	]);
 	if (serversRes.error) {
 		throw error(500, 'Failed to load servers');
 	}
-	return { servers: serversRes.data };
+	if (keysRes.error) {
+		throw error(500, 'Failed to load SSH keys');
+	}
+	return { servers: serversRes.data, keys: keysRes.data };
 };

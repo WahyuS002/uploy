@@ -1,5 +1,5 @@
 import type { IconSource } from '@steeze-ui/svelte-icon';
-import { Squares2x2, Server, Key, FolderPlus, ServerStack, Plus } from '@steeze-ui/heroicons';
+import { Squares2x2, Server, FolderPlus, ServerStack } from '@steeze-ui/heroicons';
 
 export type QuickActionGroup = 'Navigate' | 'Create';
 
@@ -31,14 +31,6 @@ export const QUICK_ACTIONS: ReadonlyArray<QuickAction> = [
 		icon: Server
 	},
 	{
-		id: 'nav-ssh-keys',
-		label: 'SSH Keys',
-		keywords: ['ssh', 'keys', 'credentials'],
-		group: 'Navigate',
-		href: '/ssh-keys',
-		icon: Key
-	},
-	{
 		id: 'create-project',
 		label: 'Create project',
 		keywords: ['new', 'project', 'add'],
@@ -50,19 +42,10 @@ export const QUICK_ACTIONS: ReadonlyArray<QuickAction> = [
 	{
 		id: 'create-server',
 		label: 'Add server',
-		keywords: ['new', 'server', 'add', 'host'],
+		keywords: ['new', 'server', 'add', 'host', 'ssh', 'key', 'credentials'],
 		group: 'Create',
 		href: '/servers',
 		icon: ServerStack,
-		visibleForRole: ['owner']
-	},
-	{
-		id: 'create-ssh-key',
-		label: 'Create SSH key',
-		keywords: ['new', 'ssh', 'key', 'add'],
-		group: 'Create',
-		href: '/ssh-keys',
-		icon: Plus,
 		visibleForRole: ['owner']
 	}
 ];

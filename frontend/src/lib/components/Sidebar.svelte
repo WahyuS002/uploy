@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Squares2x2, Key, Server } from '@steeze-ui/heroicons';
+	import { Squares2x2, Server } from '@steeze-ui/heroicons';
 	import SidebarNavItem from '$lib/components/app/SidebarNavItem.svelte';
 	import SidebarQuickActions from '$lib/components/app/SidebarQuickActions.svelte';
 	import SidebarWorkspaceMenu from '$lib/components/app/SidebarWorkspaceMenu.svelte';
@@ -14,7 +14,6 @@
 
 	const navItems = [
 		{ href: '/projects', label: 'Projects', icon: Squares2x2 },
-		{ href: '/ssh-keys', label: 'SSH Keys', icon: Key },
 		{ href: '/servers', label: 'Servers', icon: Server }
 	];
 

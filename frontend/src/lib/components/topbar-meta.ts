@@ -1,5 +1,5 @@
 import type { IconSource } from '@steeze-ui/svelte-icon';
-import { Key, Server, Squares2x2 } from '@steeze-ui/heroicons';
+import { Server, Squares2x2 } from '@steeze-ui/heroicons';
 import type { components } from '$lib/api/v1';
 
 type ServiceResponse = components['schemas']['ServiceResponse'];
@@ -18,8 +18,7 @@ type RouteData =
 
 const STATIC_META: Record<string, TopbarMeta> = {
 	'/(app)/(dashboard)/projects': { title: 'Projects', icon: Squares2x2 },
-	'/(app)/(dashboard)/servers': { title: 'Servers', icon: Server },
-	'/(app)/(dashboard)/ssh-keys': { title: 'SSH Keys', icon: Key }
+	'/(app)/(dashboard)/servers': { title: 'Servers', icon: Server }
 };
 
 export function getDashboardTopbarMeta(routeId: string | null, data: RouteData): TopbarMeta {

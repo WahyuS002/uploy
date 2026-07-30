@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { ChevronDown, Squares2x2, Server, Key } from '@steeze-ui/heroicons';
+	import { ChevronDown, Squares2x2, Server } from '@steeze-ui/heroicons';
 	import { DropdownMenu } from 'bits-ui';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -16,8 +16,7 @@
 
 	const links = [
 		{ href: '/projects', label: 'Projects', icon: Squares2x2 },
-		{ href: '/servers', label: 'Servers', icon: Server },
-		{ href: '/ssh-keys', label: 'SSH Keys', icon: Key }
+		{ href: '/servers', label: 'Servers', icon: Server }
 	] as const;
 
 	function formatRole(role?: string): string {
