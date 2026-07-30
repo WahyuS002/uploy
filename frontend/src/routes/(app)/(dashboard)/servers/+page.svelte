@@ -172,7 +172,7 @@
 			controller={serverController}
 			submitLabel="Add server"
 			fieldsClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
-			actionsClass="justify-end rounded-b-xl border-t border-border bg-muted px-5 py-3"
+			actionsClass="justify-end rounded-b-xl border-t border-border px-5 py-3"
 		>
 			{#snippet aside()}
 				<SSHKeyField controller={serverController} />

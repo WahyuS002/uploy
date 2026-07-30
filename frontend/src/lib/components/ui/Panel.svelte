@@ -65,7 +65,7 @@
 		{@render children()}
 	</div>
 	{#if footer}
-		<footer class="border-t border-border bg-muted px-4 py-3">
+		<footer class="border-t border-border px-4 py-3">
 			{@render footer()}
 		</footer>
 	{/if}

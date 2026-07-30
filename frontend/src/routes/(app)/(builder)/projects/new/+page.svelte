@@ -419,7 +419,7 @@
 				{/if}
 			</div>
 
-			<DialogFooter class="rounded-none bg-muted/40 px-4">
+			<DialogFooter class="rounded-none px-4">
 				<Button
 					type="button"
 					variant="secondary"
