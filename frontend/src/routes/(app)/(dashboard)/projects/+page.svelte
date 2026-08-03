@@ -149,7 +149,7 @@
 					{#if canEdit}
 						<Button href="/projects/new" variant="primary" size="sm">
 							<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
-							Add record
+							Add project
 						</Button>
 					{/if}
 				</div>
@@ -177,7 +177,7 @@
 					{#if canEdit}
 						<Button href="/projects/new" variant="primary" size="sm">
 							<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
-							Create project
+							Add project
 						</Button>
 					{/if}
 				{/snippet}
