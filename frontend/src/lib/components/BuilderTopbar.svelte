@@ -38,7 +38,7 @@
 			class="flex flex-none items-center gap-2 rounded-md px-1 py-1.5 select-none"
 		>
 			<span
-				class="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground"
+				class="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground"
 				>U</span
 			>
 			<span class="text-sm font-semibold tracking-tight text-foreground">Uploy</span>

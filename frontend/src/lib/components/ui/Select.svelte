@@ -3,7 +3,7 @@
 	import { pillVariants } from './pillVariants.js';
 
 	export const selectTriggerVariants = cva(
-		'inline-flex w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
+		'inline-flex w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-input bg-muted text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
 		{
 			variants: {
 				size: {

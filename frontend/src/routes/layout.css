@@ -4,16 +4,30 @@
 }
 @plugin '@tailwindcss/typography';
 
-/* Vercel-style reference: monochrome on paper white. Depth comes from hairline
-   rings and tonal value shifts, never from shadow or hue. */
+/* Supabase reference, measured off their rendered light theme. Achromatic
+   surfaces, one green brand hue. Canvas and card sit ~2 units apart, so a panel
+   is defined by its border, not by a value step — elevation lives entirely in
+   the hairline. Green appears only for "primary action" or "healthy". */
 :root {
-	/* Value ramp — the only "palette" the system has. */
-	--paper-white: #fafafa;
+	/* Value ramp — carries every surface, border and text colour. */
+	--paper-white: #fdfdfd;
 	--pure-white: #ffffff;
-	--hairline: #ebebeb;
-	--stone: #666666;
-	--charcoal: #4d4d4d;
-	--obsidian: #171717;
+	--hairline: #eaeaea;
+	--stone: #696969;
+	--charcoal: #464646;
+	--obsidian: #030303;
+
+	/* Brand ramp, mapped to Supabase's own steps. The fill is brand-400 with a
+	   brand-600 edge — one flat mint at this lightness has no boundary against a
+	   near-white canvas, so the border is load-bearing, not decoration. Mint is a
+	   fill colour only: at 1.9:1 it cannot carry text or a focus ring, so anything
+	   that must be *seen* on a light surface uses --mint-deep (5.1:1). */
+	--mint: #72e3ad;
+	--mint-hover: #3fcf8e;
+	--mint-active: #2cc182;
+	--mint-edge: #2cc182;
+	--mint-deep: #097c4f;
+	--mint-tint: #e6f8f0;
 
 	--background: var(--paper-white);
 	--foreground: var(--obsidian);
@@ -21,27 +35,36 @@
 	--card-foreground: var(--obsidian);
 	--popover: var(--pure-white);
 	--popover-foreground: var(--obsidian);
-	--primary: var(--obsidian);
-	--primary-foreground: var(--pure-white);
+	--primary: var(--mint);
+	--primary-foreground: var(--obsidian);
+	/* Interaction steps live here rather than as hex literals in Button, so the
+	   whole primary ramp moves together. */
+	--primary-hover: var(--mint-hover);
+	--primary-active: var(--mint-active);
+	--primary-border: var(--mint-edge);
 	--secondary: var(--paper-white);
 	--secondary-foreground: var(--charcoal);
-	--muted: #f2f2f2;
+	/* The recessed surface. Fields sit *below* the panel rather than floating on
+	   it as white cards — with canvas and card this close, a white field would
+	   have no edge at all. --accent stays one step darker so hover still reads. */
+	--muted: #f6f6f6;
 	--muted-foreground: var(--stone);
 	/* Disabled reads as a value shift, never as transparency: an opacity-faded
 	   control picks up whatever is behind it and stops looking like a control. */
 	--disabled-foreground: #a8a8a8;
 	--accent: #f2f2f2;
 	--accent-foreground: var(--obsidian);
-	/* Functional state colours. The reference is achromatic apart from terminal
-	   green, but error/warning must stay legible as states, so they are kept at
-	   the lowest saturation that still reads as a state. */
+	/* Functional state colours. Error/warning stay at the lowest saturation that
+	   still reads as a state. Success shares the brand hue on purpose: two
+	   unrelated greens read as a bug, so "primary" and "healthy" are told apart
+	   by shape — solid fill vs tint-and-text — not by hue. */
 	--destructive: #c7342f;
 	--destructive-foreground: var(--pure-white);
 	--border: var(--hairline);
-	/* Hairline (#ebebeb) is invisible as a control boundary, so inputs sit one
-	   step darker; the focus ring carries the accessible signal. */
-	--input: #d4d4d4;
-	--ring: var(--obsidian);
+	/* The hairline is invisible as a control boundary, so controls sit one step
+	   darker; the focus ring carries the accessible signal. */
+	--input: #dadada;
+	--ring: var(--mint-deep);
 	--sidebar: var(--paper-white);
 	--sidebar-foreground: var(--obsidian);
 	--sidebar-primary: var(--obsidian);
@@ -49,11 +72,11 @@
 	--sidebar-accent: var(--hairline);
 	--sidebar-accent-foreground: var(--obsidian);
 	--sidebar-border: var(--hairline);
-	--sidebar-ring: var(--obsidian);
+	--sidebar-ring: var(--mint-deep);
 	--info: #4d4d4d;
 	--info-muted: #f2f2f2;
-	--success: #297a3a;
-	--success-muted: #e8f2ea;
+	--success: var(--mint-deep);
+	--success-muted: var(--mint-tint);
 	--warning: #8a6116;
 	--warning-muted: #f6efe1;
 }
@@ -67,6 +90,9 @@
 	--color-popover-foreground: var(--popover-foreground);
 	--color-primary: var(--primary);
 	--color-primary-foreground: var(--primary-foreground);
+	--color-primary-hover: var(--primary-hover);
+	--color-primary-active: var(--primary-active);
+	--color-primary-border: var(--primary-border);
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
 	--color-muted: var(--muted);
@@ -142,8 +168,8 @@
 
 	&:focus {
 		outline: none;
-		border-color: var(--obsidian);
-		box-shadow: 0 0 0 3px rgba(23, 23, 23, 0.12);
+		border-color: var(--mint-deep);
+		box-shadow: 0 0 0 3px rgba(63, 207, 142, 0.28);
 	}
 
 	&:disabled:focus {

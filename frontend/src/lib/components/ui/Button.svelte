@@ -7,7 +7,7 @@
 			variants: {
 				variant: {
 					primary:
-						'bg-primary text-primary-foreground hover:bg-[#333333] focus-visible:bg-[#333333] active:bg-[#404040] disabled:bg-muted disabled:text-disabled-foreground',
+						'border border-primary-border bg-primary text-primary-foreground hover:bg-primary-hover focus-visible:bg-primary-hover active:bg-primary-active disabled:border-transparent disabled:bg-muted disabled:text-disabled-foreground',
 					secondary:
 						'border border-border bg-card text-secondary-foreground hover:bg-accent hover:text-accent-foreground disabled:bg-card disabled:text-disabled-foreground',
 					ghost:
