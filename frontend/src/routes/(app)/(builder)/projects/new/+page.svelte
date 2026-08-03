@@ -9,6 +9,7 @@
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import ServerCreatePanel from '$lib/components/app/ServerCreatePanel.svelte';
+	import SSHKeyField from '$lib/components/app/SSHKeyField.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import {
 		Dialog,
@@ -304,7 +305,7 @@
 
 <Dialog bind:open={serverDialogOpen}>
 	<DialogContent
-		class="inset-y-auto top-[18vh] mt-0 mb-0 w-[min(92vw,600px)] max-w-none overflow-hidden rounded-2xl"
+		class="inset-y-auto top-[18vh] mt-0 mb-0 w-[min(92vw,46rem)] max-w-none overflow-hidden rounded-2xl"
 	>
 		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
 			<div class="flex items-start justify-between gap-3">
@@ -433,17 +434,24 @@
 				</Button>
 			</DialogFooter>
 		{:else}
-			<div class="max-h-[min(70vh,560px)] overflow-y-auto px-5 pt-4 pb-5">
-				<ServerCreatePanel controller={serverController}>
-					{#snippet actionsLeading()}
-						<Button type="button" variant="ghost" size="sm" onclick={switchToPicker}>
-							<Icon src={ArrowLeft} theme="outline" class="h-3.5 w-3.5" />
-							Back
-						</Button>
-						<span class="flex-1"></span>
-					{/snippet}
-				</ServerCreatePanel>
-			</div>
+			<ServerCreatePanel
+				controller={serverController}
+				fieldsClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
+				actionsClass="rounded-none border-t border-border px-5 py-3"
+			>
+				{#snippet actionsLeading()}
+					<Button type="button" variant="ghost" size="sm" onclick={switchToPicker}>
+						<Icon src={ArrowLeft} theme="outline" class="h-3.5 w-3.5" />
+						Back
+					</Button>
+					<span class="flex-1"></span>
+				{/snippet}
+				{#snippet aside()}
+					<aside class="h-full rounded-md border border-border bg-muted p-3">
+						<SSHKeyField controller={serverController} />
+					</aside>
+				{/snippet}
+			</ServerCreatePanel>
 		{/if}
 	</DialogContent>
 </Dialog>

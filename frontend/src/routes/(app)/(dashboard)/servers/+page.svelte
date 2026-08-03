@@ -175,7 +175,9 @@
 			actionsClass="justify-end rounded-b-xl border-t border-border px-5 py-3"
 		>
 			{#snippet aside()}
-				<SSHKeyField controller={serverController} />
+				<aside class="h-full rounded-md border border-border bg-muted p-3">
+					<SSHKeyField controller={serverController} />
+				</aside>
 			{/snippet}
 		</ServerCreatePanel>
 	</DialogContent>

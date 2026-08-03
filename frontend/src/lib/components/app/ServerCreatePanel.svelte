@@ -38,7 +38,7 @@
 	<div
 		class={cn(
 			aside
-				? 'grid items-start gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]'
+				? 'grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,14rem)]'
 				: 'flex flex-col gap-3',
 			fieldsClass
 		)}
