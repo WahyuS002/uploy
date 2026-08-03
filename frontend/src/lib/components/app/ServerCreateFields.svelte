@@ -1,16 +1,10 @@
 <script lang="ts">
 	import FormField from './FormField.svelte';
-	import SSHKeyField from './SSHKeyField.svelte';
+	import ServerConnectFailure from './ServerConnectFailure.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import type { ServerCreateController } from './server-create-form.svelte';
 
-	type Props = {
-		controller: ServerCreateController;
-		/** Set false when the caller renders SSHKeyField itself (e.g. in a side rail). */
-		showSshKey?: boolean;
-	};
-
-	let { controller, showSshKey = true }: Props = $props();
+	let { controller }: { controller: ServerCreateController } = $props();
 
 	$effect(() => {
 		controller.loadKeys();
@@ -33,11 +27,9 @@
 		</FormField>
 	</div>
 
-	{#if showSshKey}
-		<SSHKeyField {controller} />
-	{/if}
-
-	{#if controller.error}
-		<p class="text-sm text-destructive">{controller.error}</p>
+	<!-- An unreachable host is this step's problem, so its diagnosis is shown
+	     here rather than back on the step that reported it. -->
+	{#if controller.failure?.belongsToTarget}
+		<ServerConnectFailure {controller} />
 	{/if}
 </div>

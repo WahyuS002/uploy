@@ -1,5 +1,4 @@
 <script lang="ts">
-	import CopyButton from './CopyButton.svelte';
 	import SSHKeyCreatePanel from './SSHKeyCreatePanel.svelte';
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
@@ -7,11 +6,9 @@
 	import type { ServerCreateController } from './server-create-form.svelte';
 
 	let { controller }: { controller: ServerCreateController } = $props();
-
-	let selectedKey = $derived(controller.keys.find((k) => k.id === controller.sshKeyId));
 </script>
 
-<fieldset class="flex h-full min-w-0 flex-col gap-1.5">
+<fieldset class="flex min-w-0 flex-col gap-1.5">
 	<legend class="mb-1.5 text-xs text-muted-foreground">SSH key</legend>
 
 	{#if controller.keysError}
@@ -62,15 +59,6 @@
 				Generate a new key
 			</button>
 		</div>
-
-		{#if selectedKey?.public_key}
-			<div class="mt-1 flex flex-col gap-1.5">
-				<CopyButton text={selectedKey.public_key} defaultLabel="Copy public key" class="w-full" />
-				<p class="text-xs text-muted-foreground">
-					Add it to ~/.ssh/authorized_keys on the server, then check the connection.
-				</p>
-			</div>
-		{/if}
 	{/if}
 </fieldset>
 

@@ -4,8 +4,7 @@
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import PublicKeyHelper from '$lib/components/app/PublicKeyHelper.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
-	import ServerCreatePanel from '$lib/components/app/ServerCreatePanel.svelte';
-	import SSHKeyField from '$lib/components/app/SSHKeyField.svelte';
+	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { Button, EmptyState } from '$lib/components/ui';
 	import {
@@ -161,24 +160,17 @@
 </section>
 
 <Dialog bind:open={dialogOpen}>
-	<DialogContent class="w-[min(92vw,42rem)] max-w-none overflow-hidden">
+	<DialogContent class="w-[min(92vw,32rem)] max-w-none overflow-hidden">
 		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
 			<DialogTitle class="text-sm">Connect a server</DialogTitle>
 			<DialogDescription class="text-xs">
-				Add SSH credentials so Uploy can deploy here.
+				Uploy deploys over SSH, so it needs an account on the machine and a key that account trusts.
 			</DialogDescription>
 		</DialogHeader>
-		<ServerCreatePanel
+		<ServerConnectWizard
 			controller={serverController}
-			submitLabel="Add server"
-			fieldsClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
-			actionsClass="justify-end rounded-b-xl border-t border-border px-5 py-3"
-		>
-			{#snippet aside()}
-				<aside class="h-full rounded-md border border-border bg-muted p-3">
-					<SSHKeyField controller={serverController} />
-				</aside>
-			{/snippet}
-		</ServerCreatePanel>
+			bodyClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
+			actionsClass="rounded-b-xl border-t border-border px-5 py-3"
+		/>
 	</DialogContent>
 </Dialog>

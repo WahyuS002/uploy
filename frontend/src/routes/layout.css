@@ -150,6 +150,19 @@
 	}
 }
 
+/* Motion is state feedback here, never decoration, so removing it costs nothing
+   but the movement. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
 @keyframes slide-up-fade {
 	from {
 		opacity: 0;

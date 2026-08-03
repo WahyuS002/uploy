@@ -55,6 +55,33 @@ func (e DeploymentResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for ErrorResponseCode.
+const (
+	DockerMissing ErrorResponseCode = "docker_missing"
+	KeyInvalid    ErrorResponseCode = "key_invalid"
+	KeyRejected   ErrorResponseCode = "key_rejected"
+	SessionFailed ErrorResponseCode = "session_failed"
+	Unreachable   ErrorResponseCode = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the ErrorResponseCode enum.
+func (e ErrorResponseCode) Valid() bool {
+	switch e {
+	case DockerMissing:
+		return true
+	case KeyInvalid:
+		return true
+	case KeyRejected:
+		return true
+	case SessionFailed:
+		return true
+	case Unreachable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogEntryType.
 const (
 	Stderr LogEntryType = "stderr"
@@ -247,8 +274,13 @@ type EnvironmentResponse struct {
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
-	Error string `json:"error"`
+	// Code Machine-readable failure stage. Present on SSH probe failures so a client can offer the right remedy: the three stages need entirely different fixes, and the human message alone cannot be branched on.
+	Code  *ErrorResponseCode `json:"code,omitempty"`
+	Error string             `json:"error"`
 }
+
+// ErrorResponseCode Machine-readable failure stage. Present on SSH probe failures so a client can offer the right remedy: the three stages need entirely different fixes, and the human message alone cannot be branched on.
+type ErrorResponseCode string
 
 // GenerateSSHKeyRequest defines model for GenerateSSHKeyRequest.
 type GenerateSSHKeyRequest struct {

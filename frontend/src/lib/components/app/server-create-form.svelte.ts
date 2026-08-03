@@ -3,10 +3,25 @@ import type { components } from '$lib/api/v1';
 
 type SSHKeyResponse = components['schemas']['SSHKeyResponse'];
 type ServerResponse = components['schemas']['ServerResponse'];
+type ErrorResponse = components['schemas']['ErrorResponse'];
+type FailureCode = NonNullable<ErrorResponse['code']>;
 
 type Options = {
 	onSuccess?: (server: ServerResponse) => void;
 };
+
+export type ServerCreateStep = 'target' | 'authorize';
+
+/** A failed connection attempt, kept as a stage rather than a string so the UI
+ *  can offer the remedy that matches. */
+export type ConnectFailure = {
+	code: FailureCode | 'unknown';
+	message: string;
+	/** True when the fix lives on the target step, not the authorize step. */
+	belongsToTarget: boolean;
+};
+
+const TARGET_FAILURES: ReadonlySet<string> = new Set(['unreachable']);
 
 export class ServerCreateController {
 	private api = createApiClient();
@@ -18,50 +33,61 @@ export class ServerCreateController {
 	keysError = $state('');
 	sshKeyDialogOpen = $state(false);
 
+	step = $state<ServerCreateStep>('target');
+
 	name = $state('');
 	host = $state('');
 	port = $state(22);
 	sshUser = $state('root');
 	sshKeyId = $state('');
-	error = $state('');
+	failure = $state<ConnectFailure | null>(null);
 	loading = $state(false);
 
-	checking = $state(false);
-	verified = $state<{ host: string; port: number; sshUser: string; sshKeyId: string } | null>(null);
-
-	isVerified = $derived(
-		this.verified !== null &&
-			this.verified.host === this.host &&
-			this.verified.port === this.port &&
-			this.verified.sshUser === this.sshUser &&
-			this.verified.sshKeyId === this.sshKeyId
-	);
-
-	canCheckConnection = $derived(
-		this.host.trim() !== '' &&
+	/** Advancing to the authorize step costs nothing, so it only needs the
+	 *  fields that the authorize instructions interpolate. */
+	canAdvance = $derived(
+		this.name.trim() !== '' &&
+			this.host.trim() !== '' &&
 			this.sshUser.trim() !== '' &&
 			this.sshKeyId !== '' &&
-			!this.checking &&
 			!this.keysError
 	);
 
-	keyItems = $derived(this.keys.map((k) => ({ value: k.id, label: k.name })));
+	selectedKey = $derived(this.keys.find((k) => k.id === this.sshKeyId));
+
+	/** The exact line to run on the target host: real key, real user, no
+	 *  placeholders left for the reader to substitute. */
+	authorizeCommand = $derived(
+		this.selectedKey?.public_key
+			? `echo '${this.selectedKey.public_key.trim()}' >> ~/.ssh/authorized_keys`
+			: ''
+	);
 
 	constructor(opts: Options = {}) {
 		this.onSuccess = opts.onSuccess;
 	}
 
 	reset = () => {
+		this.step = 'target';
 		this.name = '';
 		this.host = '';
 		this.port = 22;
 		this.sshUser = 'root';
 		this.sshKeyId = '';
-		this.error = '';
-		this.verified = null;
-		this.checking = false;
+		this.failure = null;
 		this.loading = false;
 		this.sshKeyDialogOpen = false;
+	};
+
+	advance = () => {
+		if (!this.canAdvance) return;
+		this.failure = null;
+		this.step = 'authorize';
+	};
+
+	back = () => {
+		this.failure = null;
+		this.step = 'target';
 	};
 
 	loadKeys = async (force = false) => {
@@ -72,7 +98,7 @@ export class ServerCreateController {
 		try {
 			const res = await this.api.GET('/api/ssh-keys');
 			if (res.error) {
-				this.keysError = (res.error as { error: string }).error ?? 'Failed to load SSH keys';
+				this.keysError = (res.error as ErrorResponse).error ?? 'Failed to load SSH keys';
 				return;
 			}
 			if (res.data) this.keys = res.data;
@@ -92,39 +118,10 @@ export class ServerCreateController {
 		this.sshKeyId = key.id;
 	};
 
-	checkConnection = async () => {
-		this.error = '';
-		this.checking = true;
-		this.verified = null;
-		try {
-			const { error: err } = await this.api.POST('/api/servers/check-connection', {
-				body: {
-					host: this.host,
-					port: this.port,
-					ssh_user: this.sshUser,
-					ssh_key_id: this.sshKeyId
-				}
-			});
-			if (err) {
-				this.error = (err as { error: string }).error;
-				return;
-			}
-			this.verified = {
-				host: this.host,
-				port: this.port,
-				sshUser: this.sshUser,
-				sshKeyId: this.sshKeyId
-			};
-		} catch {
-			this.error = 'Network error, please try again';
-		} finally {
-			this.checking = false;
-		}
-	};
-
+	/** Submitting *is* the connection test: the API probes SSH, session and
+	 *  docker before it writes a record, so an unreachable host never lands. */
 	createServer = async () => {
-		if (!this.isVerified) return;
-		this.error = '';
+		this.failure = null;
 		this.loading = true;
 		try {
 			const { data, error: err } = await this.api.POST('/api/servers', {
@@ -137,18 +134,22 @@ export class ServerCreateController {
 				}
 			});
 			if (err) {
-				this.error = (err as { error: string }).error;
+				const body = err as ErrorResponse;
+				const code = body.code ?? 'unknown';
+				this.failure = {
+					code,
+					message: body.error,
+					belongsToTarget: TARGET_FAILURES.has(code)
+				};
 				return;
 			}
-			this.name = '';
-			this.host = '';
-			this.port = 22;
-			this.sshUser = 'root';
-			this.sshKeyId = '';
-			this.verified = null;
 			if (data) this.onSuccess?.(data);
 		} catch {
-			this.error = 'Network error, please try again';
+			this.failure = {
+				code: 'unknown',
+				message: 'Network error, please try again',
+				belongsToTarget: false
+			};
 		} finally {
 			this.loading = false;
 		}
