@@ -102,17 +102,15 @@
 			<div class="flex flex-col gap-3">
 				<div>
 					<h3 class="text-sm font-medium text-foreground">
-						Let Uploy in to {controller.host}
+						Authorize SSH key on {controller.host}
 					</h3>
 					{#if controller.authorizeCommand}
 						<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-							Run this on the server as {controller.sshUser}. It appends the public key of
-							{controller.selectedKey?.name} to that account's authorized_keys.
+							Run this command on the server as <span class="font-medium text-foreground">{controller.sshUser}</span>:
 						</p>
 					{:else}
 						<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-							{controller.selectedKey?.name ?? 'This key'} has no public half stored, so Uploy cannot
-							show the exact command. Authorize the key on the server yourself, then continue.
+							{controller.selectedKey?.name ?? 'This key'} has no public key stored. Authorize it on the server, then continue.
 						</p>
 					{/if}
 				</div>
@@ -131,7 +129,7 @@
 				{/if}
 
 				<p class="text-xs text-muted-foreground">
-					Already authorized this key on the server? Go straight ahead.
+					Already authorized this key? Click Connect to continue.
 				</p>
 
 				<ServerConnectFailure {controller} />
