@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: uploy
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: uploy
+    ports:
+      - "5432:5432"
+    volumes:
+      # postgres:18+ wants a single mount here, not at /data — the image places
+      # the cluster in a version-specific subdir so pg_upgrade --link works.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uploy -d uploy"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:
