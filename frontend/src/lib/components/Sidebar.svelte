@@ -2,7 +2,6 @@
 	import { page } from '$app/state';
 	import { Squares2x2, Server } from '@steeze-ui/heroicons';
 	import SidebarNavItem from '$lib/components/app/SidebarNavItem.svelte';
-	import SidebarQuickActions from '$lib/components/app/SidebarQuickActions.svelte';
 	import SidebarWorkspaceMenu from '$lib/components/app/SidebarWorkspaceMenu.svelte';
 
 	type Props = {
@@ -23,14 +22,13 @@
 </script>
 
 <aside
-	class="flex h-screen w-64 flex-none flex-col border-r border-border bg-background text-sidebar-foreground"
+	class="flex h-screen w-56 flex-none flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
 >
-	<div class="flex h-14 flex-col justify-center border-b border-border px-2">
+	<div class="flex h-14 flex-col justify-center border-b border-sidebar-border px-2">
 		<SidebarWorkspaceMenu {workspaceName} {workspaceRole} />
 	</div>
-	<nav class="flex-1 overflow-y-auto px-2 pt-3 pb-2">
-		<SidebarQuickActions {workspaceRole} />
-		<div class="flex flex-col gap-px pt-0.5">
+	<nav class="flex-1 overflow-y-auto p-2">
+		<div class="flex min-w-0 flex-col gap-1">
 			{#each navItems as item (item.href)}
 				<SidebarNavItem
 					href={item.href}
