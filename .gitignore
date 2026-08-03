@@ -1,4 +1,7 @@
 .agents/
 .claude/
+.codex/
+.github/hooks/
+.github/skills/
 .unvibe/
 skills-lock.json
