@@ -154,18 +154,12 @@
 	}
 }
 
-/* Motion is state feedback here, never decoration, so removing it costs nothing
-   but the movement. */
-@media (prefers-reduced-motion: reduce) {
-	*,
-	*::before,
-	*::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
-		scroll-behavior: auto !important;
-	}
-}
+/* No blanket reduced-motion override here. A `* { animation-duration: 0.01ms
+   !important }` block silently kills every animation in the app — including
+   deliberate ones — and there is no way to opt back out of an `!important` on
+   `*`. Tailwind's `motion-safe:` / `motion-reduce:` variants cover this per
+   element instead, so motion is dropped where it is actually movement rather
+   than everywhere at once. */
 
 @keyframes slide-up-fade {
 	from {

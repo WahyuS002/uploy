@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { navigating } from '$app/state';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
@@ -33,6 +34,13 @@
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
 	let isOwner = $derived(data.workspace?.role === 'owner');
+
+	// Only a step back from the image form animates. A direct URL load has no
+	// previous position to move from, so the motion would be explaining nothing.
+	// Captured once at init rather than derived: SvelteKit clears `navigating`
+	// as soon as the navigation settles, and a reactive read would strip the
+	// class out from under the animation while it is still running.
+	const steppedBack = navigating.from?.url.pathname === '/projects/new/image';
 
 	let busyStarter = $state<Starter | null>(null);
 	let error = $state('');
@@ -201,7 +209,7 @@
 				style="transform: translate3d({pan.x}px, {pan.y}px, 0) scale({pan.scale});"
 			>
 				{#if !canEdit}
-					<div class="w-full max-w-105" data-no-pan>
+					<div class="w-full max-w-105" class:nodes-enter={steppedBack} data-no-pan>
 						<EmptyState
 							icon={Server}
 							title="You don't have permission to create projects"
@@ -213,7 +221,11 @@
 						</EmptyState>
 					</div>
 				{:else}
-					<div class="flex w-full max-w-105 flex-col items-center" data-no-pan>
+					<div
+						class="flex w-full max-w-105 flex-col items-center"
+						class:nodes-enter={steppedBack}
+						data-no-pan
+					>
 						<ServerNode
 							servers={sortedServers}
 							value={activeServerId}
@@ -333,6 +345,39 @@
 	.world {
 		transform-origin: center center;
 		will-change: transform;
+	}
+
+	/* Coming back from the image step, the canvas reads as sliding back to where
+	   it was: the nodes enter from the left, the side the image form pushed them
+	   off to. Applied to .stage, not .world — .world owns the pan transform. */
+	/* Coming back from the image step, the nodes enter from the left — the side
+	   the form pushed them off to. Staggered rather than moved as one slab: this
+	   canvas is a graph, and 30ms between node, edge and node is what makes it
+	   read as one. Timing matches the dialog (Content.svelte), the only other
+	   deliberate motion in the app, so the two belong to the same system.
+	   `backwards` holds the start offset on the first frame instead of flashing
+	   the end state. */
+	.nodes-enter > :global(*) {
+		animation: node-in 200ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+	}
+
+	.nodes-enter > :global(:nth-child(2)) {
+		animation-delay: 30ms;
+	}
+
+	.nodes-enter > :global(:nth-child(3)) {
+		animation-delay: 60ms;
+	}
+
+	@keyframes node-in {
+		from {
+			opacity: 0;
+			transform: translateX(-12px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
 	}
 
 	/* The connector between the server node and the starter node. Without it the

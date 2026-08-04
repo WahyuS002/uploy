@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto, invalidateAll } from '$app/navigation';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
@@ -24,6 +24,13 @@
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
+
+	// Only a step in from the starter panel animates. A direct URL load has no
+	// previous position to move from, so the motion would be explaining nothing.
+	// Captured once at init rather than derived: SvelteKit clears `navigating`
+	// as soon as the navigation settles, and a reactive read would strip the
+	// class out from under the animation while it is still running.
+	const steppedIn = navigating.from?.url.pathname === '/projects/new';
 
 	let serverId = $derived(page.url.searchParams.get('server_id') ?? '');
 
@@ -156,6 +163,7 @@
 	<div class="scroll-area relative z-10 flex w-full overflow-x-hidden overflow-y-auto">
 		<div
 			class="stage m-auto flex min-h-full w-full items-center justify-center px-4 py-8 sm:px-6 sm:py-12"
+			class:stage-enter={steppedIn}
 		>
 			<div
 				class="world flex w-full items-center justify-center"
@@ -385,6 +393,28 @@
 	.world {
 		transform-origin: center center;
 		will-change: transform;
+	}
+
+	/* Forward step from the starter panel, so the form enters from the right.
+	   Applied to .stage, not .world — .world owns the pan transform. */
+	/* Forward step from the starter panel, so the form enters from the right. One
+	   node here, so no stagger — but the same 200ms curve as the nodes it
+	   replaces, and as the dialog (Content.svelte). Applied to .stage, not
+	   .world: .world owns the pan transform. `backwards` holds the start offset
+	   on the first frame instead of flashing the end state. */
+	.stage-enter {
+		animation: stage-in-from-right 200ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+	}
+
+	@keyframes stage-in-from-right {
+		from {
+			opacity: 0;
+			transform: translateX(12px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
 	}
 
 	.card {
