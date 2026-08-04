@@ -241,7 +241,7 @@
 
 						<StarterPanel
 							{busyStarter}
-							title="Deploy to it"
+							title="Start with"
 							enabled={{ 'docker-image': activeServerId !== '', 'empty-project': true }}
 							onSelect={launch}
 						/>
