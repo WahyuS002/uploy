@@ -1,166 +1,93 @@
 <script lang="ts" module>
-	export type Starter = 'empty-project' | 'docker-image';
-
-	type StarterId = 'github' | 'database' | 'template' | 'docker-image' | 'bucket' | 'empty-project';
+	export type Starter = 'docker-image' | 'empty-project';
 
 	export type StarterEnabled = Partial<Record<Starter, boolean>>;
 </script>
 
 <script lang="ts">
-	import Input from '$lib/components/ui/Input.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
-	import { Icon, type IconSource } from '@steeze-ui/svelte-icon';
-	import {
-		CodeBracket,
-		CircleStack,
-		RectangleStack,
-		ChevronRight,
-		MagnifyingGlass
-	} from '@steeze-ui/heroicons';
-	import { Archive, Container, SquareTerminal } from 'lucide-svelte';
+	import { Icon } from '@steeze-ui/svelte-icon';
+	import { ChevronRight } from '@steeze-ui/heroicons';
+	import { Container, SquareTerminal } from 'lucide-svelte';
 
 	type Props = {
 		busyStarter?: Starter | null;
 		enabled?: StarterEnabled;
-		placeholder?: string;
+		title?: string;
 		onSelect: (starter: Starter) => void;
 	};
 
 	let {
 		busyStarter = null,
 		enabled = { 'docker-image': true, 'empty-project': true },
-		placeholder = 'What would you like to create?',
+		title = 'Start with',
 		onSelect
 	}: Props = $props();
 
-	let promptDraft = $state('');
+	const headingId = $props.id();
 
 	type StarterRow = {
-		id: StarterId;
+		id: Starter;
 		title: string;
-		icon?: IconSource;
-		lucide?: typeof Container;
+		icon: typeof Container;
+		// A chevron means "this opens a next step". Rows that commit immediately
+		// don't get one, so the affordance stays honest.
 		showsChevron: boolean;
-		starter?: Starter;
 	};
 
 	const rows: StarterRow[] = [
-		{ id: 'github', title: 'GitHub Repository', icon: CodeBracket, showsChevron: true },
-		{ id: 'database', title: 'Database', icon: CircleStack, showsChevron: true },
-		{ id: 'template', title: 'Template', icon: RectangleStack, showsChevron: true },
-		{
-			id: 'docker-image',
-			title: 'Docker Image',
-			lucide: Container,
-			showsChevron: true,
-			starter: 'docker-image'
-		},
-		{ id: 'bucket', title: 'Bucket', lucide: Archive, showsChevron: false },
-		{
-			id: 'empty-project',
-			title: 'Empty Project',
-			lucide: SquareTerminal,
-			showsChevron: false,
-			starter: 'empty-project'
-		}
+		{ id: 'docker-image', title: 'Docker Image', icon: Container, showsChevron: true },
+		{ id: 'empty-project', title: 'Empty Project', icon: SquareTerminal, showsChevron: false }
 	];
 
-	function isInteractive(row: StarterRow): boolean {
-		return row.starter != null && enabled[row.starter] === true;
-	}
-
-	let filteredRows = $derived.by(() => {
-		const q = promptDraft.trim().toLowerCase();
-		if (!q) return rows;
-		return rows.filter((row) => row.title.toLowerCase().includes(q));
-	});
+	// Unavailable starters are hidden, not greyed out. A menu of things you can't
+	// pick is a roadmap, and a roadmap isn't a control. Whatever blocks a starter
+	// explains itself in the node that owns the precondition.
+	let visibleRows = $derived(rows.filter((row) => enabled[row.id] === true));
 </script>
 
-<section
-	class="panel overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
-	aria-label="Start a new resource"
->
-	<div class="border-b border-border/70 px-2 py-1.5">
-		<Input
-			bind:value={promptDraft}
-			{placeholder}
-			class="border-transparent! bg-transparent! px-2 py-1.5 text-sm focus:shadow-none!"
-		/>
-	</div>
+{#if visibleRows.length > 0}
+	<section
+		class="panel w-full overflow-hidden rounded-lg border border-border bg-card text-card-foreground"
+		aria-labelledby={headingId}
+	>
+		<div class="border-b border-border/70 px-3 py-2">
+			<h2 id={headingId} class="text-sm font-medium text-foreground">{title}</h2>
+		</div>
 
-	<div class="py-1">
-		{#if filteredRows.length === 0}
-			<div class="flex items-center gap-2.5 px-4 py-3 text-sm text-muted-foreground">
-				<Icon src={MagnifyingGlass} theme="outline" class="h-3.5 w-3.5 flex-none" />
-				<span>No starters match "{promptDraft}"</span>
-			</div>
-		{:else}
-			<ul>
-				{#each filteredRows as row (row.id)}
-					{@const interactive = isInteractive(row)}
-					{@const busy = row.starter != null && busyStarter === row.starter}
-					{@const pending = busyStarter !== null}
-					{@const dimmed = pending && !busy}
-					{@const gridCols =
-						row.showsChevron || !interactive || busy
-							? 'grid-cols-[auto_1fr_auto]'
-							: 'grid-cols-[auto_1fr]'}
-					{#if interactive}
-						<li>
-							<button
-								type="button"
-								onclick={() => row.starter && onSelect(row.starter)}
-								disabled={pending}
-								aria-busy={busy ? 'true' : undefined}
-								class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:hover:bg-transparent {dimmed
-									? 'opacity-50'
-									: ''} {gridCols}"
-							>
-								<span class="text-muted-foreground/70">
-									{#if row.lucide}
-										{@const LucideIcon = row.lucide}
-										<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
-									{:else if row.icon}
-										<Icon src={row.icon} theme="outline" class="h-4 w-4" />
-									{/if}
-								</span>
-								<span class="truncate">{row.title}</span>
-								{#if busy}
-									<Spinner class="h-3.5 w-3.5 text-muted-foreground/70" />
-								{:else if row.showsChevron}
-									<Icon
-										src={ChevronRight}
-										theme="outline"
-										class="h-3.5 w-3.5 text-muted-foreground/70"
-									/>
-								{/if}
-							</button>
-						</li>
-					{:else}
-						<li
-							class="grid cursor-default items-center gap-x-3 px-3 py-2 text-sm text-muted-foreground {gridCols}"
-						>
-							<span class="text-muted-foreground/70">
-								{#if row.lucide}
-									{@const LucideIcon = row.lucide}
-									<LucideIcon class="h-4 w-4" strokeWidth={1.75} />
-								{:else if row.icon}
-									<Icon src={row.icon} theme="outline" class="h-4 w-4" />
-								{/if}
-							</span>
-							<span class="truncate">{row.title}</span>
-							<span
-								class="rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase"
-							>
-								Soon
-							</span>
-						</li>
-					{/if}
-				{/each}
-			</ul>
-		{/if}
-	</div>
-</section>
+		<ul class="py-1">
+			{#each visibleRows as row (row.id)}
+				{@const busy = busyStarter === row.id}
+				{@const pending = busyStarter !== null}
+				{@const RowIcon = row.icon}
+				{@const gridCols =
+					row.showsChevron || busy ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[auto_1fr]'}
+				<li>
+					<button
+						type="button"
+						onclick={() => onSelect(row.id)}
+						disabled={pending}
+						aria-busy={busy ? 'true' : undefined}
+						class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:cursor-not-allowed disabled:hover:bg-transparent {pending &&
+						!busy
+							? 'opacity-50'
+							: ''} {gridCols}"
+					>
+						<span class="text-muted-foreground">
+							<RowIcon class="h-4 w-4" strokeWidth={1.75} />
+						</span>
+						<span class="truncate">{row.title}</span>
+						{#if busy}
+							<Spinner class="h-3.5 w-3.5 text-muted-foreground" />
+						{:else if row.showsChevron}
+							<Icon src={ChevronRight} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
+						{/if}
+					</button>
+				</li>
+			{/each}
+		</ul>
+	</section>
+{/if}
 
 <style>
 	.panel {

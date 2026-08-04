@@ -436,7 +436,7 @@
 							{#if canEdit}
 								<StarterPanel
 									enabled={{ 'docker-image': true }}
-									placeholder="What would you like to deploy?"
+									title="Add a service"
 									onSelect={handleStarterSelect}
 								/>
 							{:else}

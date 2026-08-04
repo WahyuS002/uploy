@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
@@ -6,15 +7,13 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
-	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import ServerNode from '$lib/components/app/ServerNode.svelte';
 	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import {
 		Dialog,
 		DialogContent,
 		DialogHeader,
-		DialogFooter,
 		DialogTitle,
 		DialogDescription
 	} from '$lib/components/ui/dialog';
@@ -26,11 +25,8 @@
 		Minus,
 		Plus,
 		ArrowsPointingIn,
-		ArrowLeft,
 		Clock,
-		ExclamationCircle,
-		ServerStack,
-		Check
+		ExclamationCircle
 	} from '@steeze-ui/heroicons';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
@@ -44,12 +40,11 @@
 	let error = $state('');
 
 	let serverDialogOpen = $state(false);
-	let dialogMode = $state<'picker' | 'create'>('picker');
 	let servers = $state<ServerResponse[]>([]);
 	let serversLoaded = $state(false);
 	let serversLoading = $state(false);
 	let serversError = $state('');
-	let pickedServerId = $state<string | null>(null);
+	let selectedServerId = $state('');
 
 	// Stable sort: ready first, then everything else. Within each bucket the
 	// API's existing created_at DESC ordering is preserved.
@@ -60,16 +55,13 @@
 			return aReady - bReady;
 		})
 	);
-	let pickedServer = $derived(
-		pickedServerId ? (sortedServers.find((s) => s.id === pickedServerId) ?? null) : null
-	);
 
 	const serverController = new ServerCreateController({
 		onSuccess: (created) => {
 			servers = [created, ...servers];
 			serversLoaded = true;
-			pickedServerId = created.id;
-			dialogMode = 'picker';
+			selectedServerId = created.id;
+			serverDialogOpen = false;
 		}
 	});
 
@@ -103,44 +95,38 @@
 		}
 	}
 
-	async function openServerPicker() {
-		pickedServerId = null;
-		dialogMode = 'picker';
-		serverDialogOpen = true;
-		void serverController.loadKeys();
-		await ensureServersLoaded();
-		const ordered = sortedServers;
-		if (serversLoaded && ordered.length > 0) {
-			pickedServerId = ordered[0].id;
-		}
-	}
-
 	function retryLoadServers() {
 		serversError = '';
+		serversLoaded = false;
 		void ensureServersLoaded();
 	}
+
+	function openServerWizard() {
+		serverDialogOpen = true;
+		void serverController.loadKeys();
+	}
+
+	// The server node is visible from the first paint, so servers load with the
+	// page rather than on demand. Deliberately not an $effect: ensureServersLoaded
+	// reads and writes serversLoading, so an effect would re-fire on every failed
+	// load and retry in a loop. Retrying is the user's call, via the node.
+	onMount(() => {
+		void ensureServersLoaded();
+	});
+
+	// Default to the first ready server. Runs once: the guard goes false as soon
+	// as a target exists, and an explicit pick is never overwritten.
+	$effect(() => {
+		if (!selectedServerId && sortedServers.length > 0) {
+			selectedServerId = sortedServers[0].id;
+		}
+	});
 
 	$effect(() => {
 		if (!serverDialogOpen) {
 			serverController.reset();
-			dialogMode = 'picker';
 		}
 	});
-
-	function switchToCreate() {
-		dialogMode = 'create';
-	}
-
-	function switchToPicker() {
-		dialogMode = 'picker';
-	}
-
-	async function confirmServerPick() {
-		if (!pickedServerId) return;
-		serverDialogOpen = false;
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		await goto(`/projects/new/image?server_id=${encodeURIComponent(pickedServerId)}`);
-	}
 
 	async function launchEmptyProject() {
 		const pendingId = toast.neutral({
@@ -200,7 +186,10 @@
 
 		if (starter === 'docker-image') {
 			try {
-				await openServerPicker();
+				if (selectedServerId) {
+					// eslint-disable-next-line svelte/no-navigation-without-resolve
+					await goto(`/projects/new/image?server_id=${encodeURIComponent(selectedServerId)}`);
+				}
 			} finally {
 				busyStarter = null;
 			}
@@ -247,15 +236,28 @@
 						</EmptyState>
 					</div>
 				{:else}
-					<div class="flex w-full max-w-105 flex-col gap-2" data-no-pan>
+					<div class="flex w-full max-w-105 flex-col items-center" data-no-pan>
+						<ServerNode
+							servers={sortedServers}
+							bind:value={selectedServerId}
+							loading={serversLoading && !serversLoaded}
+							error={serversError}
+							canConnect={isOwner}
+							onConnect={openServerWizard}
+							onRetry={retryLoadServers}
+						/>
+
+						<span class="edge" aria-hidden="true"></span>
+
 						<StarterPanel
 							{busyStarter}
-							enabled={{ 'docker-image': true, 'empty-project': true }}
+							title="Deploy to it"
+							enabled={{ 'docker-image': selectedServerId !== '', 'empty-project': true }}
 							onSelect={launch}
 						/>
 
 						{#if error}
-							<p class="text-sm text-destructive">{error}</p>
+							<p class="mt-2 self-start text-sm text-destructive">{error}</p>
 						{/if}
 					</div>
 				{/if}
@@ -307,145 +309,17 @@
 		class="inset-y-auto top-[18vh] mt-0 mb-0 w-[min(92vw,32rem)] max-w-none overflow-hidden rounded-2xl"
 	>
 		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
-			<div class="flex items-start justify-between gap-3">
-				<div class="flex min-w-0 flex-col gap-1">
-					{#if dialogMode === 'picker'}
-						<DialogTitle class="text-sm">Pick a server</DialogTitle>
-						<DialogDescription class="text-xs">
-							Choose where to deploy this Docker image.
-						</DialogDescription>
-					{:else}
-						<DialogTitle class="text-sm">Connect a server</DialogTitle>
-						<DialogDescription class="text-xs">
-							Add SSH credentials so Uploy can deploy here.
-						</DialogDescription>
-					{/if}
-				</div>
-				{#if dialogMode === 'picker' && isOwner && sortedServers.length > 0}
-					<Button type="button" size="xs" variant="secondary" onclick={switchToCreate}>
-						<Icon src={Plus} theme="outline" class="h-3 w-3" />
-						Add server
-					</Button>
-				{/if}
-			</div>
+			<DialogTitle class="text-sm">Connect a server</DialogTitle>
+			<DialogDescription class="text-xs">
+				Add SSH credentials so Uploy can deploy here.
+			</DialogDescription>
 		</DialogHeader>
 
-		{#if dialogMode === 'picker'}
-			<div class="max-h-[min(60vh,440px)] overflow-y-auto p-2">
-				{#if serversLoading && !serversLoaded}
-					<div class="flex items-center justify-center py-10">
-						<Spinner class="h-5 w-5 text-muted-foreground" />
-					</div>
-				{:else if serversError}
-					<div
-						class="m-1 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive"
-					>
-						<div class="text-sm font-semibold">Couldn't load servers</div>
-						<div class="mt-1 text-xs text-destructive/80">{serversError}</div>
-						<div class="mt-3">
-							<Button type="button" size="xs" variant="secondary" onclick={retryLoadServers}>
-								Retry
-							</Button>
-						</div>
-					</div>
-				{:else if sortedServers.length === 0}
-					<div
-						class="m-1 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-8 text-center"
-					>
-						<span
-							class="grid h-9 w-9 place-content-center rounded-full bg-muted text-muted-foreground"
-							aria-hidden="true"
-						>
-							<Icon src={ServerStack} theme="outline" class="h-4 w-4" />
-						</span>
-						<div class="text-sm font-medium text-foreground">No servers connected yet</div>
-						<p class="max-w-xs text-xs text-muted-foreground">
-							{#if isOwner}
-								Connect a server before you can deploy a Docker image to this workspace.
-							{:else}
-								Ask a workspace owner to connect a server before deploying.
-							{/if}
-						</p>
-						{#if isOwner}
-							<div class="mt-1">
-								<Button type="button" size="xs" variant="secondary" onclick={switchToCreate}>
-									<Icon src={Plus} theme="outline" class="h-3 w-3" />
-									Add server
-								</Button>
-							</div>
-						{/if}
-					</div>
-				{:else}
-					<ul class="flex flex-col gap-1" role="listbox" aria-label="Servers">
-						{#each sortedServers as server (server.id)}
-							{@const selected = server.id === pickedServerId}
-							<li>
-								<button
-									type="button"
-									role="option"
-									aria-selected={selected}
-									onclick={() => (pickedServerId = server.id)}
-									class="grid w-full cursor-pointer grid-cols-[auto_1fr_auto_auto] items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors {selected
-										? 'bg-accent text-accent-foreground'
-										: 'hover:bg-accent/70 hover:text-accent-foreground'}"
-								>
-									<span
-										class="grid h-7 w-7 flex-none place-content-center rounded-md bg-muted text-foreground"
-										aria-hidden="true"
-									>
-										<Icon src={ServerStack} theme="outline" class="h-3.5 w-3.5" />
-									</span>
-									<span class="min-w-0">
-										<span class="block truncate text-sm font-medium text-foreground">
-											{server.name}
-										</span>
-										<span class="block truncate font-mono text-[11px] text-muted-foreground">
-											{server.host}:{server.port}
-										</span>
-									</span>
-									<StatusBadge status={server.proxy_status} />
-									<span
-										class="grid h-4 w-4 place-content-center text-foreground"
-										aria-hidden="true"
-									>
-										{#if selected}
-											<Icon src={Check} theme="outline" class="h-3.5 w-3.5" />
-										{/if}
-									</span>
-								</button>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</div>
-
-			<DialogFooter class="rounded-none px-4">
-				<Button
-					type="button"
-					variant="secondary"
-					size="sm"
-					onclick={() => (serverDialogOpen = false)}
-				>
-					Cancel
-				</Button>
-				<Button type="button" size="sm" onclick={confirmServerPick} disabled={!pickedServer}>
-					Continue
-				</Button>
-			</DialogFooter>
-		{:else}
-			<ServerConnectWizard
-				controller={serverController}
-				bodyClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
-				actionsClass="rounded-none border-t border-border px-5 py-3"
-			>
-				{#snippet actionsLeading()}
-					<Button type="button" variant="ghost" size="sm" onclick={switchToPicker}>
-						<Icon src={ArrowLeft} theme="outline" class="h-3.5 w-3.5" />
-						Back to list
-					</Button>
-				{/snippet}
-			</ServerConnectWizard>
-		{/if}
+		<ServerConnectWizard
+			controller={serverController}
+			bodyClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
+			actionsClass="rounded-none border-t border-border px-5 py-3"
+		/>
 	</DialogContent>
 </Dialog>
 
@@ -481,6 +355,38 @@
 	.world {
 		transform-origin: center center;
 		will-change: transform;
+	}
+
+	/* The connector between the server node and the starter node. Without it the
+	   two panels read as stacked modals; with it they read as a graph, which is
+	   what the canvas is claiming to be. Drawn at --input, not --border: the
+	   hairline disappears against the dotted background. */
+	.edge {
+		position: relative;
+		width: 1px;
+		height: 1.25rem;
+		background: var(--input);
+	}
+
+	.edge::before,
+	.edge::after {
+		content: '';
+		position: absolute;
+		left: 50%;
+		width: 5px;
+		height: 5px;
+		border-radius: 9999px;
+		background: var(--card);
+		border: 1px solid var(--input);
+		translate: -50% 0;
+	}
+
+	.edge::before {
+		top: -3px;
+	}
+
+	.edge::after {
+		bottom: -3px;
 	}
 
 	.toolbar {
