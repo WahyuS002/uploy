@@ -1,13 +1,12 @@
 <script lang="ts">
-	import { Select } from 'bits-ui';
 	import type { components } from '$lib/api/v1';
 	import Button from '$lib/components/ui/Button.svelte';
 	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
-	import { selectMenuVariants, selectMenuItemVariants } from '$lib/components/ui/Select.svelte';
+	import RadioList from '$lib/components/ui/RadioList.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { ServerStack, ChevronDown, Check, Plus } from '@steeze-ui/heroicons';
+	import { Plus } from '@steeze-ui/heroicons';
 
 	type ServerResponse = components['schemas']['ServerResponse'];
 
@@ -24,7 +23,7 @@
 
 	let {
 		servers,
-		value = $bindable(''),
+		value = '',
 		loading = false,
 		error = '',
 		canConnect = false,
@@ -35,8 +34,15 @@
 
 	const headingId = $props.id();
 
-	let selected = $derived(servers.find((s) => s.id === value) ?? null);
-	let items = $derived(servers.map((s) => ({ value: s.id, label: s.name })));
+	// Only surface proxy state the user can act on. 'not_configured' is the column
+	// default every freshly connected server carries, and it only clears once
+	// something with a domain deploys — so it flags healthy servers as broken and
+	// points at no fix. Silence means fine; a badge means look at this.
+	const actionableProxyStatuses = new Set(['port_conflict', 'degraded']);
+
+	function proxyProblem(status: string): boolean {
+		return actionableProxyStatuses.has(status);
+	}
 </script>
 
 <section
@@ -80,55 +86,26 @@
 			{/if}
 		</div>
 	{:else}
-		<Select.Root type="single" bind:value {onValueChange} {items}>
-			<Select.Trigger
-				class="grid w-full cursor-pointer grid-cols-[auto_1fr_auto_auto] items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
-				aria-label="Deployment target"
-			>
-				<span class="text-muted-foreground">
-					<Icon src={ServerStack} theme="outline" class="h-4 w-4" />
+		<RadioList
+			items={servers}
+			{value}
+			name={headingId}
+			ariaLabelledby={headingId}
+			onChange={(id) => onValueChange?.(id)}
+			class="max-h-52"
+		>
+			{#snippet children(server)}
+				<span class="min-w-0 flex-1" title={server.name}>
+					<span class="block truncate text-sm text-foreground">{server.name}</span>
+					<span class="block truncate font-mono text-[11px] text-muted-foreground">
+						{server.host}:{server.port}
+					</span>
 				</span>
-				<span class="truncate">{selected?.name ?? 'Select a server'}</span>
-				{#if selected}
-					<StatusBadge status={selected.proxy_status} />
-				{:else}
-					<span></span>
+				{#if proxyProblem(server.proxy_status)}
+					<StatusBadge status={server.proxy_status} />
 				{/if}
-				<Icon src={ChevronDown} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
-			</Select.Trigger>
-
-			<Select.Portal>
-				<Select.Content
-					class="{selectMenuVariants()} max-h-60 w-[var(--bits-select-anchor-width)] overflow-auto"
-					sideOffset={4}
-				>
-					<Select.Viewport>
-						{#each servers as server (server.id)}
-							<Select.Item
-								class="{selectMenuItemVariants()} grid grid-cols-[1fr_auto_auto] gap-x-3"
-								value={server.id}
-								label={server.name}
-							>
-								{#snippet children({ selected: isSelected })}
-									<span class="min-w-0">
-										<span class="block truncate">{server.name}</span>
-										<span class="block truncate font-mono text-[11px] text-muted-foreground">
-											{server.host}:{server.port}
-										</span>
-									</span>
-									<StatusBadge status={server.proxy_status} />
-									<span class="grid h-4 w-4 place-content-center" aria-hidden="true">
-										{#if isSelected}
-											<Icon src={Check} theme="outline" class="h-3.5 w-3.5" />
-										{/if}
-									</span>
-								{/snippet}
-							</Select.Item>
-						{/each}
-					</Select.Viewport>
-				</Select.Content>
-			</Select.Portal>
-		</Select.Root>
+			{/snippet}
+		</RadioList>
 	{/if}
 </section>
 

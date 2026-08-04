@@ -93,6 +93,10 @@
 	--color-primary-hover: var(--primary-hover);
 	--color-primary-active: var(--primary-active);
 	--color-primary-border: var(--primary-border);
+	/* The readable end of the brand ramp. --primary is a fill at 1.9:1, so any
+	   brand-coloured mark that must actually be seen — a checked control, a
+	   selected indicator — uses this instead. 5.1:1 on --card. */
+	--color-primary-deep: var(--mint-deep);
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
 	--color-muted: var(--muted);

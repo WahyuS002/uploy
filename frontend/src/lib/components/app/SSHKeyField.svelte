@@ -1,11 +1,16 @@
 <script lang="ts">
 	import SSHKeyCreatePanel from './SSHKeyCreatePanel.svelte';
+	import RadioList from '$lib/components/ui/RadioList.svelte';
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { Plus } from '@steeze-ui/heroicons';
 	import type { ServerCreateController } from './server-create-form.svelte';
 
 	let { controller }: { controller: ServerCreateController } = $props();
+
+	// Was a hardcoded "ssh-key": two wizards mounted at once would have shared one
+	// radio group and fought over the checked state.
+	const groupName = $props.id();
 </script>
 
 <fieldset class="flex min-w-0 flex-col gap-1.5">
@@ -27,24 +32,20 @@
 	{:else}
 		<div class="overflow-hidden rounded-lg border border-border bg-card">
 			{#if controller.keys.length > 0}
-				<div class="max-h-52 divide-y divide-border overflow-y-auto">
-					{#each controller.keys as key (key.id)}
-						<label
-							title={key.name}
-							class="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 transition-colors hover:bg-accent has-checked:bg-accent"
-						>
-							<input
-								type="radio"
-								name="ssh-key"
-								value={key.id}
-								checked={controller.sshKeyId === key.id}
-								onchange={() => (controller.sshKeyId = key.id)}
-								class="form-radio h-3.5 w-3.5 flex-none border-input text-foreground focus:ring-2 focus:ring-ring/40 focus:ring-offset-0"
-							/>
-							<span class="min-w-0 flex-1 truncate text-sm text-foreground">{key.name}</span>
-						</label>
-					{/each}
-				</div>
+				<RadioList
+					items={controller.keys}
+					value={controller.sshKeyId}
+					name={groupName}
+					ariaLabel="SSH key"
+					onChange={(id) => (controller.sshKeyId = id)}
+					class="max-h-52"
+				>
+					{#snippet children(key)}
+						<span class="min-w-0 flex-1 truncate text-sm text-foreground" title={key.name}>
+							{key.name}
+						</span>
+					{/snippet}
+				</RadioList>
 			{:else}
 				<p class="px-3 py-2.5 text-xs text-muted-foreground">
 					No key in this workspace yet. Uploy needs one to reach the server.

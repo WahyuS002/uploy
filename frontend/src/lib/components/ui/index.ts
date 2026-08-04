@@ -36,6 +36,12 @@ export {
 } from './Select.svelte';
 export type { SelectSize } from './Select.svelte';
 export {
+	default as RadioList,
+	radioListVariants,
+	radioListItemVariants,
+	radioListInputVariants
+} from './RadioList.svelte';
+export {
 	default as ToggleGroup,
 	toggleGroupRootVariants,
 	toggleGroupItemVariants

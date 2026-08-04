@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
@@ -30,7 +29,6 @@
 	} from '@steeze-ui/heroicons';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
-	type ServerResponse = components['schemas']['ServerResponse'];
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
@@ -40,28 +38,39 @@
 	let error = $state('');
 
 	let serverDialogOpen = $state(false);
-	let servers = $state<ServerResponse[]>([]);
-	let serversLoaded = $state(false);
-	let serversLoading = $state(false);
-	let serversError = $state('');
-	let selectedServerId = $state('');
+	let refreshingServers = $state(false);
 
 	// Stable sort: ready first, then everything else. Within each bucket the
 	// API's existing created_at DESC ordering is preserved.
 	let sortedServers = $derived(
-		servers.slice().sort((a, b) => {
+		data.servers.slice().sort((a, b) => {
 			const aReady = a.proxy_status === 'ready' ? 0 : 1;
 			const bReady = b.proxy_status === 'ready' ? 0 : 1;
 			return aReady - bReady;
 		})
 	);
 
+	// Holds an explicit pick only. The active target falls back to the first ready
+	// server, derived rather than assigned in an $effect: an effect would run
+	// after the first paint, so the Docker Image row would pop in a frame late.
+	let pickedServerId = $state('');
+	let activeServerId = $derived(
+		(sortedServers.some((s) => s.id === pickedServerId) ? pickedServerId : sortedServers[0]?.id) ??
+			''
+	);
+
 	const serverController = new ServerCreateController({
 		onSuccess: (created) => {
-			servers = [created, ...servers];
-			serversLoaded = true;
-			selectedServerId = created.id;
-			serverDialogOpen = false;
+			void (async () => {
+				try {
+					// Refresh before selecting, so the node never points at a server
+					// that is not in its own list yet.
+					await invalidateAll();
+					pickedServerId = created.id;
+				} finally {
+					serverDialogOpen = false;
+				}
+			})();
 		}
 	});
 
@@ -76,51 +85,19 @@
 		return data ?? null;
 	}
 
-	async function ensureServersLoaded() {
-		if (serversLoaded || serversLoading) return;
-		serversLoading = true;
-		serversError = '';
+	async function retryLoadServers() {
+		refreshingServers = true;
 		try {
-			const { data, error: err } = await api.GET('/api/servers');
-			if (err) {
-				serversError = (err as { error: string }).error ?? 'Failed to load servers';
-				return;
-			}
-			servers = data ?? [];
-			serversLoaded = true;
-		} catch {
-			serversError = 'Network error';
+			await invalidateAll();
 		} finally {
-			serversLoading = false;
+			refreshingServers = false;
 		}
-	}
-
-	function retryLoadServers() {
-		serversError = '';
-		serversLoaded = false;
-		void ensureServersLoaded();
 	}
 
 	function openServerWizard() {
 		serverDialogOpen = true;
 		void serverController.loadKeys();
 	}
-
-	// The server node is visible from the first paint, so servers load with the
-	// page rather than on demand. Deliberately not an $effect: ensureServersLoaded
-	// reads and writes serversLoading, so an effect would re-fire on every failed
-	// load and retry in a loop. Retrying is the user's call, via the node.
-	onMount(() => {
-		void ensureServersLoaded();
-	});
-
-	// Default to the first ready server. Runs once: the guard goes false as soon
-	// as a target exists, and an explicit pick is never overwritten.
-	$effect(() => {
-		if (!selectedServerId && sortedServers.length > 0) {
-			selectedServerId = sortedServers[0].id;
-		}
-	});
 
 	$effect(() => {
 		if (!serverDialogOpen) {
@@ -186,9 +163,9 @@
 
 		if (starter === 'docker-image') {
 			try {
-				if (selectedServerId) {
+				if (activeServerId) {
 					// eslint-disable-next-line svelte/no-navigation-without-resolve
-					await goto(`/projects/new/image?server_id=${encodeURIComponent(selectedServerId)}`);
+					await goto(`/projects/new/image?server_id=${encodeURIComponent(activeServerId)}`);
 				}
 			} finally {
 				busyStarter = null;
@@ -239,9 +216,10 @@
 					<div class="flex w-full max-w-105 flex-col items-center" data-no-pan>
 						<ServerNode
 							servers={sortedServers}
-							bind:value={selectedServerId}
-							loading={serversLoading && !serversLoaded}
-							error={serversError}
+							value={activeServerId}
+							onValueChange={(id) => (pickedServerId = id)}
+							loading={refreshingServers}
+							error={data.serversError}
 							canConnect={isOwner}
 							onConnect={openServerWizard}
 							onRetry={retryLoadServers}
@@ -252,7 +230,7 @@
 						<StarterPanel
 							{busyStarter}
 							title="Deploy to it"
-							enabled={{ 'docker-image': selectedServerId !== '', 'empty-project': true }}
+							enabled={{ 'docker-image': activeServerId !== '', 'empty-project': true }}
 							onSelect={launch}
 						/>
 
