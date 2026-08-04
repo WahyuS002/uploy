@@ -26,9 +26,25 @@
 		size?: InputSize;
 		nativeSize?: number;
 		value?: HTMLInputAttributes['value'];
+		/** The underlying element, for focus and measurement. `use:` cannot be
+		    applied to a component, so callers reach the input through this. */
+		ref?: HTMLInputElement | null;
 	};
 
-	let { class: className, size, nativeSize, value = $bindable(), ...rest }: Props = $props();
+	let {
+		class: className,
+		size,
+		nativeSize,
+		value = $bindable(),
+		ref = $bindable(null),
+		...rest
+	}: Props = $props();
 </script>
 
-<input bind:value size={nativeSize} class={cn(inputVariants({ size }), className)} {...rest} />
+<input
+	bind:this={ref}
+	bind:value
+	size={nativeSize}
+	class={cn(inputVariants({ size }), className)}
+	{...rest}
+/>

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
@@ -8,7 +9,6 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import {
@@ -19,7 +19,6 @@
 		ArrowsPointingIn,
 		ArrowLeft
 	} from '@steeze-ui/heroicons';
-	import { Container } from 'lucide-svelte';
 
 	type ServerResponse = components['schemas']['ServerResponse'];
 
@@ -28,56 +27,70 @@
 
 	let serverId = $derived(page.url.searchParams.get('server_id') ?? '');
 
-	let servers = $state<ServerResponse[]>([]);
-	let serversLoaded = $state(false);
-	let serversError = $state('');
-	let serversLoadToken = 0;
-	let server = $derived<ServerResponse | null>(
-		serversLoaded ? (servers.find((s) => s.id === serverId) ?? null) : null
-	);
+	let server = $derived<ServerResponse | null>(data.servers.find((s) => s.id === serverId) ?? null);
 
-	let image = $state('nginx:latest');
+	// Empty on landing, not prefilled: the field is the first thing you type into,
+	// and backspace-on-empty only works as "go back" if it starts empty.
+	let image = $state('');
 	let port = $state(8080);
 	let submitting = $state(false);
 	let error = $state('');
 
+	let started = $derived(image.trim() !== '');
+
+	// Ports ride along with the image. There is no correct default port — these
+	// five listen on 80, 6379, 5432, 80 and 8080 — so picking an example fills in
+	// the one that image actually uses instead of leaving a wrong 8080 behind.
 	const examples = [
-		'nginx:latest',
-		'redis:7-alpine',
-		'postgres:16',
-		'caddy:2',
-		'ghcr.io/owner/repo:tag'
+		{ image: 'nginx:latest', port: 80 },
+		{ image: 'redis:7-alpine', port: 6379 },
+		{ image: 'postgres:16', port: 5432 },
+		{ image: 'caddy:2', port: 80 },
+		{ image: 'ghcr.io/owner/repo:tag', port: 8080 }
 	];
 
-	async function loadServers() {
-		const token = ++serversLoadToken;
-		serversError = '';
-		serversLoaded = false;
+	function pickExample(example: { image: string; port: number }) {
+		image = example.image;
+		port = example.port;
+	}
+
+	let retrying = $state(false);
+
+	async function retryLoadServers() {
+		retrying = true;
 		try {
-			const { data, error: err } = await api.GET('/api/servers');
-			if (token !== serversLoadToken) return;
-			if (err) {
-				serversError = (err as { error: string }).error ?? 'Failed to load servers';
-				return;
-			}
-			servers = data ?? [];
-			serversLoaded = true;
-		} catch {
-			if (token !== serversLoadToken) return;
-			serversError = 'Network error';
+			await invalidateAll();
+		} finally {
+			retrying = false;
 		}
 	}
 
-	$effect(() => {
-		loadServers();
-		return () => {
-			serversLoadToken++;
-		};
-	});
-
-	function pickExample(value: string) {
-		image = value;
+	function goBack() {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto('/projects/new');
 	}
+
+	// The command-palette idiom: the arrow lives in the field, and the keyboard
+	// gets out the same way it came in. Backspace only leaves when there is
+	// nothing left to delete, so it never eats a character.
+	function onImageKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			goBack();
+			return;
+		}
+		if (event.key === 'Backspace' && image === '') {
+			event.preventDefault();
+			goBack();
+		}
+	}
+
+	// Works because servers now arrive with the page: the form is in the very
+	// first render, so the input is already bound when onMount fires. While the
+	// list was fetched client-side, mount landed on the spinner branch and this
+	// focused nothing.
+	let imageInput = $state<HTMLInputElement | null>(null);
+	onMount(() => imageInput?.focus());
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
@@ -175,21 +188,23 @@
 							{/snippet}
 						</EmptyState>
 					</div>
-				{:else if serversError}
+				{:else if data.serversError}
 					<div class="w-full max-w-105" data-no-pan>
-						<EmptyState icon={ServerStack} title="Couldn't load servers" description={serversError}>
+						<EmptyState
+							icon={ServerStack}
+							title="Couldn't load servers"
+							description={data.serversError}
+						>
 							{#snippet actions()}
-								<Button type="button" size="sm" onclick={loadServers}>Retry</Button>
+								<Button type="button" size="sm" loading={retrying} onclick={retryLoadServers}>
+									Retry
+								</Button>
 								<Button href="/projects/new" variant="secondary" size="sm">
 									<Icon src={ArrowLeft} theme="outline" class="h-3.5 w-3.5" />
 									Back to starters
 								</Button>
 							{/snippet}
 						</EmptyState>
-					</div>
-				{:else if !serversLoaded}
-					<div data-no-pan class="flex items-center justify-center">
-						<Spinner class="h-6 w-6 text-muted-foreground" />
 					</div>
 				{:else if !server}
 					<div class="w-full max-w-105" data-no-pan>
@@ -210,90 +225,88 @@
 					<div class="w-full max-w-105" data-no-pan>
 						<form
 							onsubmit={submit}
-							class="card flex flex-col gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground"
+							class="card overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
 						>
-							<header class="flex items-start gap-3">
-								<span
-									class="grid h-9 w-9 flex-none place-content-center rounded-md bg-muted text-foreground"
+							<div class="relative p-2">
+								<button
+									type="button"
+									onclick={goBack}
+									aria-label="Back to starters"
+									class="absolute top-1/2 left-4 z-10 grid h-5 w-5 -translate-y-1/2 cursor-pointer place-content-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 								>
-									<Container class="h-4 w-4" strokeWidth={1.75} />
-								</span>
-								<div class="min-w-0">
-									<h1 class="text-sm font-semibold text-foreground">Deploy a Docker image</h1>
-									<p class="text-xs text-muted-foreground">
-										We'll create the project, a production environment, and your service in one
-										step.
-									</p>
-								</div>
-							</header>
-
-							<div class="flex items-end gap-2">
-								<div class="flex-1">
-									<FormField label="Docker image">
-										<Input
-											type="text"
-											bind:value={image}
-											placeholder="nginx:latest"
-											autocomplete="off"
-											required
-										/>
-									</FormField>
-								</div>
-								<div class="w-24">
-									<FormField label="Port">
-										<Input type="number" bind:value={port} min={1} max={65535} required />
-									</FormField>
-								</div>
+									<Icon src={ArrowLeft} theme="outline" class="h-3.5 w-3.5" />
+								</button>
+								<!-- No border/shadow overrides here: Input already carries
+								     field-focus-glow, which is this design system's answer to the
+								     brand-coloured focus ring — --mint-deep border plus a soft
+								     brand halo. Suppressing it was the reason focus read as dead. -->
+								<Input
+									type="text"
+									bind:value={image}
+									onkeydown={onImageKeydown}
+									bind:ref={imageInput}
+									placeholder="nginx:latest"
+									aria-label="Docker image"
+									autocomplete="off"
+									autocapitalize="off"
+									spellcheck={false}
+									required
+									class="pl-9"
+								/>
 							</div>
 
-							<p class="text-xs text-muted-foreground">
-								Supports Docker Hub, GHCR, GCR, Quay, and other public registries.
-							</p>
+							{#if !started}
+								<p class="border-t border-border/70 px-4 py-2.5 text-xs text-muted-foreground">
+									Any public registry works — Docker Hub, GHCR, GCR, Quay.
+								</p>
 
-							<div class="flex flex-col gap-1.5">
-								<span class="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-									Try one of these
-								</span>
-								<div class="flex flex-wrap gap-1.5">
-									{#each examples as example (example)}
+								<div class="border-t border-border/70 py-1">
+									<p class="px-4 py-1.5 text-xs text-muted-foreground">Examples</p>
+									{#each examples as example (example.image)}
 										<button
 											type="button"
 											onclick={() => pickExample(example)}
-											class="cursor-pointer rounded-md border border-border bg-card px-2 py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-accent hover:text-foreground"
+											class="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-1.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
 										>
-											{example}
+											<span class="truncate font-mono text-xs text-foreground">{example.image}</span
+											>
+											<span class="font-mono text-[11px] text-muted-foreground"
+												>:{example.port}</span
+											>
 										</button>
 									{/each}
 								</div>
-							</div>
+							{:else}
+								<div class="flex flex-col gap-4 border-t border-border/70 p-4">
+									<div class="w-28">
+										<FormField label="Port">
+											<Input type="number" bind:value={port} min={1} max={65535} required />
+										</FormField>
+									</div>
 
-							<div
-								class="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"
-							>
-								<div class="flex items-center gap-2 text-muted-foreground">
-									<Icon src={ServerStack} theme="outline" class="h-3.5 w-3.5" />
-									<span
-										>Deploys to <span class="font-medium text-foreground">{server.name}</span></span
+									<div
+										class="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"
 									>
+										<div class="flex min-w-0 items-center gap-2 text-muted-foreground">
+											<Icon src={ServerStack} theme="outline" class="h-3.5 w-3.5 flex-none" />
+											<span class="truncate">
+												Deploys to <span class="font-medium text-foreground">{server.name}</span>
+											</span>
+										</div>
+										<span class="flex-none font-mono text-[11px] text-muted-foreground">
+											{server.host}:{server.port}
+										</span>
+									</div>
+
+									{#if error}
+										<p class="text-sm text-destructive">{error}</p>
+									{/if}
+
+									<Button type="submit" size="sm" loading={submitting} disabled={submitting}>
+										{submitting ? 'Creating...' : 'Create project'}
+									</Button>
 								</div>
-								<span class="font-mono text-[11px] text-muted-foreground">
-									{server.host}:{server.port}
-								</span>
-							</div>
-
-							{#if error}
-								<p class="text-sm text-destructive">{error}</p>
 							{/if}
-
-							<div class="flex items-center justify-between gap-2">
-								<Button href="/projects/new" variant="secondary" size="sm" type="button">
-									<Icon src={ArrowLeft} theme="outline" class="h-3.5 w-3.5" />
-									Back
-								</Button>
-								<Button type="submit" size="sm" loading={submitting} disabled={submitting}>
-									{submitting ? 'Creating...' : 'Create project'}
-								</Button>
-							</div>
 						</form>
 					</div>
 				{/if}
