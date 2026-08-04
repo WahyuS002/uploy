@@ -6,6 +6,7 @@
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
+	import { formatDate } from '$lib/format-date';
 	import { Button, EmptyState } from '$lib/components/ui';
 	import {
 		Dialog,
@@ -70,8 +71,8 @@
 					<thead>
 						<tr class="border-b border-border text-xs text-muted-foreground">
 							<th scope="col" class="pb-2 font-medium">Server</th>
-							<th scope="col" class="pb-2 font-medium">Access</th>
-							<th scope="col" class="pb-2 font-medium">Proxy</th>
+							<th scope="col" class="pb-2 font-medium">SSH Access</th>
+							<th scope="col" class="pb-2 font-medium">Proxy Status</th>
 							<th scope="col" class="pb-2 font-medium">Created</th>
 						</tr>
 					</thead>
@@ -118,7 +119,7 @@
 									{/if}
 								</td>
 								<td class="py-2.5 align-top text-muted-foreground">
-									{new Date(server.created_at).toLocaleDateString()}
+									{formatDate(server.created_at)}
 								</td>
 							</tr>
 							{#if expanded && key?.public_key}

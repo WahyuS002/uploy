@@ -3,6 +3,7 @@
 	import type { components } from '$lib/api/v1';
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
+	import { formatDate } from '$lib/format-date';
 	import {
 		Button,
 		EmptyState,
@@ -262,7 +263,7 @@
 							<div>
 								<h3 class="font-semibold text-foreground">{project.name}</h3>
 								<p class="text-xs text-muted-foreground">
-									Updated {new Date(project.updated_at).toLocaleDateString()}
+									Updated {formatDate(project.updated_at)}
 								</p>
 							</div>
 						</div>

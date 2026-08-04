@@ -11,6 +11,7 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { Server } from '@steeze-ui/heroicons';
 	import { cn } from '$lib/components/ui/cn.js';
+	import { formatDateTime } from '$lib/format-date';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ServiceDomainResponse = components['schemas']['ServiceDomainResponse'];
@@ -414,7 +415,7 @@
 							<span class="font-mono text-xs text-muted-foreground">{dep.id.slice(0, 12)}</span>
 							<StatusBadge status={dep.status} class="font-bold" />
 							<span class="text-muted-foreground">
-								{new Date(dep.created_at).toLocaleString()}
+								{formatDateTime(dep.created_at)}
 							</span>
 						</div>
 					{/each}
