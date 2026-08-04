@@ -8,15 +8,9 @@
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
 	import { Button, EmptyState } from '$lib/components/ui';
-	import {
-		Dialog,
-		DialogContent,
-		DialogDescription,
-		DialogHeader,
-		DialogTitle
-	} from '$lib/components/ui/dialog';
+	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Key, Plus, Server } from '@steeze-ui/heroicons';
+	import { ChevronRight, Key, Plus, Server } from '@steeze-ui/heroicons';
 
 	let { data }: { data: PageData } = $props();
 
@@ -163,10 +157,17 @@
 <Dialog bind:open={dialogOpen}>
 	<DialogContent class="w-[min(92vw,32rem)] max-w-none overflow-hidden">
 		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
-			<DialogTitle class="text-sm">Connect a server</DialogTitle>
-			<DialogDescription class="text-xs">
-				Uploy deploys over SSH, so it needs an account on the machine and a key that account trusts.
-			</DialogDescription>
+			<DialogTitle class="flex items-center gap-2 text-sm">
+				<span class="font-medium text-muted-foreground">Servers</span>
+				<Icon src={ChevronRight} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
+				<span
+					class="grid h-6 w-6 place-content-center rounded-full border border-border bg-muted"
+					aria-hidden="true"
+				>
+					<Icon src={Server} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
+				</span>
+				New server
+			</DialogTitle>
 		</DialogHeader>
 		<ServerConnectWizard
 			controller={serverController}
