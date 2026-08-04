@@ -49,46 +49,58 @@
 	<div class={cn('flex min-h-0 flex-col gap-4', bodyClass)}>
 		<!-- Three states, three treatments. A marker that renders "done" and
 		     "current" the same way stops answering the only question it exists to
-		     answer. The number carries the meaning so the ring can stay quiet. -->
-		<ol class="flex items-center gap-2.5 text-xs" aria-label="Progress">
+		     answer. Each step owns a full-width rail rather than a stub connector,
+		     so the row reads as progress across the dialog instead of two badges
+		     floating in the corner. Done is tint-and-text (the tone every other
+		     success surface here uses); current is the solid obsidian mark. -->
+		<ol class="flex items-stretch gap-3 text-xs" aria-label="Progress">
 			{#each steps as step, i (step.id)}
 				{@const state = i === stepIndex ? 'current' : i < stepIndex ? 'done' : 'todo'}
-				{#if i > 0}
-					<li
+				<li
+					class="flex min-w-0 flex-1 flex-col gap-2"
+					aria-current={state === 'current' ? 'step' : undefined}
+				>
+					<span class="flex items-center gap-2">
+						<span
+							class="grid h-5 w-5 flex-none place-content-center rounded-full text-[11px] font-medium tabular-nums transition-colors duration-150 {state ===
+							'done'
+								? 'bg-success-muted text-success'
+								: state === 'current'
+									? 'bg-foreground text-background'
+									: 'border border-input text-muted-foreground'}"
+						>
+							{#if state === 'done'}
+								<Icon src={Check} theme="outline" class="h-3 w-3" />
+							{:else}
+								{i + 1}
+							{/if}
+						</span>
+						<span
+							class="min-w-0 truncate {state === 'current'
+								? 'font-medium text-foreground'
+								: state === 'done'
+									? 'text-foreground'
+									: 'text-muted-foreground'}"
+						>
+							{step.label}
+						</span>
+						<!-- Colour alone must not carry "done": name the state for AT too. -->
+						<span class="sr-only">
+							{state === 'done'
+								? 'completed'
+								: state === 'current'
+									? 'current step'
+									: 'not started'}
+						</span>
+					</span>
+					<span
 						aria-hidden="true"
-						class="h-px w-6 flex-none transition-colors duration-150 {i <= stepIndex
+						class="h-0.5 rounded-full transition-colors duration-150 {state === 'done'
 							? 'bg-success'
-							: 'bg-border'}"
-					></li>
-				{/if}
-				<li class="flex items-center gap-2" aria-current={state === 'current' ? 'step' : undefined}>
-					<span
-						class="grid h-5 w-5 flex-none place-content-center rounded-full text-[10px] font-medium tabular-nums transition-colors duration-150 {state ===
-						'done'
-							? 'bg-success text-white'
 							: state === 'current'
-								? 'bg-foreground text-background'
-								: 'border border-input text-muted-foreground'}"
-					>
-						{#if state === 'done'}
-							<Icon src={Check} theme="outline" class="h-3 w-3" />
-						{:else}
-							{i + 1}
-						{/if}
-					</span>
-					<span
-						class={state === 'current'
-							? 'font-medium text-foreground'
-							: state === 'done'
-								? 'text-foreground'
-								: 'text-muted-foreground'}
-					>
-						{step.label}
-					</span>
-					<!-- Colour alone must not carry "done": name the state for AT too. -->
-					<span class="sr-only">
-						{state === 'done' ? 'completed' : state === 'current' ? 'current step' : 'not started'}
-					</span>
+								? 'bg-foreground'
+								: 'bg-border'}"
+					></span>
 				</li>
 			{/each}
 		</ol>
@@ -106,11 +118,14 @@
 					</h3>
 					{#if controller.authorizeCommand}
 						<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-							Run this command on the server as <span class="font-medium text-foreground">{controller.sshUser}</span>:
+							Run this command on the server as <span class="font-medium text-foreground"
+								>{controller.sshUser}</span
+							>:
 						</p>
 					{:else}
 						<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-							{controller.selectedKey?.name ?? 'This key'} has no public key stored. Authorize it on the server, then continue.
+							{controller.selectedKey?.name ?? 'This key'} has no public key stored. Authorize it on the
+							server, then continue.
 						</p>
 					{/if}
 				</div>
