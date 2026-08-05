@@ -50,6 +50,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Sign in · Uploy</title>
+</svelte:head>
+
 <AuthCard title="Sign in to Uploy">
 	{#if error}
 		<Alert tone="danger" class="mb-4">{error}</Alert>

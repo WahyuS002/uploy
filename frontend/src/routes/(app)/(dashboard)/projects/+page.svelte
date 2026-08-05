@@ -109,6 +109,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Projects · Uploy</title>
+</svelte:head>
+
 <!-- The service marks, shared by both views: brand logo where we know the image,
      monogram where we don't, so an unmapped image still reads as a distinct node. -->
 {#snippet serviceTiles(list: ServiceResponse[], size: 'sm' | 'lg')}

@@ -13,7 +13,6 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import {
 		Dialog,
 		DialogContent,
@@ -324,11 +323,21 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{project ? `${project.name} · Uploy` : 'Project · Uploy'}</title>
+</svelte:head>
+
 {#snippet leadingSnippet()}
 	<div class="flex min-w-0 items-center gap-2">
-		<span class="truncate text-sm font-semibold text-foreground">
-			{project?.name ?? 'Project'}
-		</span>
+		{#if !loaded}
+			<!-- A bar, not the literal word "Project": the fallback label reads as the
+			     real name until it swaps, which is a content flash, not a load. -->
+			<div class="h-4 w-28 animate-pulse rounded bg-muted"></div>
+		{:else}
+			<span class="truncate text-sm font-semibold text-foreground">
+				{project?.name ?? 'Project'}
+			</span>
+		{/if}
 		{#if environments.length > 0}
 			<span class="text-muted-foreground/60">/</span>
 			<DropdownMenu.Root>
@@ -409,8 +418,36 @@
 					style="transform: translate3d({pan.x}px, {pan.y}px, 0) scale({pan.scale});"
 				>
 					{#if !loaded}
-						<div data-no-pan class="flex items-center justify-center">
-							<Spinner class="h-6 w-6 text-muted-foreground" />
+						<!-- Ghost nodes in the real node geometry, so the canvas resolves in
+						     place instead of swapping a centred spinner for a grid. bg-card
+						     with muted bars inside, not bare muted blocks: --muted and
+						     --canvas are the same value out here, so the node surface is what
+						     carries the shape. Two, because that is the honest guess — enough
+						     to say "services are coming", not enough to promise a count. -->
+						<div
+							class="grid gap-4"
+							style="grid-template-columns: repeat(2, minmax(220px, 240px));"
+							data-no-pan
+							role="status"
+							aria-label="Loading project"
+						>
+							{#each [0, 1] as i (i)}
+								<div
+									class="skeleton-node flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+								>
+									<div class="flex items-center gap-2">
+										<div class="h-7 w-7 flex-none animate-pulse rounded-md bg-muted"></div>
+										<div class="flex min-w-0 flex-1 flex-col gap-1">
+											<div class="h-3.5 w-24 animate-pulse rounded bg-muted"></div>
+											<div class="h-2.5 w-32 animate-pulse rounded bg-muted"></div>
+										</div>
+									</div>
+									<div class="flex h-4 items-center justify-between">
+										<div class="h-2.5 w-12 animate-pulse rounded bg-muted"></div>
+										<div class="h-2.5 w-16 animate-pulse rounded bg-muted"></div>
+									</div>
+								</div>
+							{/each}
 						</div>
 					{:else if !project}
 						<div class="w-full max-w-105" data-no-pan>
@@ -720,8 +757,12 @@
 		}
 	}
 
-	.service-node {
+	.service-node,
+	.skeleton-node {
 		box-shadow: 0 1px 0 rgba(17, 17, 17, 0.04);
+	}
+
+	.service-node {
 		cursor: pointer;
 	}
 

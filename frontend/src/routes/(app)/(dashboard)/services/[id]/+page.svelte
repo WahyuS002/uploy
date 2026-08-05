@@ -6,6 +6,10 @@
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
 </script>
 
+<svelte:head>
+	<title>{data.service ? `${data.service.name} · Uploy` : 'Service · Uploy'}</title>
+</svelte:head>
+
 {#if data.service}
 	<div class="mx-auto w-full max-w-4xl px-4 py-6">
 		<header class="mb-4">

@@ -41,6 +41,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Create your account · Uploy</title>
+</svelte:head>
+
 <AuthCard title="Create your account">
 	{#if error}
 		<Alert tone="danger" class="mb-4">{error}</Alert>

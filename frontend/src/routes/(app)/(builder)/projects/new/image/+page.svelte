@@ -91,6 +91,10 @@
 	const panViewport = pan.viewport;
 </script>
 
+<svelte:head>
+	<title>Deploy a Docker image · Uploy</title>
+</svelte:head>
+
 <div
 	class="canvas viewport relative flex w-full flex-1 overflow-hidden rounded-xl border border-border"
 	data-panning={pan.isPanning ? 'true' : 'false'}
