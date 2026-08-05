@@ -154,7 +154,7 @@
 
 	{#if !started}
 		<p class="border-t border-border/70 px-4 py-2.5 text-xs text-muted-foreground">
-			Any public registry works — Docker Hub, GHCR, GCR, Quay.
+			Supports any public registry (Docker Hub, GHCR, GCR, Quay).
 		</p>
 
 		<div class="border-t border-border/70 py-1">
