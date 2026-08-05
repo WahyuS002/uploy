@@ -1948,6 +1948,7 @@ components:
         - created_at
         - updated_at
         - has_pending_changes
+        - has_deployed
       properties:
         id:
           type: string
@@ -1981,6 +1982,13 @@ components:
             True when no successful deployment has landed at or after this
             service's last change — it has either never been deployed, or was
             edited since the last deploy. Derived per request, never stored.
+        has_deployed:
+          type: boolean
+          description: >
+            True once at least one deployment of this service has succeeded.
+            Combined with has_pending_changes it distinguishes a service that
+            will be created on its server from one that will be updated.
+            Derived per request, never stored.
 
     CreateDomainRequest:
       type: object

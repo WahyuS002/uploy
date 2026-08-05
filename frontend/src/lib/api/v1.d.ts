@@ -611,6 +611,8 @@ export interface components {
 			updated_at: string;
 			/** @description True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored. */
 			has_pending_changes: boolean;
+			/** @description True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored. */
+			has_deployed: boolean;
 		};
 		CreateDomainRequest: {
 			domain: string;

@@ -16,7 +16,8 @@ INSERT INTO services (name, image, container_name, port, server_id, workspace_id
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
     -- A service created one statement ago has no deployments, so it is always pending.
-    TRUE::boolean AS has_pending_changes
+    TRUE::boolean AS has_pending_changes,
+    FALSE::boolean AS has_deployed
 `
 
 type CreateServiceParams struct {
@@ -45,6 +46,7 @@ type CreateServiceRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	HasPendingChanges bool      `json:"has_pending_changes"`
+	HasDeployed       bool      `json:"has_deployed"`
 }
 
 // has_pending_changes is derived, not stored: a service is pending when no
@@ -54,6 +56,12 @@ type CreateServiceRow struct {
 // cannot drift out of sync with the deployments table, and expressed here
 // rather than in the client so the API and the UI can never disagree on what
 // "pending" means. idx_deployments_service_id keeps the lookup cheap.
+//
+// has_deployed rides alongside it purely to tell the two pending cases apart:
+// false means the service has never landed on a server (the review dialog says
+// "will be added"), true means it is live and edited since ("will be updated").
+// Note has_deployed = false implies has_pending_changes = true, so the pair only
+// ever expresses three real states.
 //
 // Known gap: editing only env vars or domains does not bump services.updated_at,
 // so those edits do not mark the service pending.
@@ -84,6 +92,7 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (C
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.HasPendingChanges,
+		&i.HasDeployed,
 	)
 	return i, err
 }
@@ -99,7 +108,8 @@ func (q *Queries) DeleteService(ctx context.Context, id string) error {
 
 const getServiceByID = `-- name: GetServiceByID :one
 SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes
+    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
+    (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.id = $1
 `
 
@@ -117,6 +127,7 @@ type GetServiceByIDRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	HasPendingChanges bool      `json:"has_pending_changes"`
+	HasDeployed       bool      `json:"has_deployed"`
 }
 
 func (q *Queries) GetServiceByID(ctx context.Context, id string) (GetServiceByIDRow, error) {
@@ -136,6 +147,7 @@ func (q *Queries) GetServiceByID(ctx context.Context, id string) (GetServiceByID
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.HasPendingChanges,
+		&i.HasDeployed,
 	)
 	return i, err
 }
@@ -146,6 +158,7 @@ SELECT
     s.server_id, s.workspace_id, s.kind, s.project_id, s.environment_id,
     s.created_at, s.updated_at,
     (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = s.id AND d.status = 'success' AND d.created_at >= s.updated_at))::boolean AS has_pending_changes,
+    (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = s.id AND d.status = 'success'))::boolean AS has_deployed,
     srv.host, srv.port AS server_port, srv.ssh_user,
     srv.proxy_status,
     k.private_key
@@ -169,6 +182,7 @@ type GetServiceWithServerRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	HasPendingChanges bool      `json:"has_pending_changes"`
+	HasDeployed       bool      `json:"has_deployed"`
 	Host              string    `json:"host"`
 	ServerPort        int32     `json:"server_port"`
 	SshUser           string    `json:"ssh_user"`
@@ -193,6 +207,7 @@ func (q *Queries) GetServiceWithServer(ctx context.Context, id string) (GetServi
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.HasPendingChanges,
+		&i.HasDeployed,
 		&i.Host,
 		&i.ServerPort,
 		&i.SshUser,
@@ -204,7 +219,8 @@ func (q *Queries) GetServiceWithServer(ctx context.Context, id string) (GetServi
 
 const listServicesByEnvironment = `-- name: ListServicesByEnvironment :many
 SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes
+    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
+    (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.environment_id = $1 ORDER BY created_at DESC
 `
 
@@ -222,6 +238,7 @@ type ListServicesByEnvironmentRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	HasPendingChanges bool      `json:"has_pending_changes"`
+	HasDeployed       bool      `json:"has_deployed"`
 }
 
 func (q *Queries) ListServicesByEnvironment(ctx context.Context, environmentID string) ([]ListServicesByEnvironmentRow, error) {
@@ -247,6 +264,7 @@ func (q *Queries) ListServicesByEnvironment(ctx context.Context, environmentID s
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.HasPendingChanges,
+			&i.HasDeployed,
 		); err != nil {
 			return nil, err
 		}
@@ -260,7 +278,8 @@ func (q *Queries) ListServicesByEnvironment(ctx context.Context, environmentID s
 
 const listServicesByProject = `-- name: ListServicesByProject :many
 SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes
+    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
+    (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.project_id = $1 ORDER BY created_at DESC
 `
 
@@ -278,6 +297,7 @@ type ListServicesByProjectRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	HasPendingChanges bool      `json:"has_pending_changes"`
+	HasDeployed       bool      `json:"has_deployed"`
 }
 
 func (q *Queries) ListServicesByProject(ctx context.Context, projectID string) ([]ListServicesByProjectRow, error) {
@@ -303,6 +323,7 @@ func (q *Queries) ListServicesByProject(ctx context.Context, projectID string) (
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.HasPendingChanges,
+			&i.HasDeployed,
 		); err != nil {
 			return nil, err
 		}
@@ -316,7 +337,8 @@ func (q *Queries) ListServicesByProject(ctx context.Context, projectID string) (
 
 const listServicesByWorkspace = `-- name: ListServicesByWorkspace :many
 SELECT id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes
+    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
+    (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.workspace_id = $1 ORDER BY created_at DESC
 `
 
@@ -334,6 +356,7 @@ type ListServicesByWorkspaceRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	HasPendingChanges bool      `json:"has_pending_changes"`
+	HasDeployed       bool      `json:"has_deployed"`
 }
 
 func (q *Queries) ListServicesByWorkspace(ctx context.Context, workspaceID string) ([]ListServicesByWorkspaceRow, error) {
@@ -359,6 +382,7 @@ func (q *Queries) ListServicesByWorkspace(ctx context.Context, workspaceID strin
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.HasPendingChanges,
+			&i.HasDeployed,
 		); err != nil {
 			return nil, err
 		}
@@ -376,7 +400,10 @@ SET name = $2, image = $3, container_name = $4, port = $5, server_id = $6, updat
 WHERE services.id = $1
 RETURNING id, name, image, container_name, port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
     -- updated_at was just set to NOW(), so nothing can have deployed after it.
-    TRUE::boolean AS has_pending_changes
+    TRUE::boolean AS has_pending_changes,
+    -- has_deployed still needs the real lookup: an edited service may well have
+    -- deployed before, which is exactly what tells "update" apart from "create".
+    (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 `
 
 type UpdateServiceParams struct {
@@ -402,6 +429,7 @@ type UpdateServiceRow struct {
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	HasPendingChanges bool      `json:"has_pending_changes"`
+	HasDeployed       bool      `json:"has_deployed"`
 }
 
 func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (UpdateServiceRow, error) {
@@ -428,6 +456,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (U
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.HasPendingChanges,
+		&i.HasDeployed,
 	)
 	return i, err
 }

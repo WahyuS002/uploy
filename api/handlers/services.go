@@ -327,5 +327,6 @@ func serviceToResponse(svc db.Service) gen.ServiceResponse {
 		UpdatedAt:     svc.UpdatedAt,
 
 		HasPendingChanges: svc.HasPendingChanges,
+		HasDeployed:       svc.HasDeployed,
 	}
 }

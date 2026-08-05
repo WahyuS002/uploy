@@ -380,6 +380,9 @@ type ServiceResponse struct {
 	CreatedAt     time.Time `json:"created_at"`
 	EnvironmentId string    `json:"environment_id"`
 
+	// HasDeployed True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored.
+	HasDeployed bool `json:"has_deployed"`
+
 	// HasPendingChanges True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored.
 	HasPendingChanges bool                `json:"has_pending_changes"`
 	Id                string              `json:"id"`

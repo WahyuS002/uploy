@@ -96,6 +96,10 @@
 	// bar would slide straight back in on the next poll.
 	let deployingIds = $state<Set<string>>(new Set());
 	let deploying = $state(false);
+	// serviceId -> the deployment the bar started for it, so the side panel can
+	// stream its logs. Without this a bar deploy runs completely invisibly: the
+	// panel only ever knew about deployments it started itself.
+	let barDeploymentIds = $state<Record<string, string>>({});
 
 	let unfiredPending = $derived(
 		envServices.filter((s) => s.has_pending_changes && !deployingIds.has(s.id))
@@ -221,7 +225,14 @@
 			const results = await Promise.all(
 				ids.map((id) => api.POST('/api/deployments', { body: { service_id: id } }))
 			);
-			const started = ids.filter((_, i) => !results[i].error);
+			const started: string[] = [];
+			const nextDeploymentIds = { ...barDeploymentIds };
+			ids.forEach((id, i) => {
+				const dep = results[i].data;
+				if (results[i].error || !dep) return;
+				started.push(id);
+				nextDeploymentIds[id] = dep.deployment_id;
+			});
 			if (started.length === 0) {
 				toast.show({
 					tone: 'error',
@@ -232,8 +243,15 @@
 				});
 				return;
 			}
+			barDeploymentIds = nextDeploymentIds;
 			deployingIds = new Set([...deployingIds, ...started]);
 			watchDeployments();
+			// Deploying one service from the bar hides the bar and leaves only a badge
+			// on the node, so the logs are a click away with nothing pointing at them.
+			// Opening the panel puts the thing the user just asked for in front of
+			// them. With several services there is no non-arbitrary one to pick, so
+			// the badges carry it instead.
+			if (started.length === 1) selectedServiceId = started[0];
 			toast.show({
 				tone: 'success',
 				title:
@@ -358,6 +376,7 @@
 		loaded = false;
 		stopWatchingDeployments();
 		deployingIds = new Set();
+		barDeploymentIds = {};
 
 		(async () => {
 			const [proj, envs, svcs] = await Promise.all([
@@ -655,10 +674,15 @@
 								     actively driving, and two dashed-vs-solid signals on one edge
 								     would just cancel each other out. -->
 								{@const isPending = svc.has_pending_changes && !isDeploying}
+								<!-- items-stretch is load-bearing, not decoration: the UA stylesheet sets
+								     align-items: flex-start on <button>, so as a flex column its rows
+								     shrink to their own content and the justify-between further down has
+								     no free space left to distribute — which is what ran "Port 8080"
+								     straight into the server name. -->
 								<button
 									type="button"
 									onclick={() => (selectedServiceId = svc.id)}
-									class="service-node group flex flex-col gap-2 rounded-lg border bg-card p-3 text-left text-card-foreground transition-shadow hover:shadow-md {isSelected
+									class="service-node group flex flex-col items-stretch gap-2 rounded-lg border bg-card p-3 text-left text-card-foreground transition-shadow hover:shadow-md {isSelected
 										? 'border-foreground shadow-md'
 										: isPending
 											? 'border-dashed border-foreground/25'
@@ -679,7 +703,11 @@
 										{#if isDeploying}
 											<span class="node-badge is-deploying">Deploying</span>
 										{:else if isPending}
-											<span class="node-badge">Pending</span>
+											<!-- "New" and "Modified" both name what the change *is*, matching the
+											     review dialog's "will be added" / "will be updated". "Pending"
+											     named the queue instead, which read as a different axis from
+											     "New" and said nothing you could act on. -->
+											<span class="node-badge">{svc.has_deployed ? 'Modified' : 'New'}</span>
 										{/if}
 									</div>
 									<div class="flex items-center justify-between text-[11px] text-muted-foreground">
@@ -766,7 +794,11 @@
 				</button>
 			</header>
 			<div class="min-h-0 flex-1 overflow-hidden">
-				<ServiceWorkspace service={selectedService} {canEdit} />
+				<ServiceWorkspace
+					service={selectedService}
+					{canEdit}
+					externalDeploymentId={barDeploymentIds[selectedService.id] ?? null}
+				/>
 			</div>
 		</aside>
 	{/if}

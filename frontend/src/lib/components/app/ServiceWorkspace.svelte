@@ -24,10 +24,22 @@
 		service: ServiceResponse;
 		canEdit: boolean;
 		showEnvVars?: boolean;
+		/**
+		 * A deployment started outside this panel — the canvas "pending changes"
+		 * bar deploys straight from the page and this is how its logs find their
+		 * way here. Without it a bar deploy runs invisibly.
+		 */
+		externalDeploymentId?: string | null;
 		class?: string;
 	};
 
-	let { service, canEdit, showEnvVars = true, class: className }: Props = $props();
+	let {
+		service,
+		canEdit,
+		showEnvVars = true,
+		externalDeploymentId = null,
+		class: className
+	}: Props = $props();
 
 	let svcId = $derived(service.id);
 
@@ -36,7 +48,12 @@
 	let domains = $state<ServiceDomainResponse[]>([]);
 	let envs = $state<ServiceEnvResponse[]>([]);
 	let envsLoaded = $state(false);
-	let deploymentId = $state<string | null>(null);
+	// Derived rather than synced with an effect: the reset below and an incoming
+	// external id would otherwise race on service change, and which one won would
+	// come down to declaration order. A deploy started from this panel is the more
+	// specific fact, so it wins; otherwise the page's id shows through.
+	let localDeploymentId = $state<string | null>(null);
+	let deploymentId = $derived(localDeploymentId ?? externalDeploymentId);
 	let deploying = $state(false);
 	let deployError = $state('');
 	let deployments = $state<DeploymentResponse[]>([]);
@@ -94,7 +111,7 @@
 				return;
 			}
 			if (data) {
-				deploymentId = data.deployment_id;
+				localDeploymentId = data.deployment_id;
 				loadDeployments(svcId);
 			}
 		} catch {
@@ -174,7 +191,7 @@
 		envs = [];
 		envsLoaded = false;
 		deployments = [];
-		deploymentId = null;
+		localDeploymentId = null;
 		deployError = '';
 		deploying = false;
 		needsRedeploy = false;
