@@ -53,27 +53,29 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "name is required"})
-		return
-	}
 	req.Image = strings.TrimSpace(req.Image)
 	if req.Image == "" {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "image is required"})
 		return
 	}
+	if !validImage.MatchString(req.Image) {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "image contains invalid characters"})
+		return
+	}
+
+	// Blank name or container name means "derive it from the image", the same
+	// rule POST /api/projects/from-image follows. The canvas flow only asks for
+	// an image, so those are the two fields it has nothing to send.
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		req.Name = serviceNameFromImage(req.Image)
+	}
 	req.ContainerName = strings.TrimSpace(req.ContainerName)
 	if req.ContainerName == "" {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "container_name is required"})
-		return
+		req.ContainerName = containerNameFromImage(req.Image)
 	}
 	if !validContainerName.MatchString(req.ContainerName) {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "container_name contains invalid characters"})
-		return
-	}
-	if !validImage.MatchString(req.Image) {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "image contains invalid characters"})
 		return
 	}
 

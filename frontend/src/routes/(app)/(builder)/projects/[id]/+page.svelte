@@ -7,6 +7,7 @@
 	import FormField from '$lib/components/app/FormField.svelte';
 	import ServiceWorkspace from '$lib/components/app/ServiceWorkspace.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
+	import ImageStarterForm from '$lib/components/app/ImageStarterForm.svelte';
 	import { toast } from '$lib/components/ui/toast/toast-service.svelte.js';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -58,13 +59,16 @@
 	let selectedEnvId = $state('');
 	let selectedServiceId = $state<string | null>(null);
 
-	let serviceDialogOpen = $state(false);
+	// Adding a service is a step on the canvas, not a dialog — the same image-first
+	// flow as /projects/new/image. Everything else (name, container name) is
+	// derived from the image server-side, so there is nothing left to fill in.
+	let addingService = $state(false);
+	// Latches on the first step into the form and stays on, so the canvas has a
+	// direction to come back from. Without it the very first paint of a project
+	// would slide in from the left, explaining a step that never happened.
+	let steppedIntoForm = $state(false);
 	let svcError = $state('');
 	let creatingService = $state(false);
-	let svcName = $state('');
-	let svcImage = $state('nginx:latest');
-	let svcContainerName = $state('');
-	let svcPort = $state(8080);
 	let svcServerId = $state('');
 
 	let envDialogOpen = $state(false);
@@ -123,28 +127,27 @@
 		selectedServiceId = null;
 	}
 
-	function openServiceDialog() {
+	function startAddService() {
 		if (!selectedEnvId) return;
 		svcError = '';
-		svcName = '';
-		svcContainerName = '';
-		svcImage = 'nginx:latest';
-		svcPort = 8080;
 		if (!svcServerId && servers.length > 0) svcServerId = servers[0].id;
-		serviceDialogOpen = true;
+		steppedIntoForm = true;
+		addingService = true;
 	}
 
-	async function createService() {
-		if (!selectedEnvId) return;
+	async function createService(image: string, port: number) {
+		if (!selectedEnvId || creatingService) return;
 		svcError = '';
 		creatingService = true;
 		try {
 			const { data, error: err } = await api.POST('/api/services', {
 				body: {
-					name: svcName,
-					image: svcImage,
-					container_name: svcContainerName,
-					port: svcPort,
+					// Blank name and container name: the API derives both from the
+					// image, the same way POST /api/projects/from-image does.
+					name: '',
+					image,
+					container_name: '',
+					port,
 					server_id: svcServerId,
 					environment_id: selectedEnvId,
 					kind: 'application'
@@ -157,7 +160,7 @@
 			if (data) {
 				services = [...services, data];
 				selectedServiceId = data.id;
-				serviceDialogOpen = false;
+				addingService = false;
 				pan.recenter();
 			}
 		} catch {
@@ -227,7 +230,7 @@
 		if (!canEdit) return;
 		if (!selectedEnvId) return;
 
-		openServiceDialog();
+		startAddService();
 
 		const cleanUrl = new URL(page.url);
 		cleanUrl.searchParams.delete('starter');
@@ -252,7 +255,7 @@
 	}
 
 	function handleStarterSelect(starter: Starter) {
-		if (starter === 'docker-image') openServiceDialog();
+		if (starter === 'docker-image') startAddService();
 	}
 
 	const pan = createCanvasPan({ bounds: 'auto' });
@@ -265,7 +268,8 @@
 		project = null;
 		environments = [];
 		services = [];
-		serviceDialogOpen = false;
+		addingService = false;
+		steppedIntoForm = false;
 		selectedEnvId = '';
 		selectedServiceId = null;
 		svcServerId = '';
@@ -370,7 +374,7 @@
 {/snippet}
 
 {#snippet actionSnippet()}
-	<Button size="sm" onclick={openServiceDialog}>
+	<Button size="sm" onclick={startAddService}>
 		<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
 		Add service
 	</Button>
@@ -439,8 +443,57 @@
 								{/if}
 							</div>
 						</div>
+					{:else if addingService}
+						<div class="step-enter w-full max-w-105" data-no-pan>
+							{#if servers.length === 0}
+								<EmptyState
+									icon={ServerStack}
+									title="Connect a server first"
+									description="Uploy needs a server with SSH access before it can deploy a service."
+								>
+									{#snippet actions()}
+										{#if isOwner}
+											<Button href="/servers" size="sm">Connect a server</Button>
+										{/if}
+										<Button
+											type="button"
+											variant="secondary"
+											size="sm"
+											onclick={() => (addingService = false)}
+										>
+											Cancel
+										</Button>
+									{/snippet}
+								</EmptyState>
+							{:else}
+								<ImageStarterForm
+									submitting={creatingService}
+									error={svcError}
+									submitLabel="Create service"
+									backLabel="Back to canvas"
+									onBack={() => (addingService = false)}
+									onSubmit={createService}
+								>
+									{#snippet details()}
+										<div class="flex items-center justify-between gap-3">
+											<span class="text-xs text-muted-foreground">Server</span>
+											<Select items={serverItems} bind:value={svcServerId} size="sm" class="w-56" />
+										</div>
+
+										<div class="flex items-baseline justify-between gap-3 text-xs">
+											<span class="flex-none text-muted-foreground">Deploys to</span>
+											<span class="truncate font-medium text-foreground">{selectedEnv?.name}</span>
+										</div>
+									{/snippet}
+								</ImageStarterForm>
+							{/if}
+						</div>
 					{:else if envServices.length === 0}
-						<div class="flex w-full max-w-105 flex-col gap-2" data-no-pan>
+						<div
+							class="flex w-full max-w-105 flex-col gap-2"
+							class:step-back={steppedIntoForm}
+							data-no-pan
+						>
 							{#if canEdit}
 								<StarterPanel
 									enabled={{ 'docker-image': true }}
@@ -459,6 +512,7 @@
 						{@const cols = nodeColumnsFor(envServices.length)}
 						<div
 							class="grid gap-4"
+							class:step-back={steppedIntoForm}
 							style="grid-template-columns: repeat({cols}, minmax(220px, 240px));"
 							data-no-pan
 						>
@@ -565,83 +619,6 @@
 	{/if}
 </div>
 
-<Dialog bind:open={serviceDialogOpen}>
-	<DialogContent>
-		<form
-			onsubmit={(e) => {
-				e.preventDefault();
-				createService();
-			}}
-		>
-			<DialogHeader>
-				<DialogTitle>Add service</DialogTitle>
-			</DialogHeader>
-			<div class="px-5 pb-5">
-				{#if servers.length === 0}
-					<div
-						class="rounded-md border border-dashed border-border bg-card p-3 text-xs text-muted-foreground"
-					>
-						You need to connect a server before you can deploy a service.
-						{#if isOwner}
-							<div class="mt-2">
-								<Button href="/servers" size="xs" variant="secondary">
-									<Icon src={ServerStack} theme="outline" class="h-3 w-3" />
-									Connect a server
-								</Button>
-							</div>
-						{/if}
-					</div>
-				{:else}
-					<div class="flex flex-col gap-3">
-						<FormField label="Name">
-							<Input type="text" bind:value={svcName} required />
-						</FormField>
-						<FormField label="Image">
-							<Input type="text" bind:value={svcImage} required />
-						</FormField>
-						<FormField label="Container name">
-							<Input type="text" bind:value={svcContainerName} required />
-						</FormField>
-						<FormField label="Port">
-							<Input type="number" bind:value={svcPort} required />
-						</FormField>
-						<FormField label="Server">
-							<Select
-								items={serverItems}
-								bind:value={svcServerId}
-								required
-								placeholder="Select a server"
-							/>
-						</FormField>
-						<p class="text-xs text-muted-foreground">
-							Deploys to <span class="font-medium text-foreground">{selectedEnv?.name}</span>
-						</p>
-					</div>
-				{/if}
-
-				{#if svcError}
-					<p class="mt-3 text-sm text-destructive">{svcError}</p>
-				{/if}
-			</div>
-			<DialogFooter>
-				<Button
-					type="button"
-					variant="secondary"
-					size="sm"
-					onclick={() => (serviceDialogOpen = false)}
-				>
-					Cancel
-				</Button>
-				{#if servers.length > 0}
-					<Button type="submit" size="sm" loading={creatingService}>
-						{creatingService ? 'Creating...' : 'Create service'}
-					</Button>
-				{/if}
-			</DialogFooter>
-		</form>
-	</DialogContent>
-</Dialog>
-
 <Dialog bind:open={envDialogOpen}>
 	<DialogContent>
 		<form
@@ -700,6 +677,42 @@
 	.world {
 		transform-origin: center center;
 		will-change: transform;
+	}
+
+	/* Stepping into the add-service form pushes the canvas left, so the form
+	   enters from the right; coming back, the canvas returns from the left. Same
+	   200ms curve as /projects/new/image and the dialog, so the whole builder
+	   shares one motion vocabulary. Applied to the branch wrapper, not .world —
+	   .world owns the pan transform. `backwards` holds the start offset on the
+	   first frame instead of flashing the end state. */
+	.step-enter {
+		animation: step-in-from-right 200ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+	}
+
+	.step-back {
+		animation: step-in-from-left 200ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+	}
+
+	@keyframes step-in-from-right {
+		from {
+			opacity: 0;
+			transform: translateX(12px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+
+	@keyframes step-in-from-left {
+		from {
+			opacity: 0;
+			transform: translateX(-12px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
 	}
 
 	.service-node {
