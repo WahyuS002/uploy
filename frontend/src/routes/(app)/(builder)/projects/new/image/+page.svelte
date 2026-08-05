@@ -401,8 +401,7 @@
 
 <style>
 	.canvas {
-		background-color: var(--background);
-		box-shadow: var(--shadow-panel);
+		background-color: var(--canvas);
 	}
 
 	@media (pointer: fine) {
@@ -419,11 +418,7 @@
 	.canvas-bg {
 		position: absolute;
 		inset: 0;
-		background-image: radial-gradient(
-			circle at 1px 1px,
-			rgba(26, 27, 30, 0.125) 1px,
-			transparent 0
-		);
+		background-image: radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0);
 		background-size: 12px 12px;
 		pointer-events: none;
 	}

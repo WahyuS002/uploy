@@ -334,11 +334,12 @@
 </section>
 
 <style>
-	/* Same dot pitch and node treatment as the builder canvas, one step recessed so
-	   it reads as a surface inside the white card rather than a second card. */
+	/* The same surface as the builder canvas, down to the dot pitch — this is a
+	   miniature of it, so it reads from the shared tokens rather than its own
+	   near-match values. */
 	.canvas-preview {
-		background-color: var(--muted);
-		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.12) 1px, transparent 0);
+		background-color: var(--canvas);
+		background-image: radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0);
 		background-size: 12px 12px;
 	}
 

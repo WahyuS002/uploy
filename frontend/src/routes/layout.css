@@ -54,6 +54,17 @@
 	--disabled-foreground: #a8a8a8;
 	--accent: #f2f2f2;
 	--accent-foreground: var(--obsidian);
+	/* The canvas deliberately breaks the "surfaces sit ~2 units apart, the border
+	   carries the edge" rule above. A panel sits *on* the page; a node sits *in* a
+	   workspace, and at 2 units apart (--background vs --card) the node had no
+	   surface of its own — only its hairline separated it, which is not enough when
+	   it must also read while panning and at 80% zoom. Measured against Railway's
+	   canvas (#fafafa under #ffffff cards), 9 units is one step firmer, which this
+	   palette needs because its hairline is lighter than theirs. Dot alpha is
+	   unchanged: over a darker field the same alpha lands within 1 unit of the
+	   contrast it had over --background (28.3 → 27.4), so the grid keeps its weight. */
+	--canvas: #f6f6f6;
+	--canvas-dot: rgba(26, 27, 30, 0.125);
 	/* Functional state colours. Error/warning stay at the lowest saturation that
 	   still reads as a state. Success shares the brand hue on purpose: two
 	   unrelated greens read as a bug, so "primary" and "healthy" are told apart

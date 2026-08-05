@@ -412,7 +412,10 @@
 						</div>
 					{:else if environments.length === 0}
 						<div class="w-full max-w-md" data-no-pan>
-							<div class="rounded-xl border border-dashed border-border bg-muted/30 p-8">
+							<!-- bg-card, not a muted tint: the canvas is now that same muted value,
+							     so a tint over it would fill with nothing. Dashed edge still says
+							     "placeholder"; the white surface says "this is a node". -->
+							<div class="rounded-xl border border-dashed border-border bg-card p-8">
 								<EmptyState
 									icon={Squares2x2}
 									title="This project has no environments yet"
@@ -667,8 +670,7 @@
 
 <style>
 	.canvas {
-		background-color: var(--background);
-		box-shadow: var(--shadow-panel);
+		background-color: var(--canvas);
 	}
 
 	@media (pointer: fine) {
@@ -685,11 +687,7 @@
 	.canvas-bg {
 		position: absolute;
 		inset: 0;
-		background-image: radial-gradient(
-			circle at 1px 1px,
-			rgba(26, 27, 30, 0.125) 1px,
-			transparent 0
-		);
+		background-image: radial-gradient(circle at 1px 1px, var(--canvas-dot) 1px, transparent 0);
 		background-size: 12px 12px;
 		pointer-events: none;
 	}
