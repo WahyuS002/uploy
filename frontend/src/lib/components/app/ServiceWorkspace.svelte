@@ -220,17 +220,24 @@
 </script>
 
 <div class={cn('flex h-full min-h-0 flex-col', className)}>
+	<!-- Underline tabs, not filled pills. Four pills across a 420px panel put four
+	     competing blocks above content that has none, and the row read as heavier
+	     than the thing it was labelling. An underline marks one tab without
+	     drawing a box around any of them. -->
 	<div class="flex-none border-b border-border bg-card">
-		<nav class="flex items-center gap-1 px-3 pt-2" aria-label="Service sections">
+		<nav class="flex items-center gap-4 px-5" aria-label="Service sections">
 			{#each visibleTabs as tab (tab.id)}
 				<button
 					type="button"
 					onclick={() => (activeTab = tab.id)}
 					class={cn(
-						'cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+						// -mb-px pulls the 2px marker onto the nav's own hairline; without it
+						// the underline floats a pixel above the border and reads as a
+						// misalignment rather than a join.
+						'-mb-px cursor-pointer border-b-2 py-2.5 text-xs font-medium whitespace-nowrap transition-colors',
 						activeTab === tab.id
-							? 'bg-accent text-accent-foreground'
-							: 'text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground'
+							? 'border-foreground text-foreground'
+							: 'border-transparent text-muted-foreground hover:text-foreground'
 					)}
 					aria-current={activeTab === tab.id ? 'page' : undefined}
 				>
@@ -238,39 +245,37 @@
 				</button>
 			{/each}
 		</nav>
-		<div class="h-2"></div>
 	</div>
 
 	<div class="min-h-0 flex-1 overflow-y-auto bg-card px-5 py-5">
 		{#if activeTab === 'overview'}
-			<dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-				<div>
-					<dt class="text-xs font-medium text-muted-foreground uppercase">Image</dt>
-					<dd class="mt-1 truncate font-mono text-foreground">{service.image}</dd>
+			<!-- Sentence-case labels in a fixed left column, not four uppercase headings
+			     over four short values. Uppercase + medium weight gave the labels more
+			     visual weight than the data they name, which is backwards. `Kind` is
+			     gone entirely: the API only accepts "application", so the row could
+			     never say anything else. -->
+			<dl class="flex flex-col gap-2.5 text-sm">
+				<div class="flex items-baseline gap-4">
+					<dt class="w-20 flex-none text-muted-foreground">Image</dt>
+					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">{service.image}</dd>
 				</div>
-				<div>
-					<dt class="text-xs font-medium text-muted-foreground uppercase">Container</dt>
-					<dd class="mt-1 truncate font-mono text-foreground">{service.container_name}</dd>
+				<div class="flex items-baseline gap-4">
+					<dt class="w-20 flex-none text-muted-foreground">Container</dt>
+					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">
+						{service.container_name}
+					</dd>
 				</div>
-				<div>
-					<dt class="text-xs font-medium text-muted-foreground uppercase">Port</dt>
-					<dd class="mt-1 font-mono text-foreground">{service.port}</dd>
-				</div>
-				<div>
-					<dt class="text-xs font-medium text-muted-foreground uppercase">Kind</dt>
-					<dd class="mt-1 font-mono text-foreground">{service.kind}</dd>
+				<div class="flex items-baseline gap-4">
+					<dt class="w-20 flex-none text-muted-foreground">Port</dt>
+					<dd class="min-w-0 flex-1 font-mono text-foreground">{service.port}</dd>
 				</div>
 			</dl>
 
 			{#if canEdit}
-				<div class="mt-6 border-t border-border pt-5">
-					<div class="flex items-center justify-between gap-3">
-						<div>
-							<h4 class="text-sm font-semibold text-foreground">Deploy</h4>
-							<p class="text-xs text-muted-foreground">
-								Trigger a new deployment for this service.
-							</p>
-						</div>
+				<div class="mt-5 border-t border-border pt-4">
+					<!-- The button is its own explanation. A heading plus "Trigger a new
+					     deployment for this service." spent three lines restating one verb. -->
+					<div class="flex justify-end">
 						<Button onclick={deploy} loading={deploying} size="sm">
 							{deploying ? 'Deploying...' : 'Deploy'}
 						</Button>
