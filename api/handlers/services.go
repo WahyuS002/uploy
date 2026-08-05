@@ -325,5 +325,7 @@ func serviceToResponse(svc db.Service) gen.ServiceResponse {
 		EnvironmentId: svc.EnvironmentID,
 		CreatedAt:     svc.CreatedAt,
 		UpdatedAt:     svc.UpdatedAt,
+
+		HasPendingChanges: svc.HasPendingChanges,
 	}
 }

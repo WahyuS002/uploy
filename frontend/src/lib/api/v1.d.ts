@@ -609,6 +609,8 @@ export interface components {
 			created_at: string;
 			/** Format: date-time */
 			updated_at: string;
+			/** @description True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored. */
+			has_pending_changes: boolean;
 		};
 		CreateDomainRequest: {
 			domain: string;

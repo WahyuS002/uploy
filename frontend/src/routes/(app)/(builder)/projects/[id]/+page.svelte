@@ -8,6 +8,7 @@
 	import ServiceWorkspace from '$lib/components/app/ServiceWorkspace.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
 	import ImageStarterForm from '$lib/components/app/ImageStarterForm.svelte';
+	import PendingChangesBar from '$lib/components/app/PendingChangesBar.svelte';
 	import { toast } from '$lib/components/ui/toast/toast-service.svelte.js';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -90,6 +91,19 @@
 		selectedServiceId ? (services.find((s) => s.id === selectedServiceId) ?? null) : null
 	);
 
+	// Services whose deployment we have already fired. The API keeps reporting
+	// them as pending until the deployment actually succeeds, so without this the
+	// bar would slide straight back in on the next poll.
+	let deployingIds = $state<Set<string>>(new Set());
+	let deploying = $state(false);
+
+	let unfiredPending = $derived(
+		envServices.filter((s) => s.has_pending_changes && !deployingIds.has(s.id))
+	);
+	// One primary action at a time: while the canvas is asking for an image, or a
+	// dialog is up, the bar stays out of the way rather than competing with it.
+	let barSuppressed = $derived(!canEdit || addingService || envDialogOpen);
+
 	async function loadProject(id: string) {
 		const { data } = await api.GET('/api/projects/{id}', { params: { path: { id } } });
 		return data ?? null;
@@ -166,6 +180,75 @@
 			svcError = 'Network error';
 		} finally {
 			creatingService = false;
+		}
+	}
+
+	// ponytail: fixed 3s poll with a hard cap, because a deployment's only precise
+	// completion signal is the per-deployment SSE stream and subscribing to N of
+	// them to dim N badges is not worth it. The cap is what keeps this honest: a
+	// deployment that fails or outlives it releases its service, and the change
+	// reappears as pending instead of staying silently hidden. Swap in the SSE
+	// subscription if the badge ever needs to be exact.
+	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	let pollDeadline = 0;
+
+	function stopWatchingDeployments() {
+		if (pollTimer === null) return;
+		clearInterval(pollTimer);
+		pollTimer = null;
+	}
+
+	function watchDeployments() {
+		pollDeadline = Date.now() + 120_000;
+		if (pollTimer !== null) return;
+		pollTimer = setInterval(async () => {
+			const svcs = await loadServices(projectId);
+			services = svcs;
+			const expired = Date.now() > pollDeadline;
+			const stillPending = new Set(svcs.filter((s) => s.has_pending_changes).map((s) => s.id));
+			deployingIds = expired
+				? new Set()
+				: new Set([...deployingIds].filter((id) => stillPending.has(id)));
+			if (deployingIds.size === 0) stopWatchingDeployments();
+		}, 3000);
+	}
+
+	async function deployPending() {
+		if (deploying || unfiredPending.length === 0) return;
+		deploying = true;
+		const ids = unfiredPending.map((s) => s.id);
+		try {
+			const results = await Promise.all(
+				ids.map((id) => api.POST('/api/deployments', { body: { service_id: id } }))
+			);
+			const started = ids.filter((_, i) => !results[i].error);
+			if (started.length === 0) {
+				toast.show({
+					tone: 'error',
+					title:
+						ids.length === 1 ? 'Could not start the deployment' : 'Could not start deployments',
+					description: (results[0]?.error as { error: string } | undefined)?.error,
+					duration: 6000
+				});
+				return;
+			}
+			deployingIds = new Set([...deployingIds, ...started]);
+			watchDeployments();
+			toast.show({
+				tone: 'success',
+				title:
+					started.length === 1 ? 'Deploying 1 service' : `Deploying ${started.length} services`,
+				description:
+					started.length < ids.length
+						? `${ids.length - started.length} could not be started.`
+						: undefined,
+				icon: { kind: 'heroicon', src: CheckCircle },
+				duration: 4500
+			});
+		} catch {
+			toast.show({ tone: 'error', title: 'Network error', duration: 6000 });
+		} finally {
+			deploying = false;
 		}
 	}
 
@@ -273,6 +356,8 @@
 		selectedServiceId = null;
 		svcServerId = '';
 		loaded = false;
+		stopWatchingDeployments();
+		deployingIds = new Set();
 
 		(async () => {
 			const [proj, envs, svcs] = await Promise.all([
@@ -293,6 +378,7 @@
 
 		return () => {
 			cancelled = true;
+			stopWatchingDeployments();
 		};
 	});
 
@@ -561,12 +647,22 @@
 							{#each envServices as svc (svc.id)}
 								{@const srv = serverById.get(svc.server_id)}
 								{@const isSelected = svc.id === selectedServiceId}
+								{@const isDeploying = deployingIds.has(svc.id)}
+								<!-- A node with undeployed changes is a plan, not a running thing, so
+								     its edge goes dashed — the same "not real yet" grammar the empty
+								     environment placeholder already uses on this canvas. Selection
+								     still wins the border outright: that is the state the user is
+								     actively driving, and two dashed-vs-solid signals on one edge
+								     would just cancel each other out. -->
+								{@const isPending = svc.has_pending_changes && !isDeploying}
 								<button
 									type="button"
 									onclick={() => (selectedServiceId = svc.id)}
 									class="service-node group flex flex-col gap-2 rounded-lg border bg-card p-3 text-left text-card-foreground transition-shadow hover:shadow-md {isSelected
 										? 'border-foreground shadow-md'
-										: 'border-border'}"
+										: isPending
+											? 'border-dashed border-foreground/25'
+											: 'border-border'}"
 								>
 									<div class="flex items-center gap-2">
 										<span
@@ -580,6 +676,11 @@
 												{svc.image}
 											</div>
 										</div>
+										{#if isDeploying}
+											<span class="node-badge is-deploying">Deploying</span>
+										{:else if isPending}
+											<span class="node-badge">Pending</span>
+										{/if}
 									</div>
 									<div class="flex items-center justify-between text-[11px] text-muted-foreground">
 										<span>Port {svc.port}</span>
@@ -594,6 +695,16 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- Chrome, not canvas content: it sits outside .world so it holds its place
+		     while the canvas pans and zooms underneath it. -->
+		<PendingChangesBar
+			services={unfiredPending}
+			suppressed={barSuppressed}
+			{deploying}
+			onDeploy={deployPending}
+			onSelect={(id) => (selectedServiceId = id)}
+		/>
 
 		<div class="toolbar" data-no-pan aria-label="Canvas controls">
 			<button
@@ -764,6 +875,42 @@
 
 	.service-node {
 		cursor: pointer;
+	}
+
+	.node-badge {
+		flex: none;
+		align-self: flex-start;
+		padding: 0.0625rem 0.375rem;
+		border-radius: var(--radius-sm);
+		background: var(--muted);
+		color: var(--muted-foreground);
+		font-size: 0.625rem;
+		font-weight: 500;
+		line-height: 1.4;
+		letter-spacing: 0.01em;
+	}
+
+	/* Deploying is the one node state that is genuinely mid-flight, so it is the
+	   one that gets motion. Opacity only — a pulsing background on a chip this
+	   small reads as a rendering bug. */
+	.node-badge.is-deploying {
+		animation: badge-pulse 1.6s ease-in-out infinite;
+	}
+
+	@keyframes badge-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.55;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.node-badge.is-deploying {
+			animation: none;
+		}
 	}
 
 	.side-panel {

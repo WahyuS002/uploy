@@ -22,6 +22,8 @@ type Service struct {
 	EnvironmentID string    `json:"environment_id"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	// Derived per query, never stored. See db/queries/services.sql for the rule.
+	HasPendingChanges bool `json:"has_pending_changes"`
 }
 
 // ServiceWithServer is used during deploy — one JOIN query gets everything.
@@ -54,6 +56,7 @@ func CreateService(ctx context.Context, name, image, containerName string, port 
 		Port: r.Port, ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		HasPendingChanges: r.HasPendingChanges,
 	}, nil
 }
 
@@ -67,6 +70,7 @@ func GetServiceByID(ctx context.Context, id string) (Service, error) {
 		Port: r.Port, ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		HasPendingChanges: r.HasPendingChanges,
 	}, nil
 }
 
@@ -82,6 +86,7 @@ func ListServicesByWorkspace(ctx context.Context, workspaceID string) ([]Service
 			Port: r.Port, ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+			HasPendingChanges: r.HasPendingChanges,
 		}
 	}
 	return services, nil
@@ -99,6 +104,7 @@ func ListServicesByEnvironment(ctx context.Context, environmentID string) ([]Ser
 			Port: r.Port, ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+			HasPendingChanges: r.HasPendingChanges,
 		}
 	}
 	return services, nil
@@ -116,6 +122,7 @@ func ListServicesByProject(ctx context.Context, projectID string) ([]Service, er
 			Port: r.Port, ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+			HasPendingChanges: r.HasPendingChanges,
 		}
 	}
 	return services, nil
@@ -138,6 +145,7 @@ func UpdateService(ctx context.Context, id, name, image, containerName string, p
 		Port: r.Port, ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		HasPendingChanges: r.HasPendingChanges,
 	}, nil
 }
 
@@ -160,6 +168,7 @@ func GetServiceWithServer(ctx context.Context, id string) (ServiceWithServer, er
 			Port: row.Port, ServerID: row.ServerID, WorkspaceID: row.WorkspaceID,
 			Kind: row.Kind, ProjectID: row.ProjectID, EnvironmentID: row.EnvironmentID,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+			HasPendingChanges: row.HasPendingChanges,
 		},
 		Host:        row.Host,
 		ServerPort:  row.ServerPort,

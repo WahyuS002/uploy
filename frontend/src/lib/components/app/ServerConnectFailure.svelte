@@ -21,8 +21,8 @@
 				};
 			case 'key_rejected':
 				return {
-					title: 'The server refused this key',
-					body: `${controller.host} is reachable, but ${account} did not accept ${keyName}. Run the command above on the server, then try again.`
+					title: 'SSH Key Not Authorized',
+					body: `${controller.host} is reachable, but ${account} hasn't authorized ${keyName} yet. Run the command above on your server to add the key, then try again.`
 				};
 			case 'key_invalid':
 				return {

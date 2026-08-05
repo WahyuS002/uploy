@@ -376,17 +376,20 @@ type ServiceEnvResponse struct {
 
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
-	ContainerName string              `json:"container_name"`
-	CreatedAt     time.Time           `json:"created_at"`
-	EnvironmentId string              `json:"environment_id"`
-	Id            string              `json:"id"`
-	Image         string              `json:"image"`
-	Kind          ServiceResponseKind `json:"kind"`
-	Name          string              `json:"name"`
-	Port          int                 `json:"port"`
-	ProjectId     string              `json:"project_id"`
-	ServerId      string              `json:"server_id"`
-	UpdatedAt     time.Time           `json:"updated_at"`
+	ContainerName string    `json:"container_name"`
+	CreatedAt     time.Time `json:"created_at"`
+	EnvironmentId string    `json:"environment_id"`
+
+	// HasPendingChanges True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored.
+	HasPendingChanges bool                `json:"has_pending_changes"`
+	Id                string              `json:"id"`
+	Image             string              `json:"image"`
+	Kind              ServiceResponseKind `json:"kind"`
+	Name              string              `json:"name"`
+	Port              int                 `json:"port"`
+	ProjectId         string              `json:"project_id"`
+	ServerId          string              `json:"server_id"`
+	UpdatedAt         time.Time           `json:"updated_at"`
 }
 
 // ServiceResponseKind defines model for ServiceResponse.Kind.

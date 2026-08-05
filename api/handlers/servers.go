@@ -76,7 +76,7 @@ func classifyDialError(err error) *probeFailure {
 
 	return &probeFailure{
 		code:    gen.KeyRejected,
-		message: "The server refused this SSH key: " + err.Error(),
+		message: "SSH authentication failed: " + err.Error(),
 	}
 }
 
