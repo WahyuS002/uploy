@@ -4,12 +4,12 @@
 	import type { PageData } from './$types';
 	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import { formatDate } from '$lib/format-date';
+	import { serviceLogo, serviceInitial } from '$lib/service-logo';
 	import {
 		Button,
 		EmptyState,
 		SelectAction,
 		SegmentedToggle,
-		Spinner,
 		pillVariants
 	} from '$lib/components/ui';
 	import { Icon } from '@steeze-ui/svelte-icon';
@@ -54,13 +54,25 @@
 		return sorted;
 	});
 
-	function getProjectServiceCount(projectId: string): number {
-		return services.filter((s) => s.project_id === projectId).length;
+	/** Same default the builder canvas opens on, so the card previews what you land in. */
+	function getProjectEnv(projectId: string): EnvironmentResponse | undefined {
+		const envs = projectEnvs[projectId];
+		return envs?.find((e) => e.name === 'production') ?? envs?.[0];
 	}
 
-	function getProjectFirstEnv(projectId: string): EnvironmentResponse | undefined {
-		return projectEnvs[projectId]?.[0];
+	/** Scoped to the environment named in the footer — a count for a different env would lie. */
+	function getEnvServices(projectId: string): ServiceResponse[] {
+		const env = getProjectEnv(projectId);
+		return services.filter(
+			(s) => s.project_id === projectId && (!env || s.environment_id === env.id)
+		);
 	}
+
+	const PREVIEW_TILES = 5;
+	// The card is mostly canvas, so the track width sets how much of the project you
+	// actually see. auto-fill (not auto-fit) keeps a card the same size whether the
+	// workspace holds three projects or thirty — the grid grows, the card doesn't.
+	const GRID_COLS = 'grid-cols-[repeat(auto-fill,minmax(320px,1fr))]';
 
 	async function load() {
 		loading = true;
@@ -96,6 +108,26 @@
 		load();
 	});
 </script>
+
+<!-- The service marks, shared by both views: brand logo where we know the image,
+     monogram where we don't, so an unmapped image still reads as a distinct node. -->
+{#snippet serviceTiles(list: ServiceResponse[], size: 'sm' | 'lg')}
+	{#each list.slice(0, PREVIEW_TILES) as service (service.id)}
+		{@const Logo = serviceLogo(service.image)}
+		<span class="node-tile" class:node-tile-lg={size === 'lg'} title={service.image}>
+			{#if Logo}
+				<Logo class={size === 'lg' ? 'h-5 w-5' : 'h-4 w-4'} />
+			{:else}
+				{serviceInitial(service.image)}
+			{/if}
+		</span>
+	{/each}
+	{#if list.length > PREVIEW_TILES}
+		<span class="node-tile text-[11px]" class:node-tile-lg={size === 'lg'}>
+			+{list.length - PREVIEW_TILES}
+		</span>
+	{/if}
+{/snippet}
 
 <section class="flex flex-1 flex-col">
 	<PageHeader>
@@ -161,9 +193,29 @@
 	<!-- Content -->
 	<div class="flex flex-1 flex-col px-4 pt-4">
 		{#if loading}
-			<div class="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-				<Spinner class="text-lg" />
-				<span>Loading projects</span>
+			<!-- Skeletons in the card's own shape: the grid doesn't reflow when data lands. -->
+			<div class={viewMode === 'grid' ? 'grid gap-4 ' + GRID_COLS : 'flex flex-col gap-2'}>
+				{#each [...Array(viewMode === 'grid' ? 6 : 5).keys()] as i (i)}
+					{#if viewMode === 'grid'}
+						<div class="flex flex-col rounded-lg border border-border bg-card">
+							<div class="px-4 pt-3.5 pb-2.5">
+								<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
+							</div>
+							<div class="mx-3 h-40 animate-pulse rounded-md bg-muted"></div>
+							<div class="px-4 pt-3 pb-3.5">
+								<div class="h-3 w-40 animate-pulse rounded bg-muted"></div>
+							</div>
+						</div>
+					{:else}
+						<div class="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+							<div class="h-9 w-9 shrink-0 animate-pulse rounded-md bg-muted"></div>
+							<div class="flex flex-col gap-1.5">
+								<div class="h-4 w-40 animate-pulse rounded bg-muted"></div>
+								<div class="h-3 w-28 animate-pulse rounded bg-muted"></div>
+							</div>
+						</div>
+					{/if}
+				{/each}
 			</div>
 		{:else if projects.length === 0}
 			<EmptyState
@@ -184,52 +236,45 @@
 				{/snippet}
 			</EmptyState>
 		{:else if viewMode === 'grid'}
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+			<div class="grid gap-4 {GRID_COLS}">
 				{#each sortedProjects() as project (project.id)}
-					{@const svcCount = getProjectServiceCount(project.id)}
-					{@const firstEnv = getProjectFirstEnv(project.id)}
+					{@const envServices = getEnvServices(project.id)}
+					{@const svcCount = envServices.length}
+					{@const env = getProjectEnv(project.id)}
 					<!-- eslint-disable svelte/no-navigation-without-resolve -->
 					<a
 						href="/projects/{project.id}"
-						class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground transition-shadow hover:shadow-md"
+						class="group flex flex-col rounded-lg border border-border bg-card text-card-foreground transition-colors duration-150 outline-none hover:border-input focus-visible:border-input focus-visible:ring-3 focus-visible:ring-primary/30"
 					>
-						<div class="px-4 pt-4 pb-3">
-							<h3 class="font-semibold text-foreground group-hover:text-foreground">
-								{project.name}
-							</h3>
+						<div class="px-4 pt-3.5 pb-2.5">
+							<h3 class="truncate text-sm font-medium text-foreground">{project.name}</h3>
+						</div>
+						<!-- A miniature of the canvas this link opens, dots and all. -->
+						<div
+							class="canvas-preview relative mx-3 flex h-40 items-center justify-center overflow-hidden rounded-md border border-border"
+							aria-hidden="true"
+						>
+							<div class="flex flex-wrap items-center justify-center gap-2 px-3">
+								{@render serviceTiles(envServices, 'lg')}
+							</div>
 						</div>
 						<div
-							class="relative mx-4 mb-3 flex h-28 items-center justify-center rounded-lg bg-[#171717]"
-							style="background-image: radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 12px 12px;"
+							class="mt-auto flex items-center gap-1.5 px-4 pt-3 pb-3.5 text-xs text-muted-foreground"
 						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-8 w-8 text-[#4d4d4d]"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
-									clip-rule="evenodd"
-								/>
-							</svg>
-						</div>
-						<div
-							class="flex items-center gap-2 border-t border-border px-4 py-3 text-xs text-muted-foreground"
-						>
-							{#if firstEnv}
-								<span class="flex items-center gap-1">
-									<span
-										class="inline-block h-2 w-2 rounded-full {svcCount > 0
-											? 'bg-success'
-											: 'bg-input'}"
-									></span>
-									{firstEnv.name}
-								</span>
+							<span
+								class="inline-block h-1.5 w-1.5 shrink-0 rounded-full {svcCount > 0
+									? 'bg-success'
+									: 'bg-input'}"
+							></span>
+							{#if env}
+								<span class="truncate">{env.name}</span>
 								<span class="text-input">&middot;</span>
 							{/if}
-							<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
+							<span class="shrink-0">
+								{svcCount === 0
+									? 'No services'
+									: `${svcCount} ${svcCount === 1 ? 'service' : 'services'}`}
+							</span>
 						</div>
 					</a>
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -238,48 +283,47 @@
 		{:else}
 			<div class="flex flex-col gap-2">
 				{#each sortedProjects() as project (project.id)}
-					{@const svcCount = getProjectServiceCount(project.id)}
-					{@const firstEnv = getProjectFirstEnv(project.id)}
+					{@const envServices = getEnvServices(project.id)}
+					{@const svcCount = envServices.length}
+					{@const env = getProjectEnv(project.id)}
 					<!-- eslint-disable svelte/no-navigation-without-resolve -->
 					<a
 						href="/projects/{project.id}"
-						class="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-card-foreground transition-shadow hover:shadow-md"
+						class="group flex items-center justify-between gap-4 rounded-lg border border-border bg-card px-4 py-3 text-card-foreground transition-colors duration-150 outline-none hover:border-input focus-visible:border-input focus-visible:ring-3 focus-visible:ring-primary/30"
 					>
-						<div class="flex items-center gap-3">
-							<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-[#171717]">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									class="h-4 w-4 text-[#a8a8a8]"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-								>
-									<path
-										fill-rule="evenodd"
-										d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
-										clip-rule="evenodd"
-									/>
-								</svg>
+						<div class="flex min-w-0 items-center gap-3">
+							<div
+								class="canvas-preview flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border"
+							>
+								<Icon src={Cube} theme="outline" class="h-4 w-4 text-muted-foreground" />
 							</div>
-							<div>
-								<h3 class="font-semibold text-foreground">{project.name}</h3>
+							<div class="min-w-0">
+								<h3 class="truncate text-sm font-medium text-foreground">{project.name}</h3>
 								<p class="text-xs text-muted-foreground">
 									Updated {formatDate(project.updated_at)}
 								</p>
 							</div>
 						</div>
-						<div class="flex items-center gap-3 text-xs text-muted-foreground">
-							{#if firstEnv}
-								<span class="flex items-center gap-1">
-									<span
-										class="inline-block h-2 w-2 rounded-full {svcCount > 0
-											? 'bg-success'
-											: 'bg-input'}"
-									></span>
-									{firstEnv.name}
+						<div class="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+							<div class="hidden items-center gap-1.5 sm:flex" aria-hidden="true">
+								{@render serviceTiles(envServices, 'sm')}
+							</div>
+							<span class="flex items-center gap-1.5">
+								<span
+									class="inline-block h-1.5 w-1.5 rounded-full {svcCount > 0
+										? 'bg-success'
+										: 'bg-input'}"
+								></span>
+								{#if env}
+									<span>{env.name}</span>
+									<span class="text-input">&middot;</span>
+								{/if}
+								<span>
+									{svcCount === 0
+										? 'No services'
+										: `${svcCount} ${svcCount === 1 ? 'service' : 'services'}`}
 								</span>
-								<span class="text-input">&middot;</span>
-							{/if}
-							<span>{svcCount} {svcCount === 1 ? 'service' : 'services'}</span>
+							</span>
 						</div>
 					</a>
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -288,3 +332,54 @@
 		{/if}
 	</div>
 </section>
+
+<style>
+	/* Same dot pitch and node treatment as the builder canvas, one step recessed so
+	   it reads as a surface inside the white card rather than a second card. */
+	.canvas-preview {
+		background-color: var(--muted);
+		background-image: radial-gradient(circle at 1px 1px, rgba(26, 27, 30, 0.12) 1px, transparent 0);
+		background-size: 12px 12px;
+	}
+
+	.node-tile {
+		display: inline-flex;
+		height: 1.75rem;
+		width: 1.75rem;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border);
+		background-color: var(--card);
+		box-shadow: 0 1px 0 rgba(17, 17, 17, 0.04);
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--muted-foreground);
+		transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	/* On the card the tiles are the subject, not a footnote: they carry the same
+	   share of the preview a node does on the real canvas. The list row keeps the
+	   small tile, where they sit beside text and must not outweigh it. */
+	.node-tile-lg {
+		height: 2.25rem;
+		width: 2.25rem;
+		font-size: 0.8125rem;
+	}
+
+	@media (hover: hover) {
+		.group:hover .node-tile {
+			transform: translateY(-1px);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.node-tile {
+			transition: none;
+		}
+
+		.group:hover .node-tile {
+			transform: none;
+		}
+	}
+</style>
