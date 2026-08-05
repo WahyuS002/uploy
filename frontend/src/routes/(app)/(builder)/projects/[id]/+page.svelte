@@ -323,8 +323,13 @@
 		{#if environments.length > 0}
 			<span class="text-muted-foreground/60">/</span>
 			<DropdownMenu.Root>
+				<!-- Borderless, like the workspace switcher and every other control in this
+				     bar. A bordered white pill on a near-white topbar reads as an input
+				     sitting inside a text breadcrumb; the chevron already says "menu". The
+				     background has to persist on open, or the trigger goes flat the moment
+				     the pointer moves into its own menu. -->
 				<DropdownMenu.Trigger
-					class="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+					class="-ml-1 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
 				>
 					<Icon src={Squares2x2} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
 					<span>{selectedEnv?.name ?? 'Select environment'}</span>
