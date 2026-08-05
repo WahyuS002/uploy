@@ -55,7 +55,11 @@
 			<h2 id={headingId} class="text-sm font-medium text-foreground">{title}</h2>
 		</div>
 
-		<ul class="py-1">
+		<!-- p-1 + rounded rows is the same geometry selectMenuItemVariants uses for every
+		     dropdown in the app. A square full-bleed fill inside a rounded panel belongs
+		     to a different family of control, and this list is a menu. The 4px inset plus
+		     the row's px-2 lands the icon at 12px — flush with the header's px-3. -->
+		<ul class="p-1">
 			{#each visibleRows as row (row.id)}
 				{@const busy = busyStarter === row.id}
 				{@const pending = busyStarter !== null}
@@ -68,7 +72,7 @@
 						onclick={() => onSelect(row.id)}
 						disabled={pending}
 						aria-busy={busy ? 'true' : undefined}
-						class="grid w-full cursor-pointer items-center gap-x-3 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:cursor-not-allowed disabled:hover:bg-transparent {pending &&
+						class="grid w-full cursor-pointer items-center gap-x-3 rounded-md px-2 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:cursor-not-allowed disabled:hover:bg-transparent {pending &&
 						!busy
 							? 'opacity-50'
 							: ''} {gridCols}"
