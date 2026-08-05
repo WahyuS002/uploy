@@ -7,7 +7,6 @@
 	import type { PageData } from './$types';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
-	import FormField from '$lib/components/app/FormField.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
@@ -39,26 +38,56 @@
 	// Empty on landing, not prefilled: the field is the first thing you type into,
 	// and backspace-on-empty only works as "go back" if it starts empty.
 	let image = $state('');
-	let port = $state(8080);
 	let submitting = $state(false);
 	let error = $state('');
 
 	let started = $derived(image.trim() !== '');
 
-	// Ports ride along with the image. There is no correct default port — these
-	// five listen on 80, 6379, 5432, 80 and 8080 — so picking an example fills in
-	// the one that image actually uses instead of leaving a wrong 8080 behind.
+	// The port an image listens on is a property of the image, not a decision the
+	// user should have to make: nobody types `postgres:16` meaning 8080. Well-known
+	// images answer for themselves; everything else falls back to 8080.
+	const wellKnownPorts: Record<string, number> = {
+		postgres: 5432,
+		mysql: 3306,
+		mariadb: 3306,
+		redis: 6379,
+		mongo: 27017,
+		nginx: 80,
+		caddy: 80,
+		httpd: 80,
+		traefik: 80
+	};
+
+	// `ghcr.io/owner/repo:tag` -> `repo`, `postgres:16` -> `postgres`. Splitting on
+	// `/` before `:` is what keeps a registry port (`localhost:5000/nginx`) from
+	// being mistaken for the tag.
+	function detectPort(value: string) {
+		const name = value.trim().split('@')[0].split('/').pop()?.split(':')[0]?.toLowerCase() ?? '';
+		return wellKnownPorts[name] ?? 8080;
+	}
+
 	const examples = [
-		{ image: 'nginx:latest', port: 80 },
-		{ image: 'redis:7-alpine', port: 6379 },
-		{ image: 'postgres:16', port: 5432 },
-		{ image: 'caddy:2', port: 80 },
-		{ image: 'ghcr.io/owner/repo:tag', port: 8080 }
+		'nginx:latest',
+		'redis:7-alpine',
+		'postgres:16',
+		'caddy:2',
+		'ghcr.io/owner/repo:tag'
 	];
 
-	function pickExample(example: { image: string; port: number }) {
-		image = example.image;
-		port = example.port;
+	let port = $state(8080);
+
+	// The port trails the image right up until it is edited, then it stops moving
+	// — an auto-filled value that overwrites a deliberate one is worse than no
+	// auto-fill at all.
+	let portTouched = $state(false);
+	$effect(() => {
+		const detected = detectPort(image);
+		if (!portTouched) port = detected;
+	});
+
+	function pickExample(example: string) {
+		image = example;
+		portTouched = false;
 	}
 
 	let retrying = $state(false);
@@ -270,40 +299,49 @@
 
 								<div class="border-t border-border/70 py-1">
 									<p class="px-4 py-1.5 text-xs text-muted-foreground">Examples</p>
-									{#each examples as example (example.image)}
+									{#each examples as example (example)}
 										<button
 											type="button"
 											onclick={() => pickExample(example)}
 											class="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-1.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
 										>
-											<span class="truncate font-mono text-xs text-foreground">{example.image}</span
-											>
+											<span class="truncate font-mono text-xs text-foreground">{example}</span>
 											<span class="font-mono text-[11px] text-muted-foreground"
-												>:{example.port}</span
+												>:{detectPort(example)}</span
 											>
 										</button>
 									{/each}
 								</div>
 							{:else}
 								<div class="flex flex-col gap-4 border-t border-border/70 p-4">
-									<div class="w-28">
-										<FormField label="Port">
-											<Input type="number" bind:value={port} min={1} max={65535} required />
-										</FormField>
-									</div>
+									<!-- Only the port is a control, so only the port gets the recessed
+									     field surface. The previous pass gave both rows the same bordered
+									     box and the input stopped reading as editable. The target is a
+									     plain line: nothing to click, so nothing that looks clickable. -->
+									<div class="flex flex-col gap-2.5">
+										<label class="flex items-center justify-between gap-3">
+											<span class="text-xs text-muted-foreground">Listens on port</span>
+											<Input
+												type="number"
+												size="sm"
+												bind:value={port}
+												oninput={() => (portTouched = true)}
+												min={1}
+												max={65535}
+												required
+												class="w-24"
+											/>
+										</label>
 
-									<div
-										class="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"
-									>
-										<div class="flex min-w-0 items-center gap-2 text-muted-foreground">
-											<Icon src={ServerStack} theme="outline" class="h-3.5 w-3.5 flex-none" />
-											<span class="truncate">
-												Deploys to <span class="font-medium text-foreground">{server.name}</span>
+										<div class="flex items-baseline justify-between gap-3 text-xs">
+											<span class="flex-none text-muted-foreground">Deploys to</span>
+											<span class="flex min-w-0 items-baseline gap-2">
+												<span class="truncate font-medium text-foreground">{server.name}</span>
+												<span class="flex-none font-mono text-[11px] text-muted-foreground">
+													{server.host}:{server.port}
+												</span>
 											</span>
 										</div>
-										<span class="flex-none font-mono text-[11px] text-muted-foreground">
-											{server.host}:{server.port}
-										</span>
 									</div>
 
 									{#if error}
