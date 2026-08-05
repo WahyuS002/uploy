@@ -303,7 +303,12 @@
 		if (!topbar) return;
 		topbar.label = '';
 		topbar.leading = leadingSnippet;
-		topbar.action = canEdit && selectedEnvId ? actionSnippet : null;
+		// The canvas owns "add a service" whenever it can say it better: the
+		// StarterPanel in the empty state, the form itself once you're in it. The
+		// topbar only takes over when the canvas has nodes on it and no longer
+		// offers the action anywhere.
+		topbar.action =
+			canEdit && selectedEnvId && !addingService && envServices.length > 0 ? actionSnippet : null;
 		return () => {
 			topbar.label = '';
 			topbar.leading = null;
