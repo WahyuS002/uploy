@@ -203,12 +203,9 @@
 		background: var(--card);
 		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
-		/* Deliberately softer than --shadow-panel's flat ring: this floats over
-		   canvas content rather than sitting beside it, so it needs a little real
-		   lift. Kept under 8px blur so it stays a hairline-plus-lift, not a glow. */
-		box-shadow:
-			0 1px 2px rgba(3, 3, 3, 0.04),
-			0 4px 8px -2px rgba(3, 3, 3, 0.06);
+		/* Floats over canvas content rather than sitting beside it, so it takes the
+		   --shadow-float exception to the hairline-only elevation rule. */
+		box-shadow: var(--shadow-float);
 		cursor: default;
 
 		/* The scale states shrink the bar toward its own top edge, so it reads as

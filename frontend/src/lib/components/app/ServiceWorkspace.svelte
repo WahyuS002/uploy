@@ -305,6 +305,7 @@
 						// the underline floats a pixel above the border and reads as a
 						// misalignment rather than a join.
 						'-mb-px cursor-pointer border-b-2 py-3.5 text-[15px] font-medium whitespace-nowrap transition-colors',
+						'focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card focus-visible:outline-none',
 						activeTab === tab.id
 							? 'border-foreground text-foreground'
 							: 'border-transparent text-muted-foreground hover:text-foreground'

@@ -778,7 +778,7 @@
 				<button
 					type="button"
 					onclick={() => (selectedServiceId = null)}
-					class="grid h-8 w-8 cursor-pointer place-content-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+					class="grid h-11 w-11 cursor-pointer place-content-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card focus-visible:outline-none md:h-8 md:w-8"
 					aria-label="Close service panel"
 				>
 					<Icon src={XMark} theme="outline" class="h-4.5 w-4.5" />
@@ -956,15 +956,13 @@
 		}
 	}
 
-	/* --shadow-panel's flat ring is the house rule for panels that sit *beside*
-	   content. This one floats over the canvas, so it takes real lift instead —
-	   the same exception PendingChangesBar makes, scaled for a surface that is a
-	   full column rather than a pill: a larger object casts a wider, softer
-	   shadow, and the hairline border is what still supplies the crisp edge. */
+	/* Floats over the canvas rather than sitting beside it, so it takes the
+	   --shadow-float exception. The lift stays a whisper on purpose: the panel is
+	   #fff on a #f6f6f6 canvas with a hairline border, and that value step is
+	   already most of the separation — the shadow only has to say which plane it
+	   is on. */
 	.side-panel {
-		box-shadow:
-			0 1px 2px rgba(3, 3, 3, 0.04),
-			0 8px 24px -6px rgba(3, 3, 3, 0.1);
+		box-shadow: var(--shadow-float);
 	}
 
 	.toolbar {
