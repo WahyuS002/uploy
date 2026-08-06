@@ -16,9 +16,16 @@
 		 * object, and two nested outlines say otherwise.
 		 */
 		flush?: boolean;
+		/**
+		 * The output *is* the surface it sits on (the stacked deployment panel), so
+		 * it takes the full height instead of the 288px slab it uses when it is one
+		 * section of a card, and it never auto-collapses — reading it is the only
+		 * reason that panel is open.
+		 */
+		fill?: boolean;
 	}
 
-	let { deploymentId, onDone, flush = false }: Props = $props();
+	let { deploymentId, onDone, flush = false, fill = false }: Props = $props();
 
 	let logs: LogEntry[] = $state([]);
 	let status: string = $state('in_progress');
@@ -39,7 +46,12 @@
 	let currentPhase: string = $state('Starting...');
 	let currentSubtext: string = $state('');
 	let lastErrorReason: string = $state('');
-	let phaseStartTime: number = $state(Date.now());
+	// The deployment's own clock, set from its first log rather than from mount.
+	// Reopening a finished deployment used to start counting at the moment you
+	// opened it, so a day-old success reported "1414m 44s" — the age of the
+	// deployment, not how long it took.
+	let startTime: number | null = $state(null);
+	let lastLogTime: number = $state(Date.now());
 	let elapsedSeconds: number = $state(0);
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -52,25 +64,33 @@
 			lastErrorReason = log.output;
 		}
 
+		const logTime = new Date(log.created_at).getTime();
+		startTime ??= logTime;
+		lastLogTime = logTime;
+
 		if (!log.phase) return;
 
 		const label = phaseLabels[log.phase];
 		if (!label) return;
 
-		const logTime = new Date(log.created_at).getTime();
-		if (label !== currentPhase) {
-			currentPhase = label;
-			phaseStartTime = logTime;
-			elapsedSeconds = Math.max(0, Math.floor((Date.now() - logTime) / 1000));
-		}
+		currentPhase = label;
 		currentSubtext = log.output;
 	}
 
 	function startTimer() {
 		if (timerInterval) return;
 		timerInterval = setInterval(() => {
-			elapsedSeconds = Math.max(0, Math.floor((Date.now() - phaseStartTime) / 1000));
+			if (startTime === null) return;
+			elapsedSeconds = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
 		}, 1000);
+	}
+
+	// Freeze on the run's own duration, not on however long ago it ran.
+	function freezeElapsed() {
+		stopTimer();
+		if (startTime !== null) {
+			elapsedSeconds = Math.max(0, Math.floor((lastLogTime - startTime) / 1000));
+		}
 	}
 
 	function stopTimer() {
@@ -100,7 +120,7 @@
 	let open = $state(true);
 	let userToggled = $state(false);
 	$effect(() => {
-		if (status === 'success' && !userToggled) open = false;
+		if (status === 'success' && !userToggled && !fill) open = false;
 	});
 
 	function toggle() {
@@ -142,7 +162,7 @@
 					currentSubtext = lastErrorReason;
 				}
 			}
-			stopTimer();
+			freezeElapsed();
 			onDone?.(status);
 			eventSource?.close();
 		});
@@ -155,7 +175,7 @@
 			if (lastErrorReason) {
 				currentSubtext = lastErrorReason;
 			}
-			stopTimer();
+			freezeElapsed();
 			onDone?.('failed');
 			eventSource?.close();
 		});
@@ -174,7 +194,8 @@
 <div
 	class={cn(
 		'overflow-hidden',
-		flush ? 'border-t border-border' : 'rounded-lg border border-border'
+		flush ? 'border-t border-border' : 'rounded-lg border border-border',
+		fill && 'flex h-full min-h-0 flex-col'
 	)}
 >
 	<button
@@ -219,7 +240,7 @@
 		<!-- Light, not a terminal. #171717 on a near-white achromatic panel read as
 		     a foreign object dropped into the page; --muted keeps it a surface of
 		     this design system and lets the one red carry real meaning. -->
-		<div bind:this={logScroller} class="log-output">
+		<div bind:this={logScroller} class="log-output" class:fill>
 			{#each logs as log (log.order)}
 				<p class:err={log.type === 'stderr'}>{log.output}</p>
 			{/each}
@@ -276,6 +297,15 @@
 		   leaves an overflowing token alone. */
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	/* Inside the stacked panel the output has the room, so it takes it: the cap
+	   comes off and the scroll happens over the full height instead of in a
+	   288px window with the panel empty underneath it. */
+	.log-output.fill {
+		max-height: none;
+		flex: 1 1 auto;
+		min-height: 0;
 	}
 
 	.log-output p {

@@ -9,7 +9,7 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import DataRow from '$lib/components/ui/DataRow.svelte';
+	import DataRow, { dataRowVariants } from '$lib/components/ui/DataRow.svelte';
 	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import {
 		Dialog,
@@ -45,6 +45,12 @@
 		externalDeploymentId?: string | null;
 		onDeleted?: (id: string) => void;
 		class?: string;
+		/**
+		 * The past deployment whose logs are open, or null. Bound rather than
+		 * rendered here: its panel stacks *over* the surface this workspace lives
+		 * in, and a child cannot draw outside its own parent's edge.
+		 */
+		openDeployment?: DeploymentResponse | null;
 	};
 
 	let {
@@ -54,7 +60,8 @@
 		showEnvVars = true,
 		externalDeploymentId = null,
 		onDeleted,
-		class: className
+		class: className,
+		openDeployment = $bindable<DeploymentResponse | null>(null)
 	}: Props = $props();
 
 	let svcId = $derived(service.id);
@@ -258,6 +265,7 @@
 		envs = [];
 		envsLoaded = false;
 		deployments = [];
+		openDeployment = null;
 		localDeploymentId = null;
 		deployError = '';
 		deploying = false;
@@ -380,9 +388,7 @@
 							class="min-w-0 flex-1 @2xl:flex @2xl:items-baseline @2xl:justify-between @2xl:gap-6"
 						>
 							<p class="truncate font-mono text-[15px] text-foreground">{service.image}</p>
-							<p
-								class="mt-0.5 truncate text-[13px] text-muted-foreground @2xl:mt-0 @2xl:flex-none"
-							>
+							<p class="mt-0.5 truncate text-[13px] text-muted-foreground @2xl:mt-0 @2xl:flex-none">
 								{#if latestDeployment}
 									<!-- Relative first: "2 hours ago" is what you actually want to know
 									     about a deployment. The exact timestamp stays one hover away. -->
@@ -421,7 +427,14 @@
 					<p class="mb-2 text-[13px] text-muted-foreground">Previous</p>
 					<div class="overflow-hidden rounded-lg border border-border">
 						{#each previousDeployments as dep (dep.id)}
-							<DataRow density="dense" class="gap-2.5 text-[13px]">
+							<button
+								type="button"
+								onclick={() => (openDeployment = dep)}
+								class={cn(
+									dataRowVariants({ density: 'dense', interactive: true }),
+									'cursor-pointer gap-2.5 text-left text-[13px]'
+								)}
+							>
 								<StatusBadge status={dep.status} class="flex-none" />
 								<span class="truncate font-mono text-muted-foreground">{dep.id.slice(0, 8)}</span>
 								<span
@@ -430,7 +443,7 @@
 								>
 									{formatRelativeTime(dep.created_at)}
 								</span>
-							</DataRow>
+							</button>
 						{/each}
 					</div>
 				</div>

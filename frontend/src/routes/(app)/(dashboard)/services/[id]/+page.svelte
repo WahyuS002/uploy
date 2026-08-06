@@ -2,8 +2,16 @@
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 	import ServiceWorkspace from '$lib/components/app/ServiceWorkspace.svelte';
+	import DeploymentPanel from '$lib/components/app/DeploymentPanel.svelte';
+	import type { components } from '$lib/api/v1';
+
+	type DeploymentResponse = components['schemas']['DeploymentResponse'];
 
 	let { data }: { data: PageData } = $props();
+
+	// No floating inspector to stack on here, so the log panel pins itself to the
+	// viewport instead — same surface, same entrance, one plane above the page.
+	let openDeployment = $state<DeploymentResponse | null>(null);
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
 	let isOwner = $derived(data.workspace?.role === 'owner');
 
@@ -33,9 +41,19 @@
 				service={data.service}
 				{canEdit}
 				{isOwner}
+				bind:openDeployment
 				onDeleted={goToProject}
 				class="h-[640px]"
 			/>
 		</div>
 	</div>
+
+	{#if openDeployment}
+		<DeploymentPanel
+			deployment={openDeployment}
+			serviceName={data.service.name}
+			onClose={() => (openDeployment = null)}
+			class="fixed inset-4 z-40 md:inset-y-4 md:right-4 md:left-auto md:w-[min(46rem,calc(100vw-2rem))]"
+		/>
+	{/if}
 {/if}

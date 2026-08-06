@@ -6,6 +6,7 @@
 	import type { PageData } from './$types';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import ServiceWorkspace from '$lib/components/app/ServiceWorkspace.svelte';
+	import DeploymentPanel from '$lib/components/app/DeploymentPanel.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
 	import ImageStarterForm from '$lib/components/app/ImageStarterForm.svelte';
 	import PendingChangesBar from '$lib/components/app/PendingChangesBar.svelte';
@@ -39,6 +40,7 @@
 	type EnvironmentResponse = components['schemas']['EnvironmentResponse'];
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ServerResponse = components['schemas']['ServerResponse'];
+	type DeploymentResponse = components['schemas']['DeploymentResponse'];
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
@@ -54,6 +56,10 @@
 
 	let selectedEnvId = $state('');
 	let selectedServiceId = $state<string | null>(null);
+	// The deployment whose logs are stacked over the inspector. It lives here, not
+	// in the workspace that raises it: the panel covers the inspector *including*
+	// its header, and a child cannot draw outside its own parent's edge.
+	let openDeployment = $state<DeploymentResponse | null>(null);
 
 	// Adding a service is a step on the canvas, not a dialog — the same image-first
 	// flow as /projects/new/image. Everything else (name, container name) is
@@ -759,6 +765,7 @@
 		<aside
 			transition:drawer
 			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:inset-y-3 md:right-3 md:left-auto md:w-[var(--inspector-width)]"
+			class:is-stacked={openDeployment !== null}
 		>
 			<!-- px-5, matching the tab row and content below it: the title used to sit a
 			     notch left of everything it introduced. The icon chip is the canvas
@@ -777,7 +784,10 @@
 				</div>
 				<button
 					type="button"
-					onclick={() => (selectedServiceId = null)}
+					onclick={() => {
+						selectedServiceId = null;
+						openDeployment = null;
+					}}
 					class="grid h-11 w-11 cursor-pointer place-content-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card focus-visible:outline-none md:h-8 md:w-8"
 					aria-label="Close service panel"
 				>
@@ -789,11 +799,25 @@
 					service={selectedService}
 					{canEdit}
 					{isOwner}
+					bind:openDeployment
 					externalDeploymentId={barDeploymentIds[selectedService.id] ?? null}
 					onDeleted={removeService}
 				/>
 			</div>
 		</aside>
+
+		<!-- A peer of the inspector, not a layer inside it: same footprint, one
+		     plane up. That is what lets it cover the service header too and leave
+		     only the receded panel's edge showing at the left — the stack reads as
+		     two panels, which is what it is. -->
+		{#if openDeployment}
+			<DeploymentPanel
+				deployment={openDeployment}
+				serviceName={selectedService.name}
+				onClose={() => (openDeployment = null)}
+				class="absolute inset-0 z-40 md:inset-y-3 md:right-3 md:left-auto md:w-[var(--inspector-width)]"
+			/>
+		{/if}
 	{/if}
 </div>
 
@@ -963,6 +987,15 @@
 	   is on. */
 	.side-panel {
 		box-shadow: var(--shadow-float);
+		transition: transform 260ms cubic-bezier(0.23, 1, 0.32, 1);
+	}
+
+	/* A deployment's log panel stacked on top: this one steps back along the same
+	   diagonal the new panel arrives on, on the same clock. Translation only — the
+	   panel is full of live text, and scaling it would re-rasterize every glyph
+	   mid-slide for a depth cue the shift and the scrim already carry. */
+	.side-panel.is-stacked {
+		transform: translate3d(-10px, 8px, 0);
 	}
 
 	.toolbar {
