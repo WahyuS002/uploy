@@ -186,7 +186,7 @@
 		<span class="status-mark" data-status={bannerStatus} aria-hidden="true"></span>
 		<span
 			class={cn(
-				'min-w-0 flex-1 truncate text-sm font-medium',
+				'min-w-0 flex-1 truncate text-[15px] font-medium',
 				bannerStatus === 'success' && 'text-success',
 				bannerStatus === 'error' && 'text-destructive',
 				bannerStatus === 'active' && 'text-foreground'
@@ -194,7 +194,7 @@
 		>
 			{currentPhase}
 		</span>
-		<span class="flex-none text-xs text-muted-foreground tabular-nums">
+		<span class="flex-none text-[13px] text-muted-foreground tabular-nums">
 			{formatElapsed(elapsedSeconds)}
 		</span>
 		<Icon
@@ -207,12 +207,12 @@
 	</button>
 
 	{#if currentSubtext && bannerStatus !== 'success'}
-		<p class="truncate border-t border-border px-3 py-2 text-xs text-muted-foreground">
+		<p class="truncate border-t border-border px-3 py-2 text-[13px] text-muted-foreground">
 			{currentSubtext}
 		</p>
 	{/if}
 	{#if streamError}
-		<p class="border-t border-border px-3 py-2 text-xs text-destructive">{streamError}</p>
+		<p class="border-t border-border px-3 py-2 text-[13px] text-destructive">{streamError}</p>
 	{/if}
 
 	{#if open}
@@ -267,7 +267,7 @@
 		background: var(--muted);
 		padding: 0.625rem 0.75rem;
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.6875rem;
+		font-size: 0.75rem;
 		line-height: 1.55;
 		color: var(--foreground);
 		/* Wrap instead of scrolling sideways: image digests are one unbroken 71-char

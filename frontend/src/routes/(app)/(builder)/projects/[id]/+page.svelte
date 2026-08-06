@@ -766,22 +766,22 @@
 			     separate screen. The image line is gone — it leads the Deployments tab
 			     and has its own row in Settings, and three restatements of one string in
 			     a 420px column is two too many. -->
-			<header class="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
-				<div class="flex min-w-0 items-center gap-2.5">
-					<span class="grid h-7 w-7 flex-none place-content-center rounded-md bg-muted text-foreground">
-						<Container class="h-3.5 w-3.5" strokeWidth={1.75} />
+			<header class="flex items-center justify-between gap-2 border-b border-border px-5 py-4">
+				<div class="flex min-w-0 items-center gap-3">
+					<span class="grid h-9 w-9 flex-none place-content-center rounded-md bg-muted text-foreground">
+						<Container class="h-4.5 w-4.5" strokeWidth={1.75} />
 					</span>
-					<h2 class="truncate text-[15px] font-semibold text-foreground">
+					<h2 class="truncate text-2xl font-semibold tracking-[-0.01em] text-foreground">
 						{selectedService.name}
 					</h2>
 				</div>
 				<button
 					type="button"
 					onclick={() => (selectedServiceId = null)}
-					class="grid h-7 w-7 cursor-pointer place-content-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+					class="grid h-8 w-8 cursor-pointer place-content-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
 					aria-label="Close service panel"
 				>
-					<Icon src={XMark} theme="outline" class="h-4 w-4" />
+					<Icon src={XMark} theme="outline" class="h-4.5 w-4.5" />
 				</button>
 			</header>
 			<div class="min-h-0 flex-1 overflow-hidden">

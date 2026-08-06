@@ -304,7 +304,7 @@
 						// -mb-px pulls the 2px marker onto the nav's own hairline; without it
 						// the underline floats a pixel above the border and reads as a
 						// misalignment rather than a join.
-						'-mb-px cursor-pointer border-b-2 py-3 text-[13px] font-medium whitespace-nowrap transition-colors',
+						'-mb-px cursor-pointer border-b-2 py-3.5 text-[15px] font-medium whitespace-nowrap transition-colors',
 						activeTab === tab.id
 							? 'border-foreground text-foreground'
 							: 'border-transparent text-muted-foreground hover:text-foreground'
@@ -323,7 +323,7 @@
 			     running, on one line. The address is the reason you'd press Deploy, so
 			     splitting them made you look in two places to decide one thing. -->
 			<div class="flex items-center justify-between gap-3">
-				<div class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+				<div class="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
 					<Icon src={GlobeAlt} theme="outline" class="h-3.5 w-3.5 flex-none" />
 					{#if primaryDomain}
 						<a
@@ -349,12 +349,12 @@
 			</div>
 
 			{#if needsRedeploy}
-				<Alert tone="warning" class="mt-3 text-xs">
+				<Alert tone="warning" class="mt-3 text-[13px]">
 					Domain configuration changed. Deploy to apply the new routing.
 				</Alert>
 			{/if}
 			{#if deployError}
-				<p class="mt-2 text-sm text-destructive">{deployError}</p>
+				<p class="mt-2 text-[15px] text-destructive">{deployError}</p>
 			{/if}
 
 			{#if latestDeployment || deploymentId}
@@ -368,8 +368,8 @@
 							class="mt-px flex-none"
 						/>
 						<div class="min-w-0 flex-1">
-							<p class="truncate font-mono text-[13px] text-foreground">{service.image}</p>
-							<p class="mt-0.5 truncate text-xs text-muted-foreground">
+							<p class="truncate font-mono text-[15px] text-foreground">{service.image}</p>
+							<p class="mt-0.5 truncate text-[13px] text-muted-foreground">
 								{#if latestDeployment}
 									<!-- Relative first: "2 hours ago" is what you actually want to know
 									     about a deployment. The exact timestamp stays one hover away. -->
@@ -401,10 +401,10 @@
 
 			{#if previousDeployments.length > 0}
 				<div class="mt-5">
-					<p class="mb-2 text-xs text-muted-foreground">Previous</p>
+					<p class="mb-2 text-[13px] text-muted-foreground">Previous</p>
 					<div class="overflow-hidden rounded-lg border border-border">
 						{#each previousDeployments as dep (dep.id)}
-							<DataRow density="dense" class="gap-2.5 text-xs">
+							<DataRow density="dense" class="gap-2.5 text-[13px]">
 								<StatusBadge status={dep.status} class="flex-none" />
 								<span class="truncate font-mono text-muted-foreground">{dep.id.slice(0, 8)}</span>
 								<span
@@ -421,8 +421,8 @@
 		{:else if activeTab === 'domains'}
 			{#if domains.length === 0}
 				<div class="rounded-lg border border-dashed border-border px-4 py-5 text-center">
-					<p class="text-sm text-muted-foreground">No domains attached</p>
-					<p class="mt-1 text-xs text-muted-foreground">
+					<p class="text-[15px] text-muted-foreground">No domains attached</p>
+					<p class="mt-1 text-[13px] text-muted-foreground">
 						Add one below to reach this service by name instead of by port.
 					</p>
 				</div>
@@ -439,7 +439,7 @@
 										href="https://{domain.domain}"
 										target="_blank"
 										rel="noreferrer"
-										class="truncate text-[13px] font-medium text-foreground hover:underline"
+										class="truncate text-[15px] font-medium text-foreground hover:underline"
 									>
 										{domain.domain}
 									</a>
@@ -448,7 +448,7 @@
 									{/if}
 								</div>
 								{#if domain.last_error}
-									<p class="mt-1 truncate text-xs text-destructive" title={domain.last_error}>
+									<p class="mt-1 truncate text-[13px] text-destructive" title={domain.last_error}>
 										{domain.last_error}
 									</p>
 								{/if}
@@ -485,9 +485,9 @@
 					</Button>
 				</form>
 				{#if domainError}
-					<p class="mt-1 text-sm text-destructive">{domainError}</p>
+					<p class="mt-1 text-[15px] text-destructive">{domainError}</p>
 				{/if}
-				<Alert tone="neutral" class="mt-3 text-xs">
+				<Alert tone="neutral" class="mt-3 text-[13px]">
 					<p class="font-medium text-foreground">DNS setup required before deploying:</p>
 					<ul class="mt-1 list-inside list-disc space-y-0.5">
 						<li>
@@ -535,13 +535,13 @@
 				</form>
 
 				{#if envError}
-					<p class="mb-2 text-sm text-destructive">{envError}</p>
+					<p class="mb-2 text-[15px] text-destructive">{envError}</p>
 				{/if}
 
 				{#if envs.length === 0}
 					<div class="rounded-lg border border-dashed border-border px-4 py-5 text-center">
-						<p class="text-sm text-muted-foreground">No variables set</p>
-						<p class="mt-1 text-xs text-muted-foreground">
+						<p class="text-[15px] text-muted-foreground">No variables set</p>
+						<p class="mt-1 text-[13px] text-muted-foreground">
 							They are passed to the container on the next deployment.
 						</p>
 					</div>
@@ -554,8 +554,8 @@
 						{#each envs as env (env.key)}
 							<DataRow density="dense" class="items-start gap-2.5">
 								<div class="min-w-0 flex-1 font-mono">
-									<p class="truncate text-[13px] font-medium text-foreground">{env.key}</p>
-									<p class="mt-0.5 text-xs break-all text-muted-foreground">{env.value}</p>
+									<p class="truncate text-[15px] font-medium text-foreground">{env.key}</p>
+									<p class="mt-0.5 text-[13px] break-all text-muted-foreground">{env.value}</p>
 								</div>
 								<IconButton
 									variant="ghost"
@@ -570,7 +570,7 @@
 					</div>
 				{/if}
 			{:else}
-				<p class="text-sm text-muted-foreground">
+				<p class="text-[15px] text-muted-foreground">
 					Environment variables are only visible to workspace owners and developers.
 				</p>
 			{/if}
@@ -583,7 +583,7 @@
 			     into one block you can read as "this is the service". -->
 			<dl class="overflow-hidden rounded-lg border border-border">
 				{#each metadata as row (row.label)}
-					<DataRow density="dense" class="gap-4 text-[13px]">
+					<DataRow density="dense" class="gap-4 text-[15px]">
 						<dt class="w-20 flex-none text-muted-foreground">{row.label}</dt>
 						<dd class={cn('min-w-0 flex-1 truncate text-foreground', row.mono && 'font-mono')}>
 							{row.value}
@@ -594,7 +594,7 @@
 
 			{#if isOwner}
 				<div class="mt-5">
-					<p class="mb-2 text-xs text-muted-foreground">Danger zone</p>
+					<p class="mb-2 text-[13px] text-muted-foreground">Danger zone</p>
 					<!-- Tinted edge, plain surface: the border is enough to say "read this
 					     twice", and a filled red block for an action nobody has taken yet
 					     reads as an error that already happened. -->
@@ -602,8 +602,8 @@
 						class="flex items-start justify-between gap-3 rounded-lg border border-destructive/25 p-3"
 					>
 						<div class="min-w-0">
-							<p class="text-[13px] font-medium text-foreground">Delete service</p>
-							<p class="mt-0.5 text-xs text-muted-foreground">
+							<p class="text-[15px] font-medium text-foreground">Delete service</p>
+							<p class="mt-0.5 text-[13px] text-muted-foreground">
 								Removes this service from Uploy. The container already running on the server is left
 								alone.
 							</p>
