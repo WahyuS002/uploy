@@ -24,3 +24,31 @@ export function formatDate(iso: string) {
 export function formatDateTime(iso: string) {
 	return dateTimeFormatter.format(new Date(iso));
 }
+
+const relativeFormatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+// Each entry is how many of this unit fit in the next one up, so the loop can
+// divide its way to the largest unit the delta still fills.
+const relativeUnits: [Intl.RelativeTimeFormatUnit, number][] = [
+	['second', 60],
+	['minute', 60],
+	['hour', 24],
+	['day', 7],
+	['week', 4.35],
+	['month', 12]
+];
+
+/**
+ * "2 hours ago" — how a deployment's age is actually read. Anything a year or
+ * older falls back to the absolute date, where the exact day matters more than
+ * "last year".
+ */
+export function formatRelativeTime(iso: string) {
+	let delta = (new Date(iso).getTime() - Date.now()) / 1000;
+	for (const [unit, perNext] of relativeUnits) {
+		if (Math.abs(delta) < perNext) return relativeFormatter.format(Math.round(delta), unit);
+		delta /= perNext;
+	}
+	if (Math.abs(delta) < 1) return relativeFormatter.format(Math.round(delta), 'year');
+	return formatDate(iso);
+}

@@ -10,9 +10,15 @@
 	interface Props {
 		deploymentId: string;
 		onDone?: (status: string) => void;
+		/**
+		 * Drops the card's own border and radius so it can sit inside another card
+		 * as its bottom section — the deployment header and its output are one
+		 * object, and two nested outlines say otherwise.
+		 */
+		flush?: boolean;
 	}
 
-	let { deploymentId, onDone }: Props = $props();
+	let { deploymentId, onDone, flush = false }: Props = $props();
 
 	let logs: LogEntry[] = $state([]);
 	let status: string = $state('in_progress');
@@ -165,7 +171,12 @@
      deployment, so stacking a tinted banner on top of a separate black slab was
      saying it twice and spending two surfaces to do it. The card stays neutral;
      only the status mark and its label carry colour. -->
-<div class="overflow-hidden rounded-lg border border-border">
+<div
+	class={cn(
+		'overflow-hidden',
+		flush ? 'border-t border-border' : 'rounded-lg border border-border'
+	)}
+>
 	<button
 		type="button"
 		onclick={toggle}

@@ -9,6 +9,8 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import DataRow from '$lib/components/ui/DataRow.svelte';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import {
 		Dialog,
 		DialogContent,
@@ -16,9 +18,10 @@
 		DialogFooter,
 		DialogTitle
 	} from '$lib/components/ui/dialog';
-	import { Server } from '@steeze-ui/heroicons';
+	import { Icon } from '@steeze-ui/svelte-icon';
+	import { GlobeAlt, Server, XMark } from '@steeze-ui/heroicons';
 	import { cn } from '$lib/components/ui/cn.js';
-	import { formatDateTime } from '$lib/format-date';
+	import { formatDateTime, formatRelativeTime } from '$lib/format-date';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ServerResponse = components['schemas']['ServerResponse'];
@@ -71,13 +74,27 @@
 	let deploying = $state(false);
 	let deployError = $state('');
 	let deployments = $state<DeploymentResponse[]>([]);
+	// The API returns them newest first, so the head is the current one and the
+	// tail is history — the same split the panel shows.
 	let latestDeployment = $derived(deployments[0] ?? null);
+	let previousDeployments = $derived(deployments.slice(1));
 
 	// The service only carries a server_id and there is no GET /api/servers/{id},
 	// so the list is the only way to put a name on it. Fetched once per mount, not
 	// per service: it does not change when the selection does.
 	let servers = $state<ServerResponse[]>([]);
 	let server = $derived(servers.find((s) => s.id === service.server_id) ?? null);
+
+	// The address the Deployments tab leads with. Primary if one is marked, else
+	// the first attached — either way it is the one a reader would try.
+	let primaryDomain = $derived(domains.find((d) => d.is_primary) ?? domains[0] ?? null);
+
+	let metadata = $derived([
+		{ label: 'Image', value: service.image, mono: true },
+		{ label: 'Container', value: service.container_name, mono: true },
+		{ label: 'Port', value: String(service.port), mono: true },
+		{ label: 'Server', value: server ? `${server.name} (${server.host})` : '—', mono: false }
+	]);
 
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
@@ -278,7 +295,7 @@
 	     than the thing it was labelling. An underline marks one tab without
 	     drawing a box around any of them. -->
 	<div class="flex-none border-b border-border bg-card">
-		<nav class="flex items-center gap-4 px-5" aria-label="Service sections">
+		<nav class="flex items-center gap-5 px-5" aria-label="Service sections">
 			{#each visibleTabs as tab (tab.id)}
 				<button
 					type="button"
@@ -287,7 +304,7 @@
 						// -mb-px pulls the 2px marker onto the nav's own hairline; without it
 						// the underline floats a pixel above the border and reads as a
 						// misalignment rather than a join.
-						'-mb-px cursor-pointer border-b-2 py-2.5 text-xs font-medium whitespace-nowrap transition-colors',
+						'-mb-px cursor-pointer border-b-2 py-3 text-[13px] font-medium whitespace-nowrap transition-colors',
 						activeTab === tab.id
 							? 'border-foreground text-foreground'
 							: 'border-transparent text-muted-foreground hover:text-foreground'
@@ -302,18 +319,26 @@
 
 	<div class="min-h-0 flex-1 overflow-y-auto bg-card px-5 py-5">
 		{#if activeTab === 'deployments'}
-			<!-- Current state and the one action that changes it share a row: the status
-			     is the reason you'd press Deploy, so putting them apart made you look in
-			     two places to decide one thing. -->
+			<!-- Where the thing is reachable, and the one action that changes what's
+			     running, on one line. The address is the reason you'd press Deploy, so
+			     splitting them made you look in two places to decide one thing. -->
 			<div class="flex items-center justify-between gap-3">
-				<div class="flex min-w-0 items-center gap-2 text-sm">
-					{#if latestDeployment}
-						<StatusBadge status={latestDeployment.status} class="font-bold" />
-						<span class="truncate text-muted-foreground">
-							{formatDateTime(latestDeployment.created_at)}
-						</span>
+				<div class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+					<Icon src={GlobeAlt} theme="outline" class="h-3.5 w-3.5 flex-none" />
+					{#if primaryDomain}
+						<a
+							href="https://{primaryDomain.domain}"
+							target="_blank"
+							rel="noreferrer"
+							class="truncate text-foreground hover:underline"
+						>
+							{primaryDomain.domain}
+						</a>
+						{#if domains.length > 1}
+							<span class="flex-none">+{domains.length - 1}</span>
+						{/if}
 					{:else}
-						<span class="text-muted-foreground">Never deployed</span>
+						<span class="truncate">No domain attached</span>
 					{/if}
 				</div>
 				{#if canEdit}
@@ -324,80 +349,122 @@
 			</div>
 
 			{#if needsRedeploy}
-				<Alert tone="warning" class="mt-3">
+				<Alert tone="warning" class="mt-3 text-xs">
 					Domain configuration changed. Deploy to apply the new routing.
 				</Alert>
 			{/if}
 			{#if deployError}
 				<p class="mt-2 text-sm text-destructive">{deployError}</p>
 			{/if}
-			{#if deploymentId}
-				<div class="mt-4">
-					<DeploymentLogs {deploymentId} onDone={() => loadDeployments(svcId)} />
-				</div>
-			{/if}
 
-			<div class="mt-5 border-t border-border pt-4">
-				{#if deployments.length === 0}
+			{#if latestDeployment || deploymentId}
+				<!-- The current deployment and its output are one object, so they share
+				     one card: the log panel drops its own edge and joins on below. Two
+				     stacked outlines read as two unrelated things stacked by accident. -->
+				<div class="mt-4 overflow-hidden rounded-lg border border-border">
+					<div class="flex items-start gap-2.5 p-3">
+						<StatusBadge
+							status={latestDeployment?.status ?? 'in_progress'}
+							class="mt-px flex-none"
+						/>
+						<div class="min-w-0 flex-1">
+							<p class="truncate font-mono text-[13px] text-foreground">{service.image}</p>
+							<p class="mt-0.5 truncate text-xs text-muted-foreground">
+								{#if latestDeployment}
+									<!-- Relative first: "2 hours ago" is what you actually want to know
+									     about a deployment. The exact timestamp stays one hover away. -->
+									<span title={formatDateTime(latestDeployment.created_at)}>
+										{formatRelativeTime(latestDeployment.created_at)}
+									</span>
+									<span class="px-1">·</span>
+									<span class="font-mono">{latestDeployment.id.slice(0, 8)}</span>
+								{:else}
+									Starting...
+								{/if}
+							</p>
+						</div>
+					</div>
+					{#if deploymentId}
+						<DeploymentLogs {deploymentId} flush onDone={() => loadDeployments(svcId)} />
+					{/if}
+				</div>
+			{:else}
+				<div class="mt-4 rounded-lg border border-dashed border-border">
 					<EmptyState
 						icon={Server}
 						title="No deployments yet"
-						description="Trigger your first deployment to see its status and history here."
+						description="Deploy this service to see its status, live logs and history here."
+						class="px-5 py-8"
 					/>
-				{:else}
-					<p class="mb-2 text-xs font-medium text-muted-foreground">History</p>
-					<div class="flex flex-col gap-1">
-						{#each deployments as dep (dep.id)}
-							<div
-								class="flex items-center gap-3 rounded-lg border border-border bg-card p-2 text-sm"
-							>
-								<span class="font-mono text-xs text-muted-foreground">{dep.id.slice(0, 12)}</span>
-								<StatusBadge status={dep.status} class="font-bold" />
-								<span class="text-muted-foreground">
-									{formatDateTime(dep.created_at)}
+				</div>
+			{/if}
+
+			{#if previousDeployments.length > 0}
+				<div class="mt-5">
+					<p class="mb-2 text-xs text-muted-foreground">Previous</p>
+					<div class="overflow-hidden rounded-lg border border-border">
+						{#each previousDeployments as dep (dep.id)}
+							<DataRow density="dense" class="gap-2.5 text-xs">
+								<StatusBadge status={dep.status} class="flex-none" />
+								<span class="truncate font-mono text-muted-foreground">{dep.id.slice(0, 8)}</span>
+								<span
+									class="ml-auto flex-none text-muted-foreground"
+									title={formatDateTime(dep.created_at)}
+								>
+									{formatRelativeTime(dep.created_at)}
 								</span>
-							</div>
+							</DataRow>
 						{/each}
 					</div>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		{:else if activeTab === 'domains'}
 			{#if domains.length === 0}
-				<p class="mb-3 text-sm text-muted-foreground">No domains attached</p>
+				<div class="rounded-lg border border-dashed border-border px-4 py-5 text-center">
+					<p class="text-sm text-muted-foreground">No domains attached</p>
+					<p class="mt-1 text-xs text-muted-foreground">
+						Add one below to reach this service by name instead of by port.
+					</p>
+				</div>
 			{:else}
-				<div class="mb-4 flex flex-col gap-1">
+				<!-- One divided card, not a stack of separate bordered pills: these are
+				     rows of the same list, and giving each its own edge made a three-domain
+				     panel read as three unrelated objects. -->
+				<div class="overflow-hidden rounded-lg border border-border">
 					{#each domains as domain (domain.id)}
-						<div
-							class="flex items-center gap-3 rounded-lg border border-border bg-card p-2 text-sm"
-						>
-							<a
-								href="https://{domain.domain}"
-								target="_blank"
-								class="font-medium text-accent underline"
-							>
-								{domain.domain}
-							</a>
-							{#if domain.is_primary}
-								<Badge tone="info">primary</Badge>
-							{/if}
-							<StatusBadge status={domain.status} />
-							{#if domain.last_error}
-								<span class="text-xs text-destructive" title={domain.last_error}>
-									{domain.last_error.length > 40
-										? domain.last_error.slice(0, 40) + '...'
-										: domain.last_error}
-								</span>
-							{/if}
+						<DataRow density="dense" class="items-start gap-2.5">
+							<div class="min-w-0 flex-1">
+								<div class="flex min-w-0 items-center gap-2">
+									<a
+										href="https://{domain.domain}"
+										target="_blank"
+										rel="noreferrer"
+										class="truncate text-[13px] font-medium text-foreground hover:underline"
+									>
+										{domain.domain}
+									</a>
+									{#if domain.is_primary}
+										<Badge tone="info" class="flex-none">primary</Badge>
+									{/if}
+								</div>
+								{#if domain.last_error}
+									<p class="mt-1 truncate text-xs text-destructive" title={domain.last_error}>
+										{domain.last_error}
+									</p>
+								{/if}
+							</div>
+							<StatusBadge status={domain.status} class="mt-px flex-none" />
 							{#if canEdit}
-								<button
+								<IconButton
+									variant="ghost"
 									onclick={() => deleteDomain(domain.id)}
-									class="ml-auto cursor-pointer text-destructive hover:text-destructive/80"
-									aria-label="Remove domain"
+									class="-mr-1 flex-none hover:text-destructive"
+									aria-label="Remove {domain.domain}"
 								>
-									&times;
-								</button>
+									<Icon src={XMark} theme="outline" class="h-3.5 w-3.5" />
+								</IconButton>
 							{/if}
-						</div>
+						</DataRow>
 					{/each}
 				</div>
 			{/if}
@@ -408,7 +475,7 @@
 						e.preventDefault();
 						addDomain();
 					}}
-					class="flex items-end gap-2"
+					class="mt-4 flex items-end gap-2"
 				>
 					<FormField label="Add domain">
 						<Input type="text" bind:value={domainInput} placeholder="myapp.example.com" required />
@@ -420,7 +487,7 @@
 				{#if domainError}
 					<p class="mt-1 text-sm text-destructive">{domainError}</p>
 				{/if}
-				<Alert tone="neutral" class="mt-2 text-xs">
+				<Alert tone="neutral" class="mt-3 text-xs">
 					<p class="font-medium text-foreground">DNS setup required before deploying:</p>
 					<ul class="mt-1 list-inside list-disc space-y-0.5">
 						<li>
@@ -443,17 +510,28 @@
 						e.preventDefault();
 						addEnv();
 					}}
-					class="mb-4 flex gap-2"
+					class="mb-4 flex items-center gap-2"
 				>
-					<Input type="text" bind:value={envKey} placeholder="KEY" required class="font-mono" />
+					<!-- A third of the row for the key, the rest for the value: at 420px the
+					     two inputs were splitting evenly and a value like a connection string
+					     got the same room as `PORT`. -->
+					<Input
+						type="text"
+						bind:value={envKey}
+						placeholder="KEY"
+						required
+						size="sm"
+						class="w-28 flex-none font-mono"
+					/>
 					<Input
 						type="text"
 						bind:value={envValue}
 						placeholder="value"
 						required
-						class="flex-1 font-mono"
+						size="sm"
+						class="min-w-0 flex-1 font-mono"
 					/>
-					<Button type="submit" size="sm">Set</Button>
+					<Button type="submit" size="sm" class="flex-none">Set</Button>
 				</form>
 
 				{#if envError}
@@ -461,24 +539,33 @@
 				{/if}
 
 				{#if envs.length === 0}
-					<p class="text-sm text-muted-foreground">No environment variables set.</p>
+					<div class="rounded-lg border border-dashed border-border px-4 py-5 text-center">
+						<p class="text-sm text-muted-foreground">No variables set</p>
+						<p class="mt-1 text-xs text-muted-foreground">
+							They are passed to the container on the next deployment.
+						</p>
+					</div>
 				{:else}
-					<div class="flex flex-col gap-1">
+					<!-- Key over value, not key = value on one line: a 420px panel wrapped
+					     every real secret mid-string, and the wrapped tail lined up under
+					     the key it did not belong to. Stacked, the key stays scannable and
+					     the value gets the full width to break in. -->
+					<div class="overflow-hidden rounded-lg border border-border">
 						{#each envs as env (env.key)}
-							<div
-								class="flex items-center gap-2 rounded-lg border border-border bg-card p-2 font-mono text-sm"
-							>
-								<span class="font-bold text-foreground">{env.key}</span>
-								<span class="text-muted-foreground">=</span>
-								<span class="flex-1 break-all text-muted-foreground">{env.value}</span>
-								<button
+							<DataRow density="dense" class="items-start gap-2.5">
+								<div class="min-w-0 flex-1 font-mono">
+									<p class="truncate text-[13px] font-medium text-foreground">{env.key}</p>
+									<p class="mt-0.5 text-xs break-all text-muted-foreground">{env.value}</p>
+								</div>
+								<IconButton
+									variant="ghost"
 									onclick={() => deleteEnv(env.key)}
-									class="cursor-pointer text-destructive hover:text-destructive/80"
-									aria-label="Remove variable"
+									class="-mr-1 flex-none hover:text-destructive"
+									aria-label="Remove {env.key}"
 								>
-									&times;
-								</button>
-							</div>
+									<Icon src={XMark} theme="outline" class="h-3.5 w-3.5" />
+								</IconButton>
+							</DataRow>
 						{/each}
 					</div>
 				{/if}
@@ -492,41 +579,41 @@
 			     over four short values. Uppercase + medium weight gave the labels more
 			     visual weight than the data they name, which is backwards. `Kind` is
 			     gone entirely: the API only accepts "application", so the row could
-			     never say anything else. -->
-			<dl class="flex flex-col gap-2.5 text-sm">
-				<div class="flex items-baseline gap-4">
-					<dt class="w-20 flex-none text-muted-foreground">Image</dt>
-					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">{service.image}</dd>
-				</div>
-				<div class="flex items-baseline gap-4">
-					<dt class="w-20 flex-none text-muted-foreground">Container</dt>
-					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">
-						{service.container_name}
-					</dd>
-				</div>
-				<div class="flex items-baseline gap-4">
-					<dt class="w-20 flex-none text-muted-foreground">Port</dt>
-					<dd class="min-w-0 flex-1 font-mono text-foreground">{service.port}</dd>
-				</div>
-				<div class="flex items-baseline gap-4">
-					<dt class="w-20 flex-none text-muted-foreground">Server</dt>
-					<dd class="min-w-0 flex-1 truncate text-foreground">
-						{server ? `${server.name} (${server.host})` : '—'}
-					</dd>
-				</div>
+			     never say anything else. The card is what turns four floating pairs
+			     into one block you can read as "this is the service". -->
+			<dl class="overflow-hidden rounded-lg border border-border">
+				{#each metadata as row (row.label)}
+					<DataRow density="dense" class="gap-4 text-[13px]">
+						<dt class="w-20 flex-none text-muted-foreground">{row.label}</dt>
+						<dd class={cn('min-w-0 flex-1 truncate text-foreground', row.mono && 'font-mono')}>
+							{row.value}
+						</dd>
+					</DataRow>
+				{/each}
 			</dl>
 
 			{#if isOwner}
-				<div class="mt-5 border-t border-border pt-4">
-					<div class="flex items-start justify-between gap-3">
+				<div class="mt-5">
+					<p class="mb-2 text-xs text-muted-foreground">Danger zone</p>
+					<!-- Tinted edge, plain surface: the border is enough to say "read this
+					     twice", and a filled red block for an action nobody has taken yet
+					     reads as an error that already happened. -->
+					<div
+						class="flex items-start justify-between gap-3 rounded-lg border border-destructive/25 p-3"
+					>
 						<div class="min-w-0">
-							<p class="text-sm font-medium text-foreground">Delete service</p>
+							<p class="text-[13px] font-medium text-foreground">Delete service</p>
 							<p class="mt-0.5 text-xs text-muted-foreground">
 								Removes this service from Uploy. The container already running on the server is left
 								alone.
 							</p>
 						</div>
-						<Button variant="destructive" size="sm" onclick={() => (deleteOpen = true)}>
+						<Button
+							variant="destructive"
+							size="sm"
+							class="flex-none"
+							onclick={() => (deleteOpen = true)}
+						>
 							Delete
 						</Button>
 					</div>

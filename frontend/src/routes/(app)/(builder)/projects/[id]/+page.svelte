@@ -789,12 +789,22 @@
 		<aside
 			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:relative md:inset-auto md:z-auto md:w-[420px] md:max-w-[440px] md:min-w-[320px] md:flex-none"
 		>
-			<header class="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-				<div class="min-w-0">
-					<div class="truncate text-sm font-semibold text-foreground">{selectedService.name}</div>
-					<div class="truncate font-mono text-[11px] text-muted-foreground">
-						{selectedService.image}
-					</div>
+			<!-- px-5, matching the tab row and content below it: the title used to sit a
+			     notch left of everything it introduced. The icon chip is the canvas
+			     node's own, so the panel reads as that node opened up rather than as a
+			     separate screen. The image line is gone — it leads the Deployments tab
+			     and has its own row in Settings, and three restatements of one string in
+			     a 420px column is two too many. -->
+			<header class="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
+				<div class="flex min-w-0 items-center gap-2.5">
+					<span
+						class="grid h-7 w-7 flex-none place-content-center rounded-md bg-muted text-foreground"
+					>
+						<Container class="h-3.5 w-3.5" strokeWidth={1.75} />
+					</span>
+					<h2 class="truncate text-[15px] font-semibold text-foreground">
+						{selectedService.name}
+					</h2>
 				</div>
 				<button
 					type="button"
