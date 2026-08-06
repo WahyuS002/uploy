@@ -187,6 +187,18 @@
 		}
 	}
 
+	function removeService(id: string) {
+		services = services.filter((s) => s.id !== id);
+		if (selectedServiceId === id) selectedServiceId = null;
+		// A deleted service never leaves the "deploying" set on its own — the poll
+		// only keeps ids it still sees as pending, and a gone service reports nothing.
+		deployingIds = new Set([...deployingIds].filter((x) => x !== id));
+		const rest = { ...barDeploymentIds };
+		delete rest[id];
+		barDeploymentIds = rest;
+		toast.show({ tone: 'success', title: 'Service deleted', duration: 4000 });
+	}
+
 	// ponytail: fixed 3s poll with a hard cap, because a deployment's only precise
 	// completion signal is the per-deployment SSE stream and subscribing to N of
 	// them to dim N badges is not worth it. The cap is what keeps this honest: a
@@ -797,7 +809,9 @@
 				<ServiceWorkspace
 					service={selectedService}
 					{canEdit}
+					{isOwner}
 					externalDeploymentId={barDeploymentIds[selectedService.id] ?? null}
+					onDeleted={removeService}
 				/>
 			</div>
 		</aside>

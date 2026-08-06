@@ -9,20 +9,30 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import {
+		Dialog,
+		DialogContent,
+		DialogHeader,
+		DialogFooter,
+		DialogTitle
+	} from '$lib/components/ui/dialog';
 	import { Server } from '@steeze-ui/heroicons';
 	import { cn } from '$lib/components/ui/cn.js';
 	import { formatDateTime } from '$lib/format-date';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
+	type ServerResponse = components['schemas']['ServerResponse'];
 	type ServiceDomainResponse = components['schemas']['ServiceDomainResponse'];
 	type ServiceEnvResponse = components['schemas']['ServiceEnvResponse'];
 	type DeploymentResponse = components['schemas']['DeploymentResponse'];
 
-	type Tab = 'overview' | 'domains' | 'env' | 'deployments';
+	type Tab = 'deployments' | 'domains' | 'env' | 'settings';
 
 	type Props = {
 		service: ServiceResponse;
 		canEdit: boolean;
+		/** Deleting a service is owner-only server-side, so the action only shows for owners. */
+		isOwner?: boolean;
 		showEnvVars?: boolean;
 		/**
 		 * A deployment started outside this panel — the canvas "pending changes"
@@ -30,20 +40,24 @@
 		 * way here. Without it a bar deploy runs invisibly.
 		 */
 		externalDeploymentId?: string | null;
+		onDeleted?: (id: string) => void;
 		class?: string;
 	};
 
 	let {
 		service,
 		canEdit,
+		isOwner = false,
 		showEnvVars = true,
 		externalDeploymentId = null,
+		onDeleted,
 		class: className
 	}: Props = $props();
 
 	let svcId = $derived(service.id);
 
-	let activeTab = $state<Tab>('overview');
+	// Deployments lands first, so it is what a freshly selected service opens on.
+	let activeTab = $state<Tab>('deployments');
 
 	let domains = $state<ServiceDomainResponse[]>([]);
 	let envs = $state<ServiceEnvResponse[]>([]);
@@ -57,6 +71,17 @@
 	let deploying = $state(false);
 	let deployError = $state('');
 	let deployments = $state<DeploymentResponse[]>([]);
+	let latestDeployment = $derived(deployments[0] ?? null);
+
+	// The service only carries a server_id and there is no GET /api/servers/{id},
+	// so the list is the only way to put a name on it. Fetched once per mount, not
+	// per service: it does not change when the selection does.
+	let servers = $state<ServerResponse[]>([]);
+	let server = $derived(servers.find((s) => s.id === service.server_id) ?? null);
+
+	let deleteOpen = $state(false);
+	let deleting = $state(false);
+	let deleteError = $state('');
 
 	let domainInput = $state('');
 	let domainError = $state('');
@@ -183,6 +208,31 @@
 		envs = envs.filter((e) => e.key !== key);
 	}
 
+	async function deleteService() {
+		deleteError = '';
+		deleting = true;
+		try {
+			const id = svcId;
+			const { error } = await api.DELETE('/api/services/{id}', { params: { path: { id } } });
+			if (error) {
+				deleteError = (error as { error: string }).error;
+				return;
+			}
+			deleteOpen = false;
+			onDeleted?.(id);
+		} catch {
+			deleteError = 'Network error';
+		} finally {
+			deleting = false;
+		}
+	}
+
+	$effect(() => {
+		api.GET('/api/servers').then(({ data }) => {
+			if (data) servers = data;
+		});
+	});
+
 	$effect(() => {
 		const id = svcId;
 		const token = ++loadToken;
@@ -196,13 +246,16 @@
 		deploying = false;
 		needsRedeploy = false;
 
-		activeTab = 'overview';
+		activeTab = 'deployments';
 		domainInput = '';
 		domainError = '';
 		domainAdding = false;
 		envKey = '';
 		envValue = '';
 		envError = '';
+		deleteOpen = false;
+		deleting = false;
+		deleteError = '';
 
 		loadDomains(id, token);
 		loadEnvs(id, token);
@@ -210,10 +263,10 @@
 	});
 
 	const tabs: { id: Tab; label: string }[] = [
-		{ id: 'overview', label: 'Overview' },
+		{ id: 'deployments', label: 'Deployments' },
 		{ id: 'domains', label: 'Domains' },
-		{ id: 'env', label: 'Env Vars' },
-		{ id: 'deployments', label: 'Deployments' }
+		{ id: 'env', label: 'Variables' },
+		{ id: 'settings', label: 'Settings' }
 	];
 
 	let visibleTabs = $derived(tabs.filter((t) => t.id !== 'env' || (showEnvVars && canEdit)));
@@ -248,53 +301,66 @@
 	</div>
 
 	<div class="min-h-0 flex-1 overflow-y-auto bg-card px-5 py-5">
-		{#if activeTab === 'overview'}
-			<!-- Sentence-case labels in a fixed left column, not four uppercase headings
-			     over four short values. Uppercase + medium weight gave the labels more
-			     visual weight than the data they name, which is backwards. `Kind` is
-			     gone entirely: the API only accepts "application", so the row could
-			     never say anything else. -->
-			<dl class="flex flex-col gap-2.5 text-sm">
-				<div class="flex items-baseline gap-4">
-					<dt class="w-20 flex-none text-muted-foreground">Image</dt>
-					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">{service.image}</dd>
+		{#if activeTab === 'deployments'}
+			<!-- Current state and the one action that changes it share a row: the status
+			     is the reason you'd press Deploy, so putting them apart made you look in
+			     two places to decide one thing. -->
+			<div class="flex items-center justify-between gap-3">
+				<div class="flex min-w-0 items-center gap-2 text-sm">
+					{#if latestDeployment}
+						<StatusBadge status={latestDeployment.status} class="font-bold" />
+						<span class="truncate text-muted-foreground">
+							{formatDateTime(latestDeployment.created_at)}
+						</span>
+					{:else}
+						<span class="text-muted-foreground">Never deployed</span>
+					{/if}
 				</div>
-				<div class="flex items-baseline gap-4">
-					<dt class="w-20 flex-none text-muted-foreground">Container</dt>
-					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">
-						{service.container_name}
-					</dd>
-				</div>
-				<div class="flex items-baseline gap-4">
-					<dt class="w-20 flex-none text-muted-foreground">Port</dt>
-					<dd class="min-w-0 flex-1 font-mono text-foreground">{service.port}</dd>
-				</div>
-			</dl>
+				{#if canEdit}
+					<Button onclick={deploy} loading={deploying} size="sm">
+						{deploying ? 'Deploying...' : 'Deploy'}
+					</Button>
+				{/if}
+			</div>
 
-			{#if canEdit}
-				<div class="mt-5 border-t border-border pt-4">
-					<!-- The button is its own explanation. A heading plus "Trigger a new
-					     deployment for this service." spent three lines restating one verb. -->
-					<div class="flex justify-end">
-						<Button onclick={deploy} loading={deploying} size="sm">
-							{deploying ? 'Deploying...' : 'Deploy'}
-						</Button>
-					</div>
-					{#if needsRedeploy}
-						<Alert tone="warning" class="mt-3">
-							Domain configuration changed. Deploy to apply the new routing.
-						</Alert>
-					{/if}
-					{#if deployError}
-						<p class="mt-2 text-sm text-destructive">{deployError}</p>
-					{/if}
-					{#if deploymentId}
-						<div class="mt-4">
-							<DeploymentLogs {deploymentId} onDone={() => loadDeployments(svcId)} />
-						</div>
-					{/if}
+			{#if needsRedeploy}
+				<Alert tone="warning" class="mt-3">
+					Domain configuration changed. Deploy to apply the new routing.
+				</Alert>
+			{/if}
+			{#if deployError}
+				<p class="mt-2 text-sm text-destructive">{deployError}</p>
+			{/if}
+			{#if deploymentId}
+				<div class="mt-4">
+					<DeploymentLogs {deploymentId} onDone={() => loadDeployments(svcId)} />
 				</div>
 			{/if}
+
+			<div class="mt-5 border-t border-border pt-4">
+				{#if deployments.length === 0}
+					<EmptyState
+						icon={Server}
+						title="No deployments yet"
+						description="Trigger your first deployment to see its status and history here."
+					/>
+				{:else}
+					<p class="mb-2 text-xs font-medium text-muted-foreground">History</p>
+					<div class="flex flex-col gap-1">
+						{#each deployments as dep (dep.id)}
+							<div
+								class="flex items-center gap-3 rounded-lg border border-border bg-card p-2 text-sm"
+							>
+								<span class="font-mono text-xs text-muted-foreground">{dep.id.slice(0, 12)}</span>
+								<StatusBadge status={dep.status} class="font-bold" />
+								<span class="text-muted-foreground">
+									{formatDateTime(dep.created_at)}
+								</span>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		{:else if activeTab === 'domains'}
 			{#if domains.length === 0}
 				<p class="mb-3 text-sm text-muted-foreground">No domains attached</p>
@@ -421,28 +487,79 @@
 					Environment variables are only visible to workspace owners and developers.
 				</p>
 			{/if}
-		{:else if activeTab === 'deployments'}
-			{#if deployments.length === 0}
-				<EmptyState
-					icon={Server}
-					title="No deployments yet"
-					description="Trigger your first deployment to see its status and history here."
-				/>
-			{:else}
-				<div class="flex flex-col gap-1">
-					{#each deployments as dep (dep.id)}
-						<div
-							class="flex items-center gap-3 rounded-lg border border-border bg-card p-2 text-sm"
-						>
-							<span class="font-mono text-xs text-muted-foreground">{dep.id.slice(0, 12)}</span>
-							<StatusBadge status={dep.status} class="font-bold" />
-							<span class="text-muted-foreground">
-								{formatDateTime(dep.created_at)}
-							</span>
+		{:else if activeTab === 'settings'}
+			<!-- Sentence-case labels in a fixed left column, not four uppercase headings
+			     over four short values. Uppercase + medium weight gave the labels more
+			     visual weight than the data they name, which is backwards. `Kind` is
+			     gone entirely: the API only accepts "application", so the row could
+			     never say anything else. -->
+			<dl class="flex flex-col gap-2.5 text-sm">
+				<div class="flex items-baseline gap-4">
+					<dt class="w-20 flex-none text-muted-foreground">Image</dt>
+					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">{service.image}</dd>
+				</div>
+				<div class="flex items-baseline gap-4">
+					<dt class="w-20 flex-none text-muted-foreground">Container</dt>
+					<dd class="min-w-0 flex-1 truncate font-mono text-foreground">
+						{service.container_name}
+					</dd>
+				</div>
+				<div class="flex items-baseline gap-4">
+					<dt class="w-20 flex-none text-muted-foreground">Port</dt>
+					<dd class="min-w-0 flex-1 font-mono text-foreground">{service.port}</dd>
+				</div>
+				<div class="flex items-baseline gap-4">
+					<dt class="w-20 flex-none text-muted-foreground">Server</dt>
+					<dd class="min-w-0 flex-1 truncate text-foreground">
+						{server ? `${server.name} (${server.host})` : '—'}
+					</dd>
+				</div>
+			</dl>
+
+			{#if isOwner}
+				<div class="mt-5 border-t border-border pt-4">
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0">
+							<p class="text-sm font-medium text-foreground">Delete service</p>
+							<p class="mt-0.5 text-xs text-muted-foreground">
+								Removes this service from Uploy. The container already running on the server is left
+								alone.
+							</p>
 						</div>
-					{/each}
+						<Button variant="destructive" size="sm" onclick={() => (deleteOpen = true)}>
+							Delete
+						</Button>
+					</div>
 				</div>
 			{/if}
 		{/if}
 	</div>
 </div>
+
+<Dialog bind:open={deleteOpen}>
+	<DialogContent>
+		<DialogHeader>
+			<DialogTitle>Delete {service.name}?</DialogTitle>
+		</DialogHeader>
+		<div class="px-5 pb-5 text-sm text-muted-foreground">
+			Its domains and environment variables go with it. This cannot be undone.
+			{#if deleteError}
+				<p class="mt-2 text-destructive">{deleteError}</p>
+			{/if}
+		</div>
+		<DialogFooter>
+			<Button type="button" variant="secondary" size="sm" onclick={() => (deleteOpen = false)}>
+				Cancel
+			</Button>
+			<Button
+				type="button"
+				variant="destructive"
+				size="sm"
+				loading={deleting}
+				onclick={deleteService}
+			>
+				{deleting ? 'Deleting...' : 'Delete'}
+			</Button>
+		</DialogFooter>
+	</DialogContent>
+</Dialog>
