@@ -289,7 +289,11 @@
 	let visibleTabs = $derived(tabs.filter((t) => t.id !== 'env' || (showEnvVars && canEdit)));
 </script>
 
-<div class={cn('flex h-full min-h-0 flex-col', className)}>
+<!-- @container, not viewport breakpoints: this same component renders in the
+     builder's inspector at clamp(420px, 55vw, 960px) and again on /services/[id]
+     at a different width entirely. What the rows should do depends on the room
+     *they* have, which the viewport does not know. -->
+<div class={cn('@container flex h-full min-h-0 flex-col', className)}>
 	<!-- Underline tabs, not filled pills. Four pills across a 420px panel put four
 	     competing blocks above content that has none, and the row read as heavier
 	     than the thing it was labelling. An underline marks one tab without
@@ -363,14 +367,22 @@
 				     one card: the log panel drops its own edge and joins on below. Two
 				     stacked outlines read as two unrelated things stacked by accident. -->
 				<div class="mt-4 overflow-hidden rounded-lg border border-border">
-					<div class="flex items-start gap-2.5 p-3">
+					<!-- Narrow, the meta stacks under the image because there is no room for it
+					     anywhere else. Once the panel is wide the same two facts sit on one
+					     line, image left and meta right — which is what stops a 960px card
+					     from being two short lines against half a metre of nothing. -->
+					<div class="flex items-start gap-2.5 p-3 @2xl:items-center">
 						<StatusBadge
 							status={latestDeployment?.status ?? 'in_progress'}
-							class="mt-px flex-none"
+							class="mt-px flex-none @2xl:mt-0"
 						/>
-						<div class="min-w-0 flex-1">
+						<div
+							class="min-w-0 flex-1 @2xl:flex @2xl:items-baseline @2xl:justify-between @2xl:gap-6"
+						>
 							<p class="truncate font-mono text-[15px] text-foreground">{service.image}</p>
-							<p class="mt-0.5 truncate text-[13px] text-muted-foreground">
+							<p
+								class="mt-0.5 truncate text-[13px] text-muted-foreground @2xl:mt-0 @2xl:flex-none"
+							>
 								{#if latestDeployment}
 									<!-- Relative first: "2 hours ago" is what you actually want to know
 									     about a deployment. The exact timestamp stays one hover away. -->
@@ -401,7 +413,11 @@
 			{/if}
 
 			{#if previousDeployments.length > 0}
-				<div class="mt-5">
+				<!-- mt-8, not mt-5: history is a different subject from what is running
+				     now, and at 20px it sat closer to the current card than the card's own
+				     rows sit to each other — proximity said "same thing" while the label
+				     said otherwise. -->
+				<div class="mt-8">
 					<p class="mb-2 text-[13px] text-muted-foreground">Previous</p>
 					<div class="overflow-hidden rounded-lg border border-border">
 						{#each previousDeployments as dep (dep.id)}
@@ -490,7 +506,9 @@
 				{/if}
 				<Alert tone="neutral" class="mt-3 text-[13px]">
 					<p class="font-medium text-foreground">DNS setup required before deploying:</p>
-					<ul class="mt-1 list-inside list-disc space-y-0.5">
+					<!-- Prose, so it takes a measure. Uncapped it ran ~105ch in a 960px
+					     panel, well past the 65–75ch a reader tracks without losing the line. -->
+					<ul class="mt-1 max-w-[68ch] list-inside list-disc space-y-0.5">
 						<li>
 							For a subdomain (e.g. <code>app.example.com</code>): create an
 							<strong>A record</strong>
