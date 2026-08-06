@@ -32,6 +32,8 @@
 		ArrowsPointingIn
 	} from '@steeze-ui/heroicons';
 	import { Container } from 'lucide-svelte';
+	import { quintOut } from 'svelte/easing';
+	import type { TransitionConfig } from 'svelte/transition';
 
 	type ProjectResponse = components['schemas']['ProjectResponse'];
 	type EnvironmentResponse = components['schemas']['EnvironmentResponse'];
@@ -82,6 +84,18 @@
 	let serverItems = $derived(servers.map((s) => ({ value: s.id, label: `${s.name} (${s.host})` })));
 	let serverById = $derived(new Map(servers.map((s) => [s.id, s])));
 	let selectedService = $derived(selectedServiceId ? (services.find((s) => s.id === selectedServiceId) ?? null) : null);
+
+	// The panel and the canvas shift are one gesture — the drawer pushing the
+	// workspace over — so they share a duration and a curve. Percentage travel
+	// rather than pixels: the panel is a full-width sheet on mobile and a
+	// clamp(420px, 55vw, 960px) column on desktop, and both should arrive from
+	// exactly their own edge. quintOut is svelte/easing's match for the
+	// cubic-bezier(0.23, 1, 0.32, 1) the rest of the builder animates on.
+	const drawer: (node: Element) => TransitionConfig = () => ({
+		duration: 280,
+		easing: quintOut,
+		css: (_t: number, u: number) => `transform: translate3d(${u * 100}%, 0, 0)`
+	});
 
 	// Services whose deployment we have already fired. The API keeps reporting
 	// them as pending until the deployment actually succeeds, so without this the
@@ -741,6 +755,7 @@
 
 	{#if selectedService}
 		<aside
+			transition:drawer
 			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:inset-y-0 md:right-0 md:left-auto md:w-[var(--inspector-width)] md:rounded-r-none"
 		>
 			<!-- px-5, matching the tab row and content below it: the title used to sit a
@@ -821,7 +836,7 @@
 
 	.inspector-shift {
 		transform: translate3d(calc(0px - var(--inspector-shift)), 0, 0);
-		transition: transform 240ms cubic-bezier(0.77, 0, 0.175, 1);
+		transition: transform 280ms cubic-bezier(0.23, 1, 0.32, 1);
 		will-change: transform;
 	}
 
@@ -931,10 +946,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.inspector-shift {
-			transition: none;
-		}
-
 		.node-badge.is-deploying {
 			animation: none;
 		}
