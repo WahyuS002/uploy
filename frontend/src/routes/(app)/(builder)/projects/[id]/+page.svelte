@@ -94,7 +94,9 @@
 	const drawer: (node: Element) => TransitionConfig = () => ({
 		duration: 280,
 		easing: quintOut,
-		css: (_t: number, u: number) => `transform: translate3d(${u * 100}%, 0, 0)`
+		// Its own width *plus* the 12px it floats off the right edge, so it clears
+		// the frame completely instead of leaving a sliver parked at the gap.
+		css: (_t: number, u: number) => `transform: translate3d(calc(${u} * (100% + 0.75rem)), 0, 0)`
 	});
 
 	// Services whose deployment we have already fired. The API keeps reporting
@@ -756,7 +758,7 @@
 	{#if selectedService}
 		<aside
 			transition:drawer
-			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:inset-y-0 md:right-0 md:left-auto md:w-[var(--inspector-width)] md:rounded-r-none"
+			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:inset-y-3 md:right-3 md:left-auto md:w-[var(--inspector-width)]"
 		>
 			<!-- px-5, matching the tab row and content below it: the title used to sit a
 			     notch left of everything it introduced. The icon chip is the canvas
@@ -841,8 +843,11 @@
 	}
 
 	@media (min-width: 768px) {
+		/* Half the panel, plus half the 12px it floats off the edge — what the
+		   canvas has to give up is the panel *and* its gap, so the remaining area
+		   only stays centred if the shift accounts for both. */
 		.builder-shell[data-inspector-open='true'] {
-			--inspector-shift: clamp(210px, 27.5vw, 480px);
+			--inspector-shift: calc(clamp(210px, 27.5vw, 480px) + 6px);
 		}
 	}
 
@@ -951,8 +956,15 @@
 		}
 	}
 
+	/* --shadow-panel's flat ring is the house rule for panels that sit *beside*
+	   content. This one floats over the canvas, so it takes real lift instead —
+	   the same exception PendingChangesBar makes, scaled for a surface that is a
+	   full column rather than a pill: a larger object casts a wider, softer
+	   shadow, and the hairline border is what still supplies the crisp edge. */
 	.side-panel {
-		box-shadow: var(--shadow-panel);
+		box-shadow:
+			0 1px 2px rgba(3, 3, 3, 0.04),
+			0 8px 24px -6px rgba(3, 3, 3, 0.1);
 	}
 
 	.toolbar {
