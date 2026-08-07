@@ -210,6 +210,12 @@
 		}
 	}
 
+	// The saved row carries a fresh has_pending_changes, which is what makes the
+	// canvas show the service as needing a deploy right after an edit.
+	function updateService(updated: ServiceResponse) {
+		services = services.map((s) => (s.id === updated.id ? updated : s));
+	}
+
 	function removeService(id: string) {
 		services = services.filter((s) => s.id !== id);
 		if (selectedServiceId === id) selectedServiceId = null;
@@ -854,6 +860,7 @@
 					bind:openDeployment
 					externalDeploymentId={barDeploymentIds[selectedService.id] ?? null}
 					onDeleted={removeService}
+					onUpdated={updateService}
 				/>
 			</div>
 		</aside>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
@@ -45,6 +46,8 @@
 		 */
 		externalDeploymentId?: string | null;
 		onDeleted?: (id: string) => void;
+		/** The saved service, so the caller can refresh whatever it renders from. */
+		onUpdated?: (service: ServiceResponse) => void;
 		class?: string;
 		/**
 		 * The past deployment whose logs are open, or null. Bound rather than
@@ -61,6 +64,7 @@
 		showEnvVars = true,
 		externalDeploymentId = null,
 		onDeleted,
+		onUpdated,
 		class: className,
 		openDeployment = $bindable<DeploymentResponse | null>(null)
 	}: Props = $props();
@@ -97,22 +101,78 @@
 	// the first attached — either way it is the one a reader would try.
 	let primaryDomain = $derived(domains.find((d) => d.is_primary) ?? domains[0] ?? null);
 
-	let metadata = $derived([
-		{ label: 'Image', value: service.image, mono: true },
+	// What the form cannot change. Container name and server are deliberately not
+	// editable: the container is found by name on one server, so changing either
+	// would leave the running one behind with nothing in Uploy pointing at it —
+	// the same orphan that deleting a service used to create.
+	let fixedMetadata = $derived([
 		{ label: 'Container', value: service.container_name, mono: true },
-		// Two numbers, and which is which matters: the left one is where you reach
-		// it, the right one is where the image listens. Showing only one of them is
-		// what made a service that could never answer look correctly configured.
-		{
-			label: 'Port',
-			value:
-				(service.host_port ?? service.port) === service.port
-					? String(service.port)
-					: `${service.host_port} → ${service.port}`,
-			mono: true
-		},
 		{ label: 'Server', value: server ? `${server.name} (${server.host})` : '—', mono: false }
 	]);
+
+	let editName = $state('');
+	let editImage = $state('');
+	let editPort = $state(80);
+	let editHostPort = $state(8080);
+	let saving = $state(false);
+	let saveError = $state('');
+	let savedAt = $state(0);
+
+	function resetEditForm(svc: ServiceResponse) {
+		editName = svc.name;
+		editImage = svc.image;
+		editPort = svc.port;
+		editHostPort = svc.host_port ?? svc.port;
+		saveError = '';
+	}
+
+	let edited = $derived(
+		editName !== service.name ||
+			editImage !== service.image ||
+			editPort !== service.port ||
+			editHostPort !== (service.host_port ?? service.port)
+	);
+
+	async function saveService() {
+		if (saving) return;
+		saveError = '';
+
+		if (!editName.trim()) {
+			saveError = 'Name is required';
+			return;
+		}
+		if (!editImage.trim()) {
+			saveError = 'Image is required';
+			return;
+		}
+
+		saving = true;
+		try {
+			const { data, error: err } = await api.PUT('/api/services/{id}', {
+				params: { path: { id: svcId } },
+				body: {
+					name: editName.trim(),
+					image: editImage.trim(),
+					// Unchanged, but the API takes the whole resource.
+					container_name: service.container_name,
+					port: editPort,
+					host_port: editHostPort,
+					server_id: service.server_id
+				}
+			});
+			if (err || !data) {
+				saveError = (err as { error: string } | undefined)?.error ?? 'Failed to save service';
+				return;
+			}
+			onUpdated?.(data);
+			// Re-seed from what the server stored, not from what was typed, so a
+			// value it normalised does not leave the form looking unsaved.
+			resetEditForm(data);
+			savedAt = Date.now();
+		} finally {
+			saving = false;
+		}
+	}
 
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
@@ -292,6 +352,11 @@
 		deleteOpen = false;
 		deleting = false;
 		deleteError = '';
+		savedAt = 0;
+		// untrack: this effect resets the whole panel and must fire only when the
+		// selected service changes. Reading `service` normally would make every
+		// save re-run it and throw the reader back to the Deployments tab.
+		resetEditForm(untrack(() => service));
 
 		loadDomains(id, token);
 		loadEnvs(id, token);
@@ -639,8 +704,67 @@
 			     gone entirely: the API only accepts "application", so the row could
 			     never say anything else. The card is what turns four floating pairs
 			     into one block you can read as "this is the service". -->
-			<dl class="overflow-hidden rounded-lg border border-border">
-				{#each metadata as row (row.label)}
+			{#if canEdit}
+				<form
+					onsubmit={(e) => {
+						e.preventDefault();
+						saveService();
+					}}
+					class="flex flex-col gap-3"
+				>
+					<FormField label="Name">
+						<Input type="text" bind:value={editName} size="sm" required />
+					</FormField>
+
+					<FormField label="Image">
+						<Input type="text" bind:value={editImage} size="sm" required class="font-mono" />
+					</FormField>
+
+					<!-- Side by side because they are one decision read left to right:
+					     reached here, answered there. Stacked, they read as two unrelated
+					     numbers, which is exactly the confusion that made a service look
+					     configured when it could never answer. -->
+					<div class="flex gap-3">
+						<div class="min-w-0 flex-1">
+							<FormField label="Reachable on port">
+								<Input
+									type="number"
+									bind:value={editHostPort}
+									min={1}
+									max={65535}
+									size="sm"
+									required
+								/>
+							</FormField>
+						</div>
+						<div class="min-w-0 flex-1">
+							<FormField label="Listens on port">
+								<Input type="number" bind:value={editPort} min={1} max={65535} size="sm" required />
+							</FormField>
+						</div>
+					</div>
+
+					{#if saveError}
+						<p class="text-[13px] text-destructive">{saveError}</p>
+					{/if}
+
+					<div class="flex items-center gap-3">
+						<Button type="submit" size="sm" loading={saving} disabled={saving || !edited}>
+							{saving ? 'Saving...' : 'Save changes'}
+						</Button>
+						{#if edited}
+							<span class="text-[13px] text-muted-foreground">
+								Takes effect on the next deployment.
+							</span>
+						{:else if savedAt}
+							<span class="text-[13px] text-success">Saved — deploy to apply.</span>
+						{/if}
+					</div>
+				</form>
+			{/if}
+
+			<dl class={cn('overflow-hidden rounded-lg border border-border', canEdit && 'mt-4')}>
+				{#each fixedMetadata as row (row.label)}
 					<DataRow density="dense" class="gap-4 text-[15px]">
 						<dt class="w-20 flex-none text-muted-foreground">{row.label}</dt>
 						<dd class={cn('min-w-0 flex-1 truncate text-foreground', row.mono && 'font-mono')}>

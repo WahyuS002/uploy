@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
 	import ServiceWorkspace from '$lib/components/app/ServiceWorkspace.svelte';
 	import DeploymentPanel from '$lib/components/app/DeploymentPanel.svelte';
@@ -44,6 +44,7 @@
 				{isOwner}
 				bind:openDeployment
 				onDeleted={goToProject}
+				onUpdated={() => invalidateAll()}
 				class="h-[640px]"
 			/>
 		</div>
