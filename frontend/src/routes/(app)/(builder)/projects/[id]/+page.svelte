@@ -993,9 +993,34 @@
 	/* A deployment's log panel stacked on top: this one steps back along the same
 	   diagonal the new panel arrives on, on the same clock. Translation only — the
 	   panel is full of live text, and scaling it would re-rasterize every glyph
-	   mid-slide for a depth cue the shift and the scrim already carry. */
+	   mid-slide for a depth cue the shift and the scrim already carry.
+
+	   10px down, not more: the builder's <main> is overflow-hidden and the panel
+	   only floats 12px off the frame, so a deeper drop gets its bottom corners
+	   sheared off by the clip instead of reading as a card behind a card. */
 	.side-panel.is-stacked {
-		transform: translate3d(-10px, 8px, 0);
+		transform: translate3d(-28px, 28px, 0);
+		pointer-events: none;
+	}
+
+	/* The receded panel is a *surface* in the stack, not a second thing to read —
+	   and 36px of exposed edge is wider than its own 20px gutter, so without this
+	   the tab row's first glyphs hang out past the front panel and get sheared by
+	   its border. An opaque --muted wash over the content leaves the border and
+	   the corner radius (both outside the padding box) and takes the text with it.
+	   Rides the same clock as the shift so the panel dims as it steps back. */
+	.side-panel::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: var(--card);
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 260ms cubic-bezier(0.23, 1, 0.32, 1);
+	}
+
+	.side-panel.is-stacked::after {
+		opacity: 1;
 	}
 
 	.toolbar {
