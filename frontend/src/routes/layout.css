@@ -146,6 +146,11 @@
 	--color-success-muted: var(--success-muted);
 	--color-warning: var(--warning);
 	--color-warning-muted: var(--warning-muted);
+	/* The one gutter every shell edge sits on: the topbar's padding, the tab row's,
+	   and the margin of the panel below them. They have to be the same number or
+	   the avatar overhangs the panel it sits above — so it is a name, not a literal
+	   repeated across two layouts and a topbar. */
+	--spacing-gutter: 2rem;
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 	/* 6px is the ceiling for cards and rectangular buttons; the sharpness is the
 	   point. lg/xl/2xl deliberately collapse onto it so existing markup inherits

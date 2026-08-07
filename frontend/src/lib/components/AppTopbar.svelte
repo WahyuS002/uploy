@@ -30,10 +30,14 @@
 	}
 </script>
 
-<header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background px-3">
+<!-- px-4 is the app's gutter: the tab row and the content panel both sit on it, so
+     the topbar has to as well or the avatar overhangs the panel it sits above. -->
+<header
+	class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background px-gutter"
+>
 	<div class="flex min-w-0 flex-1 items-center gap-2">
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<a href="/projects" class="flex flex-none items-center rounded-md px-1 py-1.5 select-none">
+		<a href="/projects" class="flex flex-none items-center rounded-md py-1.5 select-none">
 			<!-- The mark is transparent inside and out, so it sits on either theme as-is.
 			     h-8 because the artwork carries its own margin — it reads at the same
 			     weight the 28px lockup did. -->

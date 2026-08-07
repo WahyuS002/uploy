@@ -32,7 +32,7 @@
 
 	<!-- Nav moved off the sidebar: the underline is the only active marker, so the
 	     tabs read as one row of section names rather than a second toolbar. -->
-	<nav class="flex-none px-4">
+	<nav class="flex-none px-gutter">
 		<div class="flex items-center gap-5">
 			{#each tabs as tab (tab.href)}
 				{@const active = page.url.pathname.startsWith(tab.href)}
@@ -53,9 +53,11 @@
 	</nav>
 
 	<!-- Same inset panel the builder's non-canvas routes use, so both halves of the
-	     app frame their content identically. -->
+	     app frame their content identically. The canvas surface was tried here and
+	     reverted: it only pays for itself at grid density, and a workspace with one
+	     project reads as a small card adrift in a large empty field. -->
 	<main
-		class="mx-4 mt-1 mb-4 flex flex-1 flex-col rounded-lg border border-border bg-card px-4 py-8 text-card-foreground sm:px-6 sm:py-10"
+		class="mx-gutter mb-4 flex flex-1 flex-col rounded-lg border border-border bg-card px-4 py-8 text-card-foreground sm:px-6 sm:py-10"
 	>
 		<div class="mx-auto flex w-full max-w-5xl flex-1 flex-col">
 			{@render children()}
