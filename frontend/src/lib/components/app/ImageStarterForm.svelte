@@ -14,19 +14,31 @@
 		traefik: 80
 	};
 
-	// 80 and 443 belong to the Uploy proxy, so an image that listens on either
-	// has to be published somewhere else. Everything else is reachable on the
-	// number it already answers to, which is what a database wants.
-	export function defaultHostPort(containerPort: number) {
-		return containerPort === 80 || containerPort === 443 ? 8080 : containerPort;
-	}
+	// Images nobody should be putting on the open internet by accident. Publishing
+	// one is a deliberate choice, so the toggle starts off for these and on for
+	// everything else — the same default Coolify and Dokploy ship.
+	const databaseImages = new Set(['postgres', 'mysql', 'mariadb', 'redis', 'mongo']);
 
 	// `ghcr.io/owner/repo:tag` -> `repo`, `postgres:16` -> `postgres`. Splitting on
 	// `/` before `:` is what keeps a registry port (`localhost:5000/nginx`) from
 	// being mistaken for the tag.
+	function imageName(value: string) {
+		return value.trim().split('@')[0].split('/').pop()?.split(':')[0]?.toLowerCase() ?? '';
+	}
+
+	// 80 and 443 belong to the Uploy proxy, so an image that listens on either
+	// has to be published somewhere else. Everything else is reachable on the
+	// number it already answers to.
+	export function defaultHostPort(containerPort: number) {
+		return containerPort === 80 || containerPort === 443 ? 8080 : containerPort;
+	}
+
+	export function defaultExposed(value: string) {
+		return !databaseImages.has(imageName(value));
+	}
+
 	export function detectPort(value: string) {
-		const name = value.trim().split('@')[0].split('/').pop()?.split(':')[0]?.toLowerCase() ?? '';
-		return wellKnownPorts[name] ?? 8080;
+		return wellKnownPorts[imageName(value)] ?? 8080;
 	}
 </script>
 
@@ -46,7 +58,8 @@
 		/** Rows shown under the port row — where the deploy target is spelled out. */
 		details?: Snippet;
 		onBack: () => void;
-		onSubmit: (image: string, port: number, hostPort: number) => void;
+		/** hostPort null means the service is not published to the host at all. */
+		onSubmit: (image: string, port: number, hostPort: number | null) => void;
 	};
 
 	let {
@@ -95,10 +108,20 @@
 		if (!hostPortTouched) hostPort = suggested;
 	});
 
+	// Off for databases, on for everything else — and it stops following the
+	// image the moment it is set by hand, the same rule the ports use.
+	let exposed = $state(true);
+	let exposedTouched = $state(false);
+	$effect(() => {
+		const suggested = defaultExposed(image);
+		if (!exposedTouched) exposed = suggested;
+	});
+
 	function pickExample(example: string) {
 		image = example;
 		portTouched = false;
 		hostPortTouched = false;
+		exposedTouched = false;
 	}
 
 	// The command-palette idiom: the arrow lives in the field, and the keyboard
@@ -132,17 +155,19 @@
 			localError = 'Port must be between 1 and 65535';
 			return;
 		}
-		if (!Number.isFinite(hostPort) || hostPort < 1 || hostPort > 65535) {
-			localError = 'Reachable-on port must be between 1 and 65535';
-			return;
-		}
-		if (hostPort === 80 || hostPort === 443) {
-			localError = 'Ports 80 and 443 are reserved for the Uploy proxy';
-			return;
+		if (exposed) {
+			if (!Number.isFinite(hostPort) || hostPort < 1 || hostPort > 65535) {
+				localError = 'Reachable-on port must be between 1 and 65535';
+				return;
+			}
+			if (hostPort === 80 || hostPort === 443) {
+				localError = 'Ports 80 and 443 are reserved for the Uploy proxy';
+				return;
+			}
 		}
 
 		localError = '';
-		onSubmit(trimmedImage, port, hostPort);
+		onSubmit(trimmedImage, port, exposed ? hostPort : null);
 	}
 </script>
 
@@ -218,18 +243,34 @@
 				</label>
 
 				<label class="flex items-center justify-between gap-3">
-					<span class="text-xs text-muted-foreground">Reachable on port</span>
-					<Input
-						type="number"
-						size="sm"
-						bind:value={hostPort}
-						oninput={() => (hostPortTouched = true)}
-						min={1}
-						max={65535}
-						required
-						class="w-24"
+					<span class="text-xs text-muted-foreground">Publish to the internet</span>
+					<input
+						type="checkbox"
+						bind:checked={exposed}
+						onchange={() => (exposedTouched = true)}
+						class="publish-toggle"
 					/>
 				</label>
+
+				{#if exposed}
+					<label class="flex items-center justify-between gap-3">
+						<span class="text-xs text-muted-foreground">Reachable on port</span>
+						<Input
+							type="number"
+							size="sm"
+							bind:value={hostPort}
+							oninput={() => (hostPortTouched = true)}
+							min={1}
+							max={65535}
+							required
+							class="w-24"
+						/>
+					</label>
+				{:else}
+					<p class="text-xs text-muted-foreground">
+						Only other services in this project can reach it.
+					</p>
+				{/if}
 
 				{@render details?.()}
 			</div>
@@ -246,6 +287,16 @@
 </form>
 
 <style>
+	/* Native input, sized and tinted to the design system rather than replaced by
+	   a custom control: the platform already gives the keyboard, the focus ring
+	   and the announcement for free. */
+	.publish-toggle {
+		width: 1rem;
+		height: 1rem;
+		accent-color: var(--primary);
+		cursor: pointer;
+	}
+
 	.card {
 		box-shadow: var(--shadow-panel);
 	}

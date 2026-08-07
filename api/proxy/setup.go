@@ -17,6 +17,23 @@ const traefikImage = "traefik:v3.6"
 // ProgressFunc is a callback for reporting proxy setup progress.
 type ProgressFunc func(msg string)
 
+// EnsureNetwork creates the shared "uploy" network if it is not there already.
+//
+// Every deployed container joins it, not just the ones behind the proxy: it is
+// what lets an app reach a database by container name, and it is the only way a
+// service that publishes no host port can be reached at all.
+func EnsureNetwork(client *ssh.Client) error {
+	docker := client.DockerBin()
+	// "network create" failing usually just means it already exists, so confirm
+	// that before treating it as a real failure.
+	if err := runSimple(client, fmt.Sprintf("%s network create %s", docker, networkName)); err != nil {
+		if err2 := runSimple(client, fmt.Sprintf("%s network inspect %s", docker, networkName)); err2 != nil {
+			return fmt.Errorf("create network: %w", err)
+		}
+	}
+	return nil
+}
+
 // EnsureProxy ensures Traefik compose file exists and the service is running.
 // The optional progress callback receives curated sub-step messages.
 func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
@@ -32,12 +49,10 @@ func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
 		return fmt.Errorf("docker compose not available: %w", err)
 	}
 
-	// 2. Create Docker network — if create fails, verify it already exists
+	// 2. Create Docker network
 	progress("creating uploy network...")
-	if err := runSimple(client, fmt.Sprintf("%s network create %s", docker, networkName)); err != nil {
-		if err2 := runSimple(client, fmt.Sprintf("%s network inspect %s", docker, networkName)); err2 != nil {
-			return fmt.Errorf("create network: %w", err)
-		}
+	if err := EnsureNetwork(client); err != nil {
+		return err
 	}
 
 	// 3. Setup directory + acme.json (each command retries with sudo -n on failure)

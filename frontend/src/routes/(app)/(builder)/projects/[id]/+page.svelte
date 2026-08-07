@@ -174,7 +174,7 @@
 		addingService = true;
 	}
 
-	async function createService(image: string, port: number, hostPort: number) {
+	async function createService(image: string, port: number, hostPort: number | null) {
 		if (!selectedEnvId || creatingService) return;
 		svcError = '';
 		creatingService = true;
@@ -187,7 +187,7 @@
 					image,
 					container_name: '',
 					port,
-					host_port: hostPort,
+					host_port: hostPort ?? undefined,
 					server_id: svcServerId,
 					environment_id: selectedEnvId,
 					kind: 'application'

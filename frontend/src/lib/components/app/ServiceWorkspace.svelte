@@ -114,6 +114,7 @@
 	let editImage = $state('');
 	let editPort = $state(80);
 	let editHostPort = $state(8080);
+	let editExposed = $state(true);
 	let saving = $state(false);
 	let saveError = $state('');
 	let savedAt = $state(0);
@@ -122,6 +123,9 @@
 		editName = svc.name;
 		editImage = svc.image;
 		editPort = svc.port;
+		// No host port means the service is internal only. Seed the field with a
+		// plausible number anyway, so turning publishing on has something to offer.
+		editExposed = svc.host_port != null;
 		editHostPort = svc.host_port ?? svc.port;
 		saveError = '';
 	}
@@ -130,7 +134,8 @@
 		editName !== service.name ||
 			editImage !== service.image ||
 			editPort !== service.port ||
-			editHostPort !== (service.host_port ?? service.port)
+			editExposed !== (service.host_port != null) ||
+			(editExposed && editHostPort !== service.host_port)
 	);
 
 	async function saveService() {
@@ -156,7 +161,7 @@
 					// Unchanged, but the API takes the whole resource.
 					container_name: service.container_name,
 					port: editPort,
-					host_port: editHostPort,
+					host_port: editExposed ? editHostPort : undefined,
 					server_id: service.server_id
 				}
 			});
@@ -832,3 +837,15 @@
 		</DialogFooter>
 	</DialogContent>
 </Dialog>
+
+<style>
+	/* Native input, sized and tinted to the design system rather than replaced by
+	   a custom control: the platform already gives the keyboard, the focus ring
+	   and the announcement for free. */
+	.publish-toggle {
+		width: 1rem;
+		height: 1rem;
+		accent-color: var(--primary);
+		cursor: pointer;
+	}
+</style>

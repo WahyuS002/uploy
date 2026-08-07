@@ -53,7 +53,7 @@
 		void goto('/projects/new');
 	}
 
-	async function submit(image: string, port: number, hostPort: number) {
+	async function submit(image: string, port: number, hostPort: number | null) {
 		if (submitting || !server) return;
 
 		error = '';
@@ -64,7 +64,7 @@
 					server_id: server.id,
 					image,
 					port,
-					host_port: hostPort
+					host_port: hostPort ?? undefined
 				}
 			});
 			if (err || !result) {

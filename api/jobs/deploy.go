@@ -112,6 +112,13 @@ func RunDeploy(cfg DeployConfig) {
 		return
 	}
 
+	// Every container joins the uploy network, so it has to exist before any of
+	// them starts — not only when the proxy is being set up.
+	if err := proxy.EnsureNetwork(client); err != nil {
+		failDeploy(cfg.DeploymentID, "Network setup failed: "+err.Error())
+		return
+	}
+
 	currentContainerRemoved := false
 
 	// step 2: if app has domains, ensure proxy is running
@@ -220,10 +227,14 @@ func RunDeploy(cfg DeployConfig) {
 func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 	var args string
 
+	// Every container joins the shared network, published or not. It is how one
+	// service reaches another by name, and for a service with no host port it is
+	// the only way it can be reached at all.
+	args = fmt.Sprintf("%s run -d --name %s --network uploy", docker, cfg.ContainerName)
+
 	if len(cfg.Domains) > 0 {
-		// Proxy mode: container on "uploy" network, no host port mapping.
-		// Traefik forwards to the container's internal port.
-		args = fmt.Sprintf("%s run -d --name %s --network uploy", docker, cfg.ContainerName)
+		// Proxy mode: Traefik forwards to the container's internal port, so
+		// nothing is published on the host.
 
 		routerName := strings.ReplaceAll(cfg.ContainerName, ".", "-")
 
@@ -240,13 +251,16 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls=true", routerName)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls.certresolver=letsencrypt", routerName)
 		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=%d", routerName, cfg.Port)
-	} else {
-		// Direct mode: publish the container's port on the chosen host port.
-		// These are two different numbers whenever the image listens on 80 —
-		// publishing port:port made nginx unreachable, because nothing inside
-		// the container was listening on the number it was published as.
-		args = fmt.Sprintf("%s run -d --name %s -p %d:%d", docker, cfg.ContainerName, cfg.HostPort, cfg.Port)
+	} else if cfg.HostPort > 0 {
+		// Publish on the chosen host port. Host and container port are two
+		// different numbers whenever the image listens on 80 — publishing
+		// port:port made nginx unreachable, because nothing inside the container
+		// was listening on the number it was published as.
+		args += fmt.Sprintf(" -p %d:%d", cfg.HostPort, cfg.Port)
 	}
+	// No domains and no host port means internal only: reachable by other
+	// services on the uploy network, and by nothing outside the machine. That is
+	// what a database should be unless someone asks otherwise.
 
 	// Survive server reboots and daemon restarts. Without this a reboot silently
 	// kills every deployed service until someone redeploys by hand.

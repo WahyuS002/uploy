@@ -15,8 +15,9 @@ type Service struct {
 	Image         string    `json:"image"`
 	ContainerName string    `json:"container_name"`
 	Port          int32     `json:"port"`
-	// HostPort is the port the service is published on. nil means "same as
-	// Port" — read it through EffectiveHostPort rather than dereferencing.
+	// HostPort is the port the service is published on, or nil for a service
+	// that is not published at all — reachable by other services on the uploy
+	// network, and by nothing outside the machine.
 	HostPort      *int32    `json:"host_port"`
 	ServerID      string    `json:"server_id"`
 	WorkspaceID   string    `json:"workspace_id"`
@@ -28,19 +29,6 @@ type Service struct {
 	// Derived per query, never stored. See db/queries/services.sql for the rule.
 	HasPendingChanges bool `json:"has_pending_changes"`
 	HasDeployed       bool `json:"has_deployed"`
-}
-
-// EffectiveHostPort is the port the service is actually published on.
-//
-// A nil HostPort means "same as the container port", which is what every row
-// written before the column existed meant, and what a database still wants when
-// it is reached on the number its image is known by (redis on 6379). Read the
-// published port through here so the fallback cannot be applied inconsistently.
-func (s Service) EffectiveHostPort() int32 {
-	if s.HostPort != nil {
-		return *s.HostPort
-	}
-	return s.Port
 }
 
 // ServiceWithServer is used during deploy — one JOIN query gets everything.

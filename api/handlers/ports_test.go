@@ -4,11 +4,10 @@ import "testing"
 
 func intPtr(v int) *int { return &v }
 
-// The rule that matters: 80 is a fine port for an image to listen on, but never
-// a port to publish on, because Traefik owns it. Getting this backwards is what
-// made nginx impossible to deploy — the form offered 80, the API refused it, and
-// every number the user could type instead was published straight through to a
-// container that was not listening there.
+// Two rules, and they are not the same rule. 80 is a fine port for an image to
+// listen on but never a port to publish on, because Traefik owns it. And no host
+// port at all is always valid — it means the service is reachable only by other
+// services on the uploy network, which is what a database should be.
 func TestValidatePorts(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -17,15 +16,18 @@ func TestValidatePorts(t *testing.T) {
 		wantOK   bool
 	}{
 		{"nginx published elsewhere", 80, intPtr(9090), true},
-		{"nginx with no host port collides with the proxy", 80, nil, false},
-		{"443 with no host port collides too", 443, nil, false},
-		{"database on its own number", 6379, nil, true},
-		{"database with an explicit host port", 5432, intPtr(15432), true},
+		// Not published is always fine, whatever the image listens on: nothing
+		// outside the machine can reach it, so it cannot collide with the proxy.
+		{"nginx kept internal", 80, nil, true},
+		{"443 kept internal", 443, nil, true},
+		{"database kept internal", 6379, nil, true},
+		{"database published on purpose", 5432, intPtr(15432), true},
 		{"host port may not take the proxy's 80", 3000, intPtr(80), false},
 		{"host port may not take the proxy's 443", 3000, intPtr(443), false},
 		{"container port out of range", 0, nil, false},
 		{"container port above range", 70000, nil, false},
 		{"host port out of range", 3000, intPtr(70000), false},
+		{"host port zero", 3000, intPtr(0), false},
 	}
 
 	for _, tc := range tests {

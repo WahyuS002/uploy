@@ -50,6 +50,42 @@ func TestBuildDockerRunCmdMapsHostPortToContainerPort(t *testing.T) {
 	}
 }
 
+// A service with no domains and no host port is reachable by other services and
+// by nothing else. Publishing it anyway is how a database ends up on the open
+// internet without anyone choosing that.
+func TestBuildDockerRunCmdKeepsUnpublishedServiceInternal(t *testing.T) {
+	internal := buildDockerRunCmd("docker", DeployConfig{
+		ContainerName: "postgres-app",
+		Image:         "postgres:16",
+		Port:          5432,
+		// no HostPort, no Domains
+	})
+	if strings.Contains(internal, "-p ") {
+		t.Errorf("unpublished service was published to the host: %s", internal)
+	}
+	if !strings.Contains(internal, "--network uploy") {
+		t.Errorf("unpublished service is not on the shared network, so nothing can reach it: %s", internal)
+	}
+}
+
+// Every container joins the shared network, published or not — that is what
+// lets one service reach another by name.
+func TestBuildDockerRunCmdAlwaysJoinsNetwork(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cfg  DeployConfig
+	}{
+		{"published", DeployConfig{ContainerName: "a", Image: "redis", Port: 6379, HostPort: 6379}},
+		{"proxied", DeployConfig{ContainerName: "b", Image: "nginx", Port: 80, Domains: []string{"example.com"}}},
+		{"internal", DeployConfig{ContainerName: "c", Image: "postgres:16", Port: 5432}},
+	} {
+		cmd := buildDockerRunCmd("docker", tc.cfg)
+		if !strings.Contains(cmd, "--network uploy") {
+			t.Errorf("%s is not on the shared network: %s", tc.name, cmd)
+		}
+	}
+}
+
 // A server reboot must not silently take every deployed service down with it,
 // so both paths have to set a restart policy.
 func TestBuildDockerRunCmdSetsRestartPolicy(t *testing.T) {

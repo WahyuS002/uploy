@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -48,29 +47,22 @@ func isUniqueViolation(err error) bool {
 //
 // port is what the image listens on inside the container — a property of the
 // image, so 80 is perfectly normal there (nginx, caddy, httpd all use it).
-// hostPort is where the service is published on the machine, and 80/443 belong
-// to the Traefik proxy, so nothing else may take them.
 //
-// A nil hostPort means "publish on the same number", which is what a database
-// wants. That is exactly why the reserved check has to run against the
-// effective host port rather than against hostPort alone: an image listening on
-// 80 with no host port chosen would otherwise collide with the proxy.
+// hostPort is where the service is published on the machine. Nil means it is
+// not published at all: other services still reach it over the uploy network,
+// but nothing outside the machine can. 80 and 443 belong to the Traefik proxy,
+// so nothing else may take them.
 func validatePorts(port int, hostPort *int) string {
 	if port < 1 || port > 65535 {
 		return "port must be between 1 and 65535"
 	}
-	if hostPort != nil && (*hostPort < 1 || *hostPort > 65535) {
+	if hostPort == nil {
+		return ""
+	}
+	if *hostPort < 1 || *hostPort > 65535 {
 		return "host port must be between 1 and 65535"
 	}
-
-	effective := port
-	if hostPort != nil {
-		effective = *hostPort
-	}
-	if effective == 80 || effective == 443 {
-		if hostPort == nil {
-			return fmt.Sprintf("this image listens on port %d, which is reserved for the Uploy proxy; choose a host port to reach it on", port)
-		}
+	if *hostPort == 80 || *hostPort == 443 {
 		return "ports 80 and 443 are reserved for the Uploy proxy; use another host port for direct access"
 	}
 	return ""
@@ -366,6 +358,15 @@ func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// hostPortOrZero flattens "not published" to 0 for the deploy job, which has no
+// use for the distinction beyond publish-or-not.
+func hostPortOrZero(v *int32) int {
+	if v == nil {
+		return 0
+	}
+	return int(*v)
 }
 
 func intPtrFromInt32Ptr(v *int32) *int {
