@@ -5,19 +5,39 @@
 		'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium',
 		{
 			variants: {
+				variant: {
+					soft: '',
+					outline: 'border bg-transparent'
+				},
 				tone: {
-					neutral: 'bg-gray-100 text-gray-700',
-					info: 'bg-blue-100 text-blue-700',
-					success: 'bg-green-100 text-green-700',
-					warning: 'bg-yellow-100 text-yellow-700',
-					danger: 'bg-red-100 text-red-700'
+					neutral: '',
+					info: '',
+					success: '',
+					warning: '',
+					danger: ''
 				}
 			},
-			defaultVariants: { tone: 'neutral' }
+			compoundVariants: [
+				{ variant: 'soft', tone: 'neutral', class: 'bg-muted text-muted-foreground' },
+				{ variant: 'soft', tone: 'info', class: 'bg-info-muted text-info' },
+				{ variant: 'soft', tone: 'success', class: 'bg-success-muted text-success' },
+				{ variant: 'soft', tone: 'warning', class: 'bg-warning-muted text-warning' },
+				{ variant: 'soft', tone: 'danger', class: 'bg-destructive/10 text-destructive' },
+				{ variant: 'outline', tone: 'neutral', class: 'border-border text-muted-foreground' },
+				{ variant: 'outline', tone: 'info', class: 'border-info/25 text-info' },
+				{ variant: 'outline', tone: 'success', class: 'border-success/25 text-success' },
+				{ variant: 'outline', tone: 'warning', class: 'border-warning/25 text-warning' },
+				{ variant: 'outline', tone: 'danger', class: 'border-destructive/25 text-destructive' }
+			],
+			defaultVariants: {
+				variant: 'soft',
+				tone: 'neutral'
+			}
 		}
 	);
 
 	export type BadgeTone = VariantProps<typeof badgeVariants>['tone'];
+	export type BadgeVariant = VariantProps<typeof badgeVariants>['variant'];
 </script>
 
 <script lang="ts">
@@ -26,13 +46,14 @@
 
 	type Props = {
 		tone?: BadgeTone;
+		variant?: BadgeVariant;
 		class?: string;
 		children: Snippet;
 	};
 
-	let { tone, class: className, children }: Props = $props();
+	let { tone, variant, class: className, children }: Props = $props();
 </script>
 
-<span class={cn(badgeVariants({ tone }), className)}>
+<span class={cn(badgeVariants({ tone, variant }), className)}>
 	{@render children()}
 </span>

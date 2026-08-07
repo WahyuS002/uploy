@@ -2,29 +2,51 @@
 	import { cva, type VariantProps } from 'class-variance-authority';
 
 	export const buttonVariants = cva(
-		'inline-flex cursor-pointer items-center justify-center gap-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+		'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md text-sm font-medium tracking-[-0.01em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none',
 		{
 			variants: {
 				variant: {
-					primary: 'rounded-lg bg-black text-white hover:bg-gray-800',
-					secondary: 'rounded-lg border border-border hover:bg-surface-muted',
-					ghost: 'rounded-lg hover:bg-surface-muted',
-					danger: 'rounded-lg bg-danger text-white hover:bg-red-600'
+					primary:
+						'border border-primary-border bg-primary text-primary-foreground hover:bg-primary-hover focus-visible:bg-primary-hover active:bg-primary-active disabled:border-transparent disabled:bg-muted disabled:text-disabled-foreground',
+					secondary:
+						'border border-border bg-card text-secondary-foreground hover:bg-accent hover:text-accent-foreground disabled:bg-card disabled:text-disabled-foreground',
+					ghost:
+						'text-foreground hover:bg-accent hover:text-accent-foreground disabled:text-disabled-foreground',
+					destructive:
+						'bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:bg-muted disabled:text-disabled-foreground'
 				},
 				size: {
-					sm: 'h-8 px-3 text-xs',
-					md: 'h-10 px-4 py-2'
+					default: 'h-10 px-4 py-2',
+					sm: 'h-7 px-3 text-xs'
 				}
 			},
-			defaultVariants: {
-				variant: 'primary',
-				size: 'md'
-			}
+			defaultVariants: { variant: 'primary', size: 'default' }
 		}
 	);
 
-	export type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
-	export type ButtonSize = VariantProps<typeof buttonVariants>['size'];
+	type CanonicalVariant = NonNullable<VariantProps<typeof buttonVariants>['variant']>;
+	type CanonicalSize = NonNullable<VariantProps<typeof buttonVariants>['size']>;
+
+	export type ButtonVariant = CanonicalVariant | 'subtle' | 'danger';
+	export type ButtonSize = CanonicalSize | 'md' | 'xs';
+
+	const variantAlias: Record<string, CanonicalVariant> = {
+		subtle: 'secondary',
+		danger: 'destructive'
+	};
+	const sizeAlias: Record<string, CanonicalSize> = {
+		md: 'default',
+		xs: 'sm'
+	};
+
+	function resolveVariant(v: ButtonVariant | undefined): CanonicalVariant {
+		if (!v) return 'primary';
+		return variantAlias[v] ?? (v as CanonicalVariant);
+	}
+	function resolveSize(s: ButtonSize | undefined): CanonicalSize {
+		if (!s) return 'default';
+		return sizeAlias[s] ?? (s as CanonicalSize);
+	}
 </script>
 
 <script lang="ts">
@@ -54,21 +76,21 @@
 		href,
 		...rest
 	}: Props = $props();
+
+	let resolvedClass = $derived(
+		cn(buttonVariants({ variant: resolveVariant(variant), size: resolveSize(size) }), className)
+	);
 </script>
 
 {#if href}
 	<!-- eslint-disable svelte/no-navigation-without-resolve -->
-	<a
-		{href}
-		class={cn(buttonVariants({ variant, size }), className)}
-		{...rest as HTMLAnchorAttributes}
-	>
+	<a {href} class={resolvedClass} {...rest as HTMLAnchorAttributes}>
 		{@render children()}
 	</a>
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 {:else}
 	<button
-		class={cn(buttonVariants({ variant, size }), className)}
+		class={resolvedClass}
 		disabled={loading || (rest as HTMLButtonAttributes).disabled}
 		{...rest as HTMLButtonAttributes}
 	>

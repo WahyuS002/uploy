@@ -11,6 +11,6 @@
 
 <pre
 	class={cn(
-		'overflow-x-auto rounded-lg bg-surface-muted p-2 font-mono text-xs break-all whitespace-pre-wrap',
+		'overflow-x-auto rounded-lg bg-muted p-2 font-mono text-xs break-all whitespace-pre-wrap',
 		className
 	)}>{code}</pre>

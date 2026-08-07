@@ -32,7 +32,7 @@
 				return;
 			}
 
-			window.location.href = '/dashboard/projects';
+			window.location.href = '/projects';
 		} catch {
 			error = 'Network error';
 		} finally {
@@ -40,6 +40,10 @@
 		}
 	}
 </script>
+
+<svelte:head>
+	<title>Create your account · Uploy</title>
+</svelte:head>
 
 <AuthCard title="Create your account">
 	{#if error}

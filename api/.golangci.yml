@@ -1,0 +1,6 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose      # resp.Body tanpa defer Close()
+    - sqlclosecheck  # rows/stmt tanpa defer Close()
+    - rowserrcheck   # rows.Err() kelupaan

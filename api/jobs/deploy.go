@@ -218,7 +218,7 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 
 	if len(cfg.Domains) > 0 {
 		// Proxy mode: container on "uploy" network, no host port mapping.
-		// Traefik forwards to the container's internal port (80).
+		// Traefik forwards to the container's internal port.
 		args = fmt.Sprintf("%s run -d --name %s --network uploy", docker, cfg.ContainerName)
 
 		routerName := strings.ReplaceAll(cfg.ContainerName, ".", "-")
@@ -235,10 +235,12 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.entrypoints=https", routerName)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls=true", routerName)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls.certresolver=letsencrypt", routerName)
-		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=80", routerName)
+		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=%d", routerName, cfg.Port)
 	} else {
-		// Direct mode: map host port to container port 80
-		args = fmt.Sprintf("%s run -d --name %s -p %d:80", docker, cfg.ContainerName, cfg.Port)
+		// Direct mode: publish the container's port on the same host port, so
+		// redis reaches you on :6379 and postgres on :5432 — the number the
+		// image is already known by.
+		args = fmt.Sprintf("%s run -d --name %s -p %d:%d", docker, cfg.ContainerName, cfg.Port, cfg.Port)
 	}
 
 	for _, env := range cfg.EnvVars {

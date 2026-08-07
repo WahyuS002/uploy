@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -9,6 +10,11 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 )
+
+// ErrInvalidPrivateKey is returned when the stored key cannot be parsed at all,
+// which is a different failure from a server refusing a well-formed key.
+// Callers branch on it, so it is a sentinel rather than a bare fmt.Errorf.
+var ErrInvalidPrivateKey = errors.New("private key is not valid")
 
 type Client struct {
 	client    *gossh.Client
@@ -73,7 +79,7 @@ type ServerConfig struct {
 func NewClient(cfg ServerConfig) (*Client, error) {
 	signer, err := gossh.ParsePrivateKey([]byte(cfg.PrivateKey))
 	if err != nil {
-		return nil, fmt.Errorf("Private key is not valid: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrInvalidPrivateKey, err)
 	}
 
 	config := &gossh.ClientConfig{

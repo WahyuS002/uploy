@@ -151,6 +151,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/projects/from-image': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Create a project, default environment, and Docker image service atomically */
+		post: operations['createProjectFromImage'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/projects/{id}': {
 		parameters: {
 			query?: never;
@@ -202,6 +219,23 @@ export interface paths {
 		post?: never;
 		/** Delete an environment */
 		delete: operations['deleteEnvironment'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/projects/{id}/services': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List services in a project */
+		get: operations['listProjectServices'];
+		put?: never;
+		post?: never;
+		delete?: never;
 		options?: never;
 		head?: never;
 		patch?: never;
@@ -427,6 +461,11 @@ export interface components {
 		};
 		ErrorResponse: {
 			error: string;
+			/**
+			 * @description Machine-readable failure stage. Present on SSH probe failures so a client can offer the right remedy: the three stages need entirely different fixes, and the human message alone cannot be branched on.
+			 * @enum {string}
+			 */
+			code?: 'unreachable' | 'key_rejected' | 'key_invalid' | 'session_failed' | 'docker_missing';
 		};
 		CreateSSHKeyRequest: {
 			name: string;
@@ -497,11 +536,28 @@ export interface components {
 			/** Format: date-time */
 			updated_at: string;
 		};
+		/**
+		 * @description Request body for creating a project. When `name` is omitted, blank, or
+		 *     whitespace-only, the backend generates a unique Railway-style
+		 *     `adjective-noun` name scoped to the workspace.
+		 */
 		CreateProjectRequest: {
-			name: string;
+			name?: string;
 		};
 		UpdateProjectRequest: {
 			name: string;
+		};
+		CreateProjectFromImageRequest: {
+			server_id: string;
+			/** @description Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`. */
+			image: string;
+			/** @description Container port the service listens on. */
+			port: number;
+		};
+		CreateProjectFromImageResponse: {
+			project: components['schemas']['ProjectResponse'];
+			environment: components['schemas']['EnvironmentResponse'];
+			service: components['schemas']['ServiceResponse'];
 		};
 		EnvironmentResponse: {
 			id: string;
@@ -553,6 +609,10 @@ export interface components {
 			created_at: string;
 			/** Format: date-time */
 			updated_at: string;
+			/** @description True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored. */
+			has_pending_changes: boolean;
+			/** @description True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored. */
+			has_deployed: boolean;
 		};
 		CreateDomainRequest: {
 			domain: string;
@@ -1065,7 +1125,7 @@ export interface operations {
 			path?: never;
 			cookie?: never;
 		};
-		requestBody: {
+		requestBody?: {
 			content: {
 				'application/json': components['schemas']['CreateProjectRequest'];
 			};
@@ -1100,6 +1160,75 @@ export interface operations {
 			};
 			/** @description Insufficient permissions */
 			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Internal server error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	createProjectFromImage: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateProjectFromImageRequest'];
+			};
+		};
+		responses: {
+			/** @description Project, environment, and service created */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['CreateProjectFromImageResponse'];
+				};
+			};
+			/** @description Invalid request */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Container name already in use on this server */
+			409: {
 				headers: {
 					[name: string]: unknown;
 				};
@@ -1512,6 +1641,55 @@ export interface operations {
 			};
 			/** @description Environment not found */
 			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	listProjectServices: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description List of services for the project, newest first */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServiceResponse'][];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Project not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Internal server error */
+			500: {
 				headers: {
 					[name: string]: unknown;
 				};

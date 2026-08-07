@@ -53,27 +53,29 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "name is required"})
-		return
-	}
 	req.Image = strings.TrimSpace(req.Image)
 	if req.Image == "" {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "image is required"})
 		return
 	}
+	if !validImage.MatchString(req.Image) {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "image contains invalid characters"})
+		return
+	}
+
+	// Blank name or container name means "derive it from the image", the same
+	// rule POST /api/projects/from-image follows. The canvas flow only asks for
+	// an image, so those are the two fields it has nothing to send.
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		req.Name = serviceNameFromImage(req.Image)
+	}
 	req.ContainerName = strings.TrimSpace(req.ContainerName)
 	if req.ContainerName == "" {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "container_name is required"})
-		return
+		req.ContainerName = containerNameFromImage(req.Image)
 	}
 	if !validContainerName.MatchString(req.ContainerName) {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "container_name contains invalid characters"})
-		return
-	}
-	if !validImage.MatchString(req.Image) {
-		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "image contains invalid characters"})
 		return
 	}
 
@@ -147,6 +149,26 @@ func (s *Server) ListServices(w http.ResponseWriter, r *http.Request) {
 	sc, _ := auth.GetSessionContext(r)
 
 	services, err := db.ListServicesByWorkspace(r.Context(), sc.WorkspaceID)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list services"})
+		return
+	}
+
+	resp := make([]gen.ServiceResponse, len(services))
+	for i, svc := range services {
+		resp[i] = serviceToResponse(svc)
+	}
+
+	respond.JSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) ListProjectServices(w http.ResponseWriter, r *http.Request, id string) {
+	proj, ok := s.requireProject(w, r, id)
+	if !ok {
+		return
+	}
+
+	services, err := db.ListServicesByProject(r.Context(), proj.ID)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list services"})
 		return
@@ -303,5 +325,8 @@ func serviceToResponse(svc db.Service) gen.ServiceResponse {
 		EnvironmentId: svc.EnvironmentID,
 		CreatedAt:     svc.CreatedAt,
 		UpdatedAt:     svc.UpdatedAt,
+
+		HasPendingChanges: svc.HasPendingChanges,
+		HasDeployed:       svc.HasDeployed,
 	}
 }

@@ -1,20 +1,208 @@
 @import 'tailwindcss';
-@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/forms' {
+	strategy: class;
+}
 @plugin '@tailwindcss/typography';
 
-@theme {
-	--color-background: #fbfbfb;
-	--color-surface: #ffffff;
-	--color-surface-muted: #f9fafb;
-	--color-border: #e5e7eb;
-	--color-foreground: #111827;
-	--color-muted-foreground: #6b7280;
-	--color-accent: #3b82f6;
-	--color-success: #10b981;
-	--color-warning: #f59e0b;
-	--color-danger: #ef4444;
-	--color-ring: #3b82f6;
-	--radius-default: 0.5rem;
-	--radius-sm: 0.375rem;
-	--radius-lg: 0.75rem;
+/* Supabase reference, measured off their rendered light theme. Achromatic
+   surfaces, one green brand hue. Canvas and card sit ~2 units apart, so a panel
+   is defined by its border, not by a value step — elevation lives entirely in
+   the hairline. Green appears only for "primary action" or "healthy". */
+:root {
+	/* Value ramp — carries every surface, border and text colour. */
+	--paper-white: #fdfdfd;
+	--pure-white: #ffffff;
+	--hairline: #eaeaea;
+	--stone: #696969;
+	--charcoal: #464646;
+	--obsidian: #030303;
+
+	/* Brand ramp, mapped to Supabase's own steps. The fill is brand-400 with a
+	   brand-600 edge — one flat mint at this lightness has no boundary against a
+	   near-white canvas, so the border is load-bearing, not decoration. Mint is a
+	   fill colour only: at 1.9:1 it cannot carry text or a focus ring, so anything
+	   that must be *seen* on a light surface uses --mint-deep (5.1:1). */
+	--mint: #72e3ad;
+	--mint-hover: #3fcf8e;
+	--mint-active: #2cc182;
+	--mint-edge: #2cc182;
+	--mint-deep: #097c4f;
+	--mint-tint: #e6f8f0;
+
+	--background: var(--paper-white);
+	--foreground: var(--obsidian);
+	--card: var(--pure-white);
+	--card-foreground: var(--obsidian);
+	--popover: var(--pure-white);
+	--popover-foreground: var(--obsidian);
+	--primary: var(--mint);
+	--primary-foreground: var(--obsidian);
+	/* Interaction steps live here rather than as hex literals in Button, so the
+	   whole primary ramp moves together. */
+	--primary-hover: var(--mint-hover);
+	--primary-active: var(--mint-active);
+	--primary-border: var(--mint-edge);
+	--secondary: var(--paper-white);
+	--secondary-foreground: var(--charcoal);
+	/* The recessed surface. Fields sit *below* the panel rather than floating on
+	   it as white cards — with canvas and card this close, a white field would
+	   have no edge at all. --accent stays one step darker so hover still reads. */
+	--muted: #f6f6f6;
+	--muted-foreground: var(--stone);
+	/* Disabled reads as a value shift, never as transparency: an opacity-faded
+	   control picks up whatever is behind it and stops looking like a control. */
+	--disabled-foreground: #a8a8a8;
+	--accent: #f2f2f2;
+	--accent-foreground: var(--obsidian);
+	/* The canvas deliberately breaks the "surfaces sit ~2 units apart, the border
+	   carries the edge" rule above. A panel sits *on* the page; a node sits *in* a
+	   workspace, and at 2 units apart (--background vs --card) the node had no
+	   surface of its own — only its hairline separated it, which is not enough when
+	   it must also read while panning and at 80% zoom. Measured against Railway's
+	   canvas (#fafafa under #ffffff cards), 9 units is one step firmer, which this
+	   palette needs because its hairline is lighter than theirs. Dot alpha is
+	   unchanged: over a darker field the same alpha lands within 1 unit of the
+	   contrast it had over --background (28.3 → 27.4), so the grid keeps its weight. */
+	--canvas: #f6f6f6;
+	--canvas-dot: rgba(26, 27, 30, 0.125);
+	/* Functional state colours. Error/warning stay at the lowest saturation that
+	   still reads as a state. Success shares the brand hue on purpose: two
+	   unrelated greens read as a bug, so "primary" and "healthy" are told apart
+	   by shape — solid fill vs tint-and-text — not by hue. */
+	--destructive: #c7342f;
+	--destructive-foreground: var(--pure-white);
+	--border: var(--hairline);
+	/* The hairline is invisible as a control boundary, so controls sit one step
+	   darker; the focus ring carries the accessible signal. */
+	--input: #dadada;
+	--ring: var(--mint-deep);
+	--sidebar: var(--paper-white);
+	--sidebar-foreground: var(--obsidian);
+	--sidebar-primary: var(--obsidian);
+	--sidebar-primary-foreground: var(--pure-white);
+	--sidebar-accent: var(--hairline);
+	--sidebar-accent-foreground: var(--obsidian);
+	--sidebar-border: var(--hairline);
+	--sidebar-ring: var(--mint-deep);
+	--info: #4d4d4d;
+	--info-muted: #f2f2f2;
+	--success: var(--mint-deep);
+	--success-muted: var(--mint-tint);
+	--warning: #8a6116;
+	--warning-muted: #f6efe1;
+}
+
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary-hover: var(--primary-hover);
+	--color-primary-active: var(--primary-active);
+	--color-primary-border: var(--primary-border);
+	/* The readable end of the brand ramp. --primary is a fill at 1.9:1, so any
+	   brand-coloured mark that must actually be seen — a checked control, a
+	   selected indicator — uses this instead. 5.1:1 on --card. */
+	--color-primary-deep: var(--mint-deep);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-disabled-foreground: var(--disabled-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-border: var(--border);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-info: var(--info);
+	--color-info-muted: var(--info-muted);
+	--color-success: var(--success);
+	--color-success-muted: var(--success-muted);
+	--color-warning: var(--warning);
+	--color-warning-muted: var(--warning-muted);
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	/* 6px is the ceiling for cards and rectangular buttons; the sharpness is the
+	   point. lg/xl/2xl deliberately collapse onto it so existing markup inherits
+	   the cap without per-component edits. Pills stay fully round via rounded-full. */
+	--radius-sm: 0.125rem;
+	--radius-default: 0.375rem;
+	--radius-md: 0.375rem;
+	--radius-lg: 0.375rem;
+	--radius-xl: 0.375rem;
+	--radius-2xl: 0.375rem;
+	/* Elevation is a hairline ring, never a drop shadow — for anything that sits
+	   *beside* content. --shadow-float is the one exception, for the two surfaces
+	   that sit *over* the canvas (the inspector panel, the pending-changes bar):
+	   they overlap the thing they belong to, so the hairline alone leaves them
+	   ambiguous about which plane they are on. Capped at 8px blur on purpose — a
+	   hairline-plus-lift, not a glow. Anything wider turns a bordered panel into
+	   a floating ghost card. */
+	--shadow-panel: 0 0 0 1px var(--hairline);
+	--shadow-float: 0 1px 2px rgba(3, 3, 3, 0.04), 0 4px 8px -2px rgba(3, 3, 3, 0.06);
+	--shadow-overlay: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 0 0 2px var(--paper-white);
+	--animate-slide-up-fade: slide-up-fade 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	html {
+		font-family: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		text-rendering: optimizeLegibility;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
+}
+
+/* No blanket reduced-motion override here. A `* { animation-duration: 0.01ms
+   !important }` block silently kills every animation in the app — including
+   deliberate ones — and there is no way to opt back out of an `!important` on
+   `*`. Tailwind's `motion-safe:` / `motion-reduce:` variants cover this per
+   element instead, so motion is dropped where it is actually movement rather
+   than everywhere at once. */
+
+@keyframes slide-up-fade {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@utility field-focus-glow {
+	transition:
+		border-color 150ms ease-out,
+		box-shadow 150ms ease-out;
+
+	&:focus {
+		outline: none;
+		border-color: var(--mint-deep);
+		box-shadow: 0 0 0 3px rgba(63, 207, 142, 0.28);
+	}
+
+	&:disabled:focus {
+		border-color: var(--input);
+		box-shadow: none;
+	}
 }

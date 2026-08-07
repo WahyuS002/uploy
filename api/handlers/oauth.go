@@ -221,5 +221,5 @@ func createSessionAndRedirect(w http.ResponseWriter, r *http.Request, userID, wo
 	}
 
 	auth.SetSessionCookie(w, token)
-	http.Redirect(w, r, "/dashboard", http.StatusFound)
+	http.Redirect(w, r, "/projects", http.StatusFound)
 }

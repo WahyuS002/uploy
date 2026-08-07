@@ -320,7 +320,7 @@ paths:
       security:
         - cookieAuth: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -372,6 +372,56 @@ paths:
                   $ref: "#/components/schemas/ProjectResponse"
         "401":
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/projects/from-image:
+    post:
+      operationId: createProjectFromImage
+      summary: Create a project, default environment, and Docker image service atomically
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectFromImageRequest"
+      responses:
+        "201":
+          description: Project, environment, and service created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateProjectFromImageResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Container name already in use on this server
           content:
             application/json:
               schema:
@@ -699,6 +749,46 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/projects/{id}/services:
+    get:
+      operationId: listProjectServices
+      summary: List services in a project
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of services for the project, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
           content:
             application/json:
               schema:
@@ -1522,6 +1612,18 @@ components:
       properties:
         error:
           type: string
+        code:
+          type: string
+          description: >
+            Machine-readable failure stage. Present on SSH probe failures so a
+            client can offer the right remedy: the three stages need entirely
+            different fixes, and the human message alone cannot be branched on.
+          enum:
+            - unreachable
+            - key_rejected
+            - key_invalid
+            - session_failed
+            - docker_missing
 
     CreateSSHKeyRequest:
       type: object
@@ -1699,8 +1801,10 @@ components:
 
     CreateProjectRequest:
       type: object
-      required:
-        - name
+      description: |
+        Request body for creating a project. When `name` is omitted, blank, or
+        whitespace-only, the backend generates a unique Railway-style
+        `adjective-noun` name scoped to the workspace.
       properties:
         name:
           type: string
@@ -1712,6 +1816,36 @@ components:
       properties:
         name:
           type: string
+
+    CreateProjectFromImageRequest:
+      type: object
+      required:
+        - server_id
+        - image
+        - port
+      properties:
+        server_id:
+          type: string
+        image:
+          type: string
+          description: Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`.
+        port:
+          type: integer
+          description: Container port the service listens on.
+
+    CreateProjectFromImageResponse:
+      type: object
+      required:
+        - project
+        - environment
+        - service
+      properties:
+        project:
+          $ref: "#/components/schemas/ProjectResponse"
+        environment:
+          $ref: "#/components/schemas/EnvironmentResponse"
+        service:
+          $ref: "#/components/schemas/ServiceResponse"
 
     EnvironmentResponse:
       type: object
@@ -1813,6 +1947,8 @@ components:
         - environment_id
         - created_at
         - updated_at
+        - has_pending_changes
+        - has_deployed
       properties:
         id:
           type: string
@@ -1840,6 +1976,19 @@ components:
         updated_at:
           type: string
           format: date-time
+        has_pending_changes:
+          type: boolean
+          description: >
+            True when no successful deployment has landed at or after this
+            service's last change — it has either never been deployed, or was
+            edited since the last deploy. Derived per request, never stored.
+        has_deployed:
+          type: boolean
+          description: >
+            True once at least one deployment of this service has succeeded.
+            Combined with has_pending_changes it distinguishes a service that
+            will be created on its server from one that will be updated.
+            Derived per request, never stored.
 
     CreateDomainRequest:
       type: object

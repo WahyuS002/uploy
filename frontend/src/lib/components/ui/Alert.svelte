@@ -6,11 +6,11 @@
 	const alertVariants = cva('rounded-lg border p-3 text-sm', {
 		variants: {
 			tone: {
-				neutral: 'border-border bg-surface-muted text-foreground',
-				info: 'border-blue-200 bg-blue-50 text-blue-800',
-				success: 'border-green-200 bg-green-50 text-green-800',
-				warning: 'border-yellow-300 bg-yellow-50 text-yellow-700',
-				danger: 'border-red-200 bg-red-50 text-red-600'
+				neutral: 'border-border bg-muted text-foreground',
+				info: 'border-info/20 bg-info-muted text-info',
+				success: 'border-success/20 bg-success-muted text-success',
+				warning: 'border-warning/25 bg-warning-muted text-warning',
+				danger: 'border-destructive/20 bg-destructive/10 text-destructive'
 			}
 		},
 		defaultVariants: { tone: 'neutral' }

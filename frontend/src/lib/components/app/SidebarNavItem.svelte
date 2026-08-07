@@ -1,26 +1,25 @@
 <script lang="ts">
+	import { Icon, type IconSource } from '@steeze-ui/svelte-icon';
+
 	type Props = {
 		href: string;
 		label: string;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		icon: any;
+		icon: IconSource;
 		active: boolean;
 	};
 
-	let { href, label, icon: Icon, active }: Props = $props();
+	let { href, label, icon, active }: Props = $props();
 </script>
 
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 <a
 	{href}
-	class="flex h-9 flex-row items-center rounded-[9px] transition-colors
+	class="flex h-8 items-center gap-2 overflow-hidden rounded-md px-1.5 text-[13px] leading-[18.5px] transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:outline-none
 		{active
-		? 'bg-[#EEEFF1] text-[#242529]'
-		: 'text-muted-foreground hover:bg-gray-100 hover:text-gray-950'}"
+		? 'bg-foreground/[0.04] font-medium text-sidebar-accent-foreground'
+		: 'font-[450] text-muted-foreground hover:bg-foreground/[0.02] hover:text-sidebar-accent-foreground active:bg-foreground/[0.04]'}"
 >
-	<div class="grid h-9 w-9 flex-none place-content-center">
-		<Icon size={16} strokeWidth={active ? 2 : 1.75} />
-	</div>
-	<span class="min-w-0 flex-1 truncate text-sm">{label}</span>
+	<Icon src={icon} theme="outline" class="h-5 w-5 flex-none" />
+	<span class="min-w-0 flex-1 truncate">{label}</span>
 </a>
 <!-- eslint-enable svelte/no-navigation-without-resolve -->

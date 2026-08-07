@@ -55,6 +55,33 @@ func (e DeploymentResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for ErrorResponseCode.
+const (
+	DockerMissing ErrorResponseCode = "docker_missing"
+	KeyInvalid    ErrorResponseCode = "key_invalid"
+	KeyRejected   ErrorResponseCode = "key_rejected"
+	SessionFailed ErrorResponseCode = "session_failed"
+	Unreachable   ErrorResponseCode = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the ErrorResponseCode enum.
+func (e ErrorResponseCode) Valid() bool {
+	switch e {
+	case DockerMissing:
+		return true
+	case KeyInvalid:
+		return true
+	case KeyRejected:
+		return true
+	case SessionFailed:
+		return true
+	case Unreachable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogEntryType.
 const (
 	Stderr LogEntryType = "stderr"
@@ -162,9 +189,28 @@ type CreateEnvironmentRequest struct {
 	Name string `json:"name"`
 }
 
-// CreateProjectRequest defines model for CreateProjectRequest.
+// CreateProjectFromImageRequest defines model for CreateProjectFromImageRequest.
+type CreateProjectFromImageRequest struct {
+	// Image Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`.
+	Image string `json:"image"`
+
+	// Port Container port the service listens on.
+	Port     int    `json:"port"`
+	ServerId string `json:"server_id"`
+}
+
+// CreateProjectFromImageResponse defines model for CreateProjectFromImageResponse.
+type CreateProjectFromImageResponse struct {
+	Environment EnvironmentResponse `json:"environment"`
+	Project     ProjectResponse     `json:"project"`
+	Service     ServiceResponse     `json:"service"`
+}
+
+// CreateProjectRequest Request body for creating a project. When `name` is omitted, blank, or
+// whitespace-only, the backend generates a unique Railway-style
+// `adjective-noun` name scoped to the workspace.
 type CreateProjectRequest struct {
-	Name string `json:"name"`
+	Name *string `json:"name,omitempty"`
 }
 
 // CreateSSHKeyRequest defines model for CreateSSHKeyRequest.
@@ -228,8 +274,13 @@ type EnvironmentResponse struct {
 
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
-	Error string `json:"error"`
+	// Code Machine-readable failure stage. Present on SSH probe failures so a client can offer the right remedy: the three stages need entirely different fixes, and the human message alone cannot be branched on.
+	Code  *ErrorResponseCode `json:"code,omitempty"`
+	Error string             `json:"error"`
 }
+
+// ErrorResponseCode Machine-readable failure stage. Present on SSH probe failures so a client can offer the right remedy: the three stages need entirely different fixes, and the human message alone cannot be branched on.
+type ErrorResponseCode string
 
 // GenerateSSHKeyRequest defines model for GenerateSSHKeyRequest.
 type GenerateSSHKeyRequest struct {
@@ -325,17 +376,23 @@ type ServiceEnvResponse struct {
 
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
-	ContainerName string              `json:"container_name"`
-	CreatedAt     time.Time           `json:"created_at"`
-	EnvironmentId string              `json:"environment_id"`
-	Id            string              `json:"id"`
-	Image         string              `json:"image"`
-	Kind          ServiceResponseKind `json:"kind"`
-	Name          string              `json:"name"`
-	Port          int                 `json:"port"`
-	ProjectId     string              `json:"project_id"`
-	ServerId      string              `json:"server_id"`
-	UpdatedAt     time.Time           `json:"updated_at"`
+	ContainerName string    `json:"container_name"`
+	CreatedAt     time.Time `json:"created_at"`
+	EnvironmentId string    `json:"environment_id"`
+
+	// HasDeployed True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored.
+	HasDeployed bool `json:"has_deployed"`
+
+	// HasPendingChanges True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored.
+	HasPendingChanges bool                `json:"has_pending_changes"`
+	Id                string              `json:"id"`
+	Image             string              `json:"image"`
+	Kind              ServiceResponseKind `json:"kind"`
+	Name              string              `json:"name"`
+	Port              int                 `json:"port"`
+	ProjectId         string              `json:"project_id"`
+	ServerId          string              `json:"server_id"`
+	UpdatedAt         time.Time           `json:"updated_at"`
 }
 
 // ServiceResponseKind defines model for ServiceResponse.Kind.
@@ -402,6 +459,9 @@ type CreateDeploymentJSONRequestBody = DeployRequest
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
 
+// CreateProjectFromImageJSONRequestBody defines body for CreateProjectFromImage for application/json ContentType.
+type CreateProjectFromImageJSONRequestBody = CreateProjectFromImageRequest
+
 // UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
 type UpdateProjectJSONRequestBody = UpdateProjectRequest
 
@@ -464,6 +524,9 @@ type ServerInterface interface {
 	// Create a new project
 	// (POST /api/projects)
 	CreateProject(w http.ResponseWriter, r *http.Request)
+	// Create a project, default environment, and Docker image service atomically
+	// (POST /api/projects/from-image)
+	CreateProjectFromImage(w http.ResponseWriter, r *http.Request)
 	// Delete a project
 	// (DELETE /api/projects/{id})
 	DeleteProject(w http.ResponseWriter, r *http.Request, id string)
@@ -488,6 +551,9 @@ type ServerInterface interface {
 	// Update environment
 	// (PUT /api/projects/{id}/environments/{envId})
 	UpdateEnvironment(w http.ResponseWriter, r *http.Request, id string, envId string)
+	// List services in a project
+	// (GET /api/projects/{id}/services)
+	ListProjectServices(w http.ResponseWriter, r *http.Request, id string)
 	// List registered servers
 	// (GET /api/servers)
 	ListServers(w http.ResponseWriter, r *http.Request)
@@ -706,6 +772,26 @@ func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateProject(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProjectFromImage operation middleware
+func (siw *ServerInterfaceWrapper) CreateProjectFromImage(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProjectFromImage(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -981,6 +1067,37 @@ func (siw *ServerInterfaceWrapper) UpdateEnvironment(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateEnvironment(w, r, id, envId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProjectServices operation middleware
+func (siw *ServerInterfaceWrapper) ListProjectServices(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProjectServices(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1657,6 +1774,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/deployments/{id}/logs", wrapper.GetDeploymentLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects", wrapper.ListProjects)
 	m.HandleFunc("POST "+options.BaseURL+"/api/projects", wrapper.CreateProject)
+	m.HandleFunc("POST "+options.BaseURL+"/api/projects/from-image", wrapper.CreateProjectFromImage)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/projects/{id}", wrapper.DeleteProject)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}", wrapper.GetProject)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/projects/{id}", wrapper.UpdateProject)
@@ -1665,6 +1783,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.DeleteEnvironment)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.GetEnvironment)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.UpdateEnvironment)
+	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}/services", wrapper.ListProjectServices)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers", wrapper.ListServers)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers", wrapper.CreateServer)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/check-connection", wrapper.CheckConnection)

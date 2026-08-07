@@ -1,7 +1,38 @@
+<script lang="ts" module>
+	import { cva, type VariantProps } from 'class-variance-authority';
+	import { pillVariants } from './pillVariants.js';
+
+	export const selectTriggerVariants = cva(
+		'inline-flex w-full cursor-pointer items-center justify-between rounded-md border field-focus-glow border-input bg-muted text-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50',
+		{
+			variants: {
+				size: {
+					sm: 'h-8 px-2.5 text-xs',
+					md: 'h-10 px-3 py-2 text-sm'
+				}
+			},
+			defaultVariants: { size: 'md' }
+		}
+	);
+
+	export const selectMenuVariants = cva(
+		'z-50 min-w-50 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-overlay'
+	);
+
+	export const selectMenuItemVariants = cva(
+		'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium tracking-[-0.01em] text-foreground outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground'
+	);
+
+	export const selectActionTriggerVariants = pillVariants;
+
+	export type SelectSize = VariantProps<typeof selectTriggerVariants>['size'];
+</script>
+
 <script lang="ts">
 	import { Select } from 'bits-ui';
 	import { cn } from './cn.js';
-	import { ChevronDown, Check } from 'lucide-svelte';
+	import { Icon } from '@steeze-ui/svelte-icon';
+	import { ChevronDown, Check } from '@steeze-ui/heroicons';
 
 	type SelectItem = { value: string; label: string; disabled?: boolean };
 
@@ -13,6 +44,7 @@
 		disabled?: boolean;
 		required?: boolean;
 		name?: string;
+		size?: SelectSize;
 		class?: string;
 	};
 
@@ -24,6 +56,7 @@
 		disabled = false,
 		required = false,
 		name,
+		size,
 		class: className
 	}: Props = $props();
 
@@ -31,21 +64,16 @@
 </script>
 
 <Select.Root type="single" bind:value {onValueChange} {disabled} {required} {name} {items}>
-	<Select.Trigger
-		class={cn(
-			'inline-flex h-10 w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-muted focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50',
-			className
-		)}
-	>
+	<Select.Trigger class={cn(selectTriggerVariants({ size }), className)}>
 		<span class={cn(!selectedLabel && 'text-muted-foreground')}>
 			{selectedLabel || placeholder}
 		</span>
-		<ChevronDown size={14} class="text-muted-foreground" />
+		<Icon src={ChevronDown} theme="outline" class="h-3.5 w-3.5 text-muted-foreground" />
 	</Select.Trigger>
 
 	<Select.Portal>
 		<Select.Content
-			class="z-50 max-h-60 overflow-auto rounded-lg border border-border bg-surface shadow-md"
+			class="z-50 max-h-60 w-[var(--bits-select-anchor-width)] min-w-[var(--bits-select-anchor-width)] overflow-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-overlay"
 			sideOffset={4}
 		>
 			<Select.Viewport class="p-1">
@@ -54,15 +82,15 @@
 						value={item.value}
 						label={item.label}
 						disabled={item.disabled}
-						class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-muted"
+						class="flex w-full animate-slide-up-fade cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground"
 					>
 						{#snippet children({ selected })}
+							<span class="flex-1">{item.label}</span>
 							<span class="inline-flex h-4 w-4 items-center justify-center">
 								{#if selected}
-									<Check size={12} />
+									<Icon src={Check} theme="outline" class="h-3 w-3" />
 								{/if}
 							</span>
-							{item.label}
 						{/snippet}
 					</Select.Item>
 				{/each}
