@@ -15,7 +15,13 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
-	import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle } from '$lib/components/ui/dialog';
+	import {
+		Dialog,
+		DialogContent,
+		DialogHeader,
+		DialogFooter,
+		DialogTitle
+	} from '$lib/components/ui/dialog';
 	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { useBuilderTopbar } from '$lib/components/builder-topbar-context';
 	import { DropdownMenu } from 'bits-ui';
@@ -89,7 +95,9 @@
 	);
 	let serverItems = $derived(servers.map((s) => ({ value: s.id, label: `${s.name} (${s.host})` })));
 	let serverById = $derived(new Map(servers.map((s) => [s.id, s])));
-	let selectedService = $derived(selectedServiceId ? (services.find((s) => s.id === selectedServiceId) ?? null) : null);
+	let selectedService = $derived(
+		selectedServiceId ? (services.find((s) => s.id === selectedServiceId) ?? null) : null
+	);
 
 	// The panel and the canvas shift are one gesture — the drawer pushing the
 	// workspace over — so they share a duration and a curve. Percentage travel
@@ -115,7 +123,9 @@
 	// panel only ever knew about deployments it started itself.
 	let barDeploymentIds = $state<Record<string, string>>({});
 
-	let unfiredPending = $derived(envServices.filter((s) => s.has_pending_changes && !deployingIds.has(s.id)));
+	let unfiredPending = $derived(
+		envServices.filter((s) => s.has_pending_changes && !deployingIds.has(s.id))
+	);
 	// One primary action at a time: while the canvas is asking for an image, or a
 	// dialog is up, the bar stays out of the way rather than competing with it.
 	let barSuppressed = $derived(!canEdit || addingService || envDialogOpen);
@@ -234,7 +244,9 @@
 			services = svcs;
 			const expired = Date.now() > pollDeadline;
 			const stillPending = new Set(svcs.filter((s) => s.has_pending_changes).map((s) => s.id));
-			deployingIds = expired ? new Set() : new Set([...deployingIds].filter((id) => stillPending.has(id)));
+			deployingIds = expired
+				? new Set()
+				: new Set([...deployingIds].filter((id) => stillPending.has(id)));
 			if (deployingIds.size === 0) stopWatchingDeployments();
 		}, 3000);
 	}
@@ -244,7 +256,9 @@
 		deploying = true;
 		const ids = unfiredPending.map((s) => s.id);
 		try {
-			const results = await Promise.all(ids.map((id) => api.POST('/api/deployments', { body: { service_id: id } })));
+			const results = await Promise.all(
+				ids.map((id) => api.POST('/api/deployments', { body: { service_id: id } }))
+			);
 			const started: string[] = [];
 			const nextDeploymentIds = { ...barDeploymentIds };
 			ids.forEach((id, i) => {
@@ -256,7 +270,8 @@
 			if (started.length === 0) {
 				toast.show({
 					tone: 'error',
-					title: ids.length === 1 ? 'Could not start the deployment' : 'Could not start deployments',
+					title:
+						ids.length === 1 ? 'Could not start the deployment' : 'Could not start deployments',
 					description: (results[0]?.error as { error: string } | undefined)?.error,
 					duration: 6000
 				});
@@ -273,8 +288,12 @@
 			if (started.length === 1) selectedServiceId = started[0];
 			toast.show({
 				tone: 'success',
-				title: started.length === 1 ? 'Deploying 1 service' : `Deploying ${started.length} services`,
-				description: started.length < ids.length ? `${ids.length - started.length} could not be started.` : undefined,
+				title:
+					started.length === 1 ? 'Deploying 1 service' : `Deploying ${started.length} services`,
+				description:
+					started.length < ids.length
+						? `${ids.length - started.length} could not be started.`
+						: undefined,
 				icon: { kind: 'heroicon', src: CheckCircle },
 				duration: 4500
 			});
@@ -426,7 +445,8 @@
 		// StarterPanel in the empty state, the form itself once you're in it. The
 		// topbar only takes over when the canvas has nodes on it and no longer
 		// offers the action anywhere.
-		topbar.action = canEdit && selectedEnvId && !addingService && envServices.length > 0 ? actionSnippet : null;
+		topbar.action =
+			canEdit && selectedEnvId && !addingService && envServices.length > 0 ? actionSnippet : null;
 		return () => {
 			topbar.label = '';
 			topbar.leading = null;
@@ -525,11 +545,13 @@
 		<div
 			class="canvas-bg"
 			aria-hidden="true"
-			style="background-size: {12 * pan.scale}px {12 * pan.scale}px; background-position: {pan.x - pan.scale}px {pan.y -
-				pan.scale}px;"
+			style="background-size: {12 * pan.scale}px {12 * pan.scale}px; background-position: {pan.x -
+				pan.scale}px {pan.y - pan.scale}px;"
 		></div>
 
-		<div class="scroll-area relative z-10 flex min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto">
+		<div
+			class="scroll-area relative z-10 flex min-h-0 w-full flex-1 overflow-x-hidden overflow-y-auto"
+		>
 			<div
 				class="stage inspector-shift m-auto flex min-h-full w-full items-center justify-center px-4 py-8 sm:px-6 sm:py-12"
 			>
@@ -552,7 +574,9 @@
 							aria-label="Loading project"
 						>
 							{#each [0, 1] as i (i)}
-								<div class="skeleton-node flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
+								<div
+									class="skeleton-node flex flex-col gap-2 rounded-lg border border-border bg-card p-3"
+								>
 									<div class="flex items-center gap-2">
 										<div class="h-7 w-7 flex-none animate-pulse rounded-md bg-muted"></div>
 										<div class="flex min-w-0 flex-1 flex-col gap-1">
@@ -615,7 +639,12 @@
 										{#if isOwner}
 											<Button href="/servers" size="sm">Connect a server</Button>
 										{/if}
-										<Button type="button" variant="secondary" size="sm" onclick={() => (addingService = false)}>
+										<Button
+											type="button"
+											variant="secondary"
+											size="sm"
+											onclick={() => (addingService = false)}
+										>
 											Cancel
 										</Button>
 									{/snippet}
@@ -644,9 +673,17 @@
 							{/if}
 						</div>
 					{:else if envServices.length === 0}
-						<div class="flex w-full max-w-105 flex-col gap-2" class:step-back={steppedIntoForm} data-no-pan>
+						<div
+							class="flex w-full max-w-105 flex-col gap-2"
+							class:step-back={steppedIntoForm}
+							data-no-pan
+						>
 							{#if canEdit}
-								<StarterPanel enabled={{ 'docker-image': true }} title="Add a service" onSelect={handleStarterSelect} />
+								<StarterPanel
+									enabled={{ 'docker-image': true }}
+									title="Add a service"
+									onSelect={handleStarterSelect}
+								/>
 							{:else}
 								<EmptyState
 									icon={Cube}
@@ -689,7 +726,9 @@
 											: 'border-border'}"
 								>
 									<div class="flex items-center gap-2">
-										<span class="grid h-7 w-7 flex-none place-content-center rounded-md bg-muted text-foreground">
+										<span
+											class="grid h-7 w-7 flex-none place-content-center rounded-md bg-muted text-foreground"
+										>
 											<Container class="h-3.5 w-3.5" strokeWidth={1.75} />
 										</span>
 										<div class="min-w-0 flex-1">
@@ -742,7 +781,12 @@
 			>
 				<Icon src={Minus} theme="outline" class="h-3.5 w-3.5" />
 			</button>
-			<button type="button" class="tool-btn zoom-label" onclick={() => pan.resetZoom()} aria-label="Reset zoom to 100%">
+			<button
+				type="button"
+				class="tool-btn zoom-label"
+				onclick={() => pan.resetZoom()}
+				aria-label="Reset zoom to 100%"
+			>
 				{Math.round(pan.scale * 100)}%
 			</button>
 			<button
@@ -755,7 +799,12 @@
 				<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
 			</button>
 			<span class="divider" aria-hidden="true"></span>
-			<button type="button" class="tool-btn" onclick={() => pan.recenter()} aria-label="Recenter canvas">
+			<button
+				type="button"
+				class="tool-btn"
+				onclick={() => pan.recenter()}
+				aria-label="Recenter canvas"
+			>
 				<Icon src={ArrowsPointingIn} theme="outline" class="h-3.5 w-3.5" />
 			</button>
 		</div>
@@ -775,7 +824,9 @@
 			     a 420px column is two too many. -->
 			<header class="flex items-center justify-between gap-2 border-b border-border px-5 py-4">
 				<div class="flex min-w-0 items-center gap-3">
-					<span class="grid h-9 w-9 flex-none place-content-center rounded-md bg-muted text-foreground">
+					<span
+						class="grid h-9 w-9 flex-none place-content-center rounded-md bg-muted text-foreground"
+					>
 						<Container class="h-4.5 w-4.5" strokeWidth={1.75} />
 					</span>
 					<h2 class="truncate text-2xl font-semibold tracking-[-0.01em] text-foreground">
@@ -841,7 +892,9 @@
 				{/if}
 			</div>
 			<DialogFooter>
-				<Button type="button" variant="secondary" size="sm" onclick={() => (envDialogOpen = false)}>Cancel</Button>
+				<Button type="button" variant="secondary" size="sm" onclick={() => (envDialogOpen = false)}
+					>Cancel</Button
+				>
 				<Button type="submit" size="sm" loading={creatingEnv}>
 					{creatingEnv ? 'Creating...' : 'Create'}
 				</Button>
