@@ -100,9 +100,9 @@
 	const drawer: (node: Element) => TransitionConfig = () => ({
 		duration: 280,
 		easing: quintOut,
-		// Its own width *plus* the 12px it floats off the right edge, so it clears
-		// the frame completely instead of leaving a sliver parked at the gap.
-		css: (_t: number, u: number) => `transform: translate3d(calc(${u} * (100% + 0.75rem)), 0, 0)`
+		// Exactly its own width: it is flush to the frame's right edge now, so that
+		// is the whole distance between parked-outside and in place.
+		css: (_t: number, u: number) => `transform: translate3d(${u * 100}%, 0, 0)`
 	});
 
 	// Services whose deployment we have already fired. The API keeps reporting
@@ -764,7 +764,7 @@
 	{#if selectedService}
 		<aside
 			transition:drawer
-			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:inset-y-3 md:right-3 md:left-auto md:w-[var(--inspector-width)]"
+			class="side-panel absolute inset-0 z-30 flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground md:top-7 md:right-0 md:bottom-0 md:left-auto md:w-[var(--inspector-width)] md:rounded-none md:rounded-tl-xl"
 			class:is-stacked={openDeployment !== null}
 		>
 			<!-- px-5, matching the tab row and content below it: the title used to sit a
@@ -815,7 +815,7 @@
 				deployment={openDeployment}
 				serviceName={selectedService.name}
 				onClose={() => (openDeployment = null)}
-				class="absolute inset-0 z-40 md:inset-y-3 md:right-3 md:left-auto md:w-[var(--inspector-width)]"
+				class="absolute inset-0 z-40 md:top-7 md:right-0 md:bottom-0 md:left-auto md:w-[var(--inspector-width)] md:rounded-none md:rounded-tl-xl"
 			/>
 		{/if}
 	{/if}
@@ -867,11 +867,10 @@
 	}
 
 	@media (min-width: 768px) {
-		/* Half the panel, plus half the 12px it floats off the edge — what the
-		   canvas has to give up is the panel *and* its gap, so the remaining area
-		   only stays centred if the shift accounts for both. */
+		/* Half the panel, flat: it is flush to the frame's edge, so the width it
+		   covers is the width it has, and half of that re-centres what is left. */
 		.builder-shell[data-inspector-open='true'] {
-			--inspector-shift: calc(clamp(210px, 27.5vw, 480px) + 6px);
+			--inspector-shift: clamp(210px, 27.5vw, 480px);
 		}
 	}
 
@@ -995,9 +994,10 @@
 	   panel is full of live text, and scaling it would re-rasterize every glyph
 	   mid-slide for a depth cue the shift and the scrim already carry.
 
-	   10px down, not more: the builder's <main> is overflow-hidden and the panel
-	   only floats 12px off the frame, so a deeper drop gets its bottom corners
-	   sheared off by the clip instead of reading as a card behind a card. */
+	   The panel is bottom: 0 now, so the downward step has no room to land in: the
+	   builder's <main> is overflow-hidden and everything past the frame's bottom
+	   edge — including this panel's bottom corners — is clipped. The recede reads
+	   entirely off the exposed band on the left. */
 	.side-panel.is-stacked {
 		transform: translate3d(-28px, 28px, 0);
 		pointer-events: none;
