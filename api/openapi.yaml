@@ -990,6 +990,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/services/{id}/logs:
+    get:
+      operationId: getServiceLogs
+      summary: Stream a running container's logs via SSE
+      description: |
+        Returns a Server-Sent Events stream of the service's container output,
+        starting with the last 200 lines and then following live. OpenAPI does
+        not natively model SSE, so this endpoint is documented for reference only.
+
+        Unlike deployment logs these are not stored by Uploy — Docker holds the
+        history, so a reconnect re-tails rather than resuming.
+
+        **SSE events (not modeled by this schema):**
+        - Default message event: JSON object with "output" and "type" ("stdout" or "stderr")
+        - `done` event: the container's stream ended
+        - `stream-error` event: JSON object with "message" field
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SSE log stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Service has not been deployed yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The server could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/services/{id}/envs:
     get:
       operationId: listServiceEnvs

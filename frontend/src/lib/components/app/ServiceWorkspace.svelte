@@ -2,6 +2,7 @@
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
+	import ServiceLogs from '$lib/components/app/ServiceLogs.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -29,7 +30,7 @@
 	type ServiceEnvResponse = components['schemas']['ServiceEnvResponse'];
 	type DeploymentResponse = components['schemas']['DeploymentResponse'];
 
-	type Tab = 'deployments' | 'domains' | 'env' | 'settings';
+	type Tab = 'deployments' | 'logs' | 'domains' | 'env' | 'settings';
 
 	type Props = {
 		service: ServiceResponse;
@@ -289,6 +290,7 @@
 
 	const tabs: { id: Tab; label: string }[] = [
 		{ id: 'deployments', label: 'Deployments' },
+		{ id: 'logs', label: 'Logs' },
 		{ id: 'domains', label: 'Domains' },
 		{ id: 'env', label: 'Variables' },
 		{ id: 'settings', label: 'Settings' }
@@ -447,6 +449,20 @@
 						{/each}
 					</div>
 				</div>
+			{/if}
+		{:else if activeTab === 'logs'}
+			<!-- Gated on has_deployed rather than letting the stream fail: with no
+			     container there is nothing to follow, and the endpoint's 400 would
+			     only make EventSource retry it forever. -->
+			{#if service.has_deployed}
+				<ServiceLogs serviceId={svcId} class="h-full" />
+			{:else}
+				<EmptyState
+					icon={Server}
+					title="No logs yet"
+					description="Deploy this service to follow its container output here."
+					class="px-5 py-8"
+				/>
 			{/if}
 		{:else if activeTab === 'domains'}
 			{#if domains.length === 0}

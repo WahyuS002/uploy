@@ -602,6 +602,9 @@ type ServerInterface interface {
 	// Delete an environment variable
 	// (DELETE /api/services/{id}/envs/{key})
 	DeleteServiceEnv(w http.ResponseWriter, r *http.Request, id string, key string)
+	// Stream a running container's logs via SSE
+	// (GET /api/services/{id}/logs)
+	GetServiceLogs(w http.ResponseWriter, r *http.Request, id string)
 	// List stored SSH keys
 	// (GET /api/ssh-keys)
 	ListSSHKeys(w http.ResponseWriter, r *http.Request)
@@ -1586,6 +1589,37 @@ func (siw *ServerInterfaceWrapper) DeleteServiceEnv(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetServiceLogs operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServiceLogs(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSSHKeys operation middleware
 func (siw *ServerInterfaceWrapper) ListSSHKeys(w http.ResponseWriter, r *http.Request) {
 
@@ -1800,6 +1834,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/envs", wrapper.ListServiceEnvs)
 	m.HandleFunc("POST "+options.BaseURL+"/api/services/{id}/envs", wrapper.UpsertServiceEnv)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}/envs/{key}", wrapper.DeleteServiceEnv)
+	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/logs", wrapper.GetServiceLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/ssh-keys", wrapper.ListSSHKeys)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys", wrapper.CreateSSHKey)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys/generate", wrapper.GenerateSSHKey)

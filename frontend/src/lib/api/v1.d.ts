@@ -278,6 +278,36 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/services/{id}/logs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Stream a running container's logs via SSE
+		 * @description Returns a Server-Sent Events stream of the service's container output,
+		 *     starting with the last 200 lines and then following live. OpenAPI does
+		 *     not natively model SSE, so this endpoint is documented for reference only.
+		 *
+		 *     Unlike deployment logs these are not stored by Uploy — Docker holds the
+		 *     history, so a reconnect re-tails rather than resuming.
+		 *
+		 *     **SSE events (not modeled by this schema):**
+		 *     - Default message event: JSON object with "output" and "type" ("stdout" or "stderr")
+		 *     - `done` event: the container's stream ended
+		 *     - `stream-error` event: JSON object with "message" field
+		 */
+		get: operations['getServiceLogs'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/services/{id}/envs': {
 		parameters: {
 			query?: never;
@@ -1954,6 +1984,64 @@ export interface operations {
 				};
 			};
 			/** @description The container could not be removed from the server, so the service was kept. Retry once the server is reachable again. */
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	getServiceLogs: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description SSE log stream */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/event-stream': string;
+				};
+			};
+			/** @description Service has not been deployed yet */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Service not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description The server could not be reached */
 			502: {
 				headers: {
 					[name: string]: unknown;

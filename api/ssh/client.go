@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -138,13 +139,30 @@ func (c *Client) TestSession() error {
 	}
 }
 
-// StreamCommand - run command and return the output line by line via channel
+// StreamCommand runs a command and returns its output line by line via channel.
+//
+// It never gives up on the command, so it suits only commands that end by
+// themselves. For anything that follows output indefinitely, use
+// StreamCommandContext.
 func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-chan error) {
+	return c.StreamCommandContext(context.Background(), command)
+}
+
+// StreamCommandContext is StreamCommand with a way out.
+//
+// Cancelling ctx closes the SSH session, which kills the remote process and
+// EOFs the pipes, and unblocks any send that is waiting on a consumer who has
+// stopped reading. Both halves are needed: "docker logs -f" outlives the
+// request that asked for it, so without this every viewer who navigated away
+// would strand a goroutine, an SSH session, and a remote process.
+//
+// On cancellation done carries ctx.Err(), so callers can tell "the caller left"
+// apart from "the command failed".
+func (c *Client) StreamCommandContext(ctx context.Context, command string) (<-chan string, <-chan string, <-chan error) {
 	stdout := make(chan string)
 	stderr := make(chan string)
 	done := make(chan error, 1)
 
-	// TODO: Add context.Context so the caller can cancel the command.
 	// TODO: Consider using buffered channels so reader goroutines do not block too easily when consumers are slow.
 	// TODO: Consider merging stdout/stderr into a single event struct if stream ordering becomes important later.
 
@@ -156,7 +174,6 @@ func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-
 			done <- err
 			return
 		}
-		// TODO: Consider using defer session.Close() immediately after session creation succeeds.
 
 		outPipe, _ := session.StdoutPipe()
 		errPipe, _ := session.StderrPipe()
@@ -173,6 +190,29 @@ func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-
 			return
 		}
 
+		// Closing the session is what actually stops a running command: it tears
+		// down the remote process and EOFs the pipes, so the scanners below fall
+		// out of their loops and Wait returns.
+		finished := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				session.Close()
+			case <-finished:
+			}
+		}()
+
+		// A send that no one is reading has to lose to cancellation, otherwise
+		// the reader goroutine parks on it forever and wg.Wait never returns.
+		send := func(ch chan<- string, line string) bool {
+			select {
+			case ch <- line:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
+
 		var wg sync.WaitGroup
 		wg.Add(2)
 
@@ -184,10 +224,9 @@ func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-
 			// TODO: Consider using bufio.Reader instead if long-line handling needs to be safer later.
 
 			for scanner.Scan() {
-				stdout <- scanner.Text()
-
-				// TODO: Be careful: sending to an unbuffered channel can block
-				// if the consumer is slow or stops reading.
+				if !send(stdout, scanner.Text()) {
+					return
+				}
 			}
 
 			// TODO: Check scanner.Err() so stdout read errors are not silently ignored.
@@ -197,14 +236,10 @@ func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-
 			defer wg.Done()
 			scanner := bufio.NewScanner(errPipe)
 
-			// TODO: Increase the scanner buffer if log output may contain long lines (> 64KB).
-			// TODO: Consider using bufio.Reader instead if long-line handling needs to be safer later.
-
 			for scanner.Scan() {
-				stderr <- scanner.Text()
-
-				// TODO: Be careful: sending to an unbuffered channel can block
-				// if the consumer is slow or stops reading.
+				if !send(stderr, scanner.Text()) {
+					return
+				}
 			}
 
 			// TODO: Check scanner.Err() so stderr read errors are not silently ignored.
@@ -212,16 +247,20 @@ func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-
 
 		err = session.Wait()
 		wg.Wait() // wait for pipe readers to drain all remaining data
-
-		// TODO: Ensure there is no goroutine leak if the caller stops consuming channels before the command finishes.
-		// TODO: Consider adding a cancellation path to stop the session when the client disconnects, times out, or the deploy is canceled.
+		close(finished)
 
 		session.Close()
 		close(stdout)
 		close(stderr)
-		done <- err
 
-		// TODO: Consider closing done as well if you want the API pattern to be more consistent.
+		// A cancelled session reports its own teardown as a failure. Report why
+		// it really ended so the caller does not log a cancelled stream as a bug.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			done <- ctxErr
+		} else {
+			done <- err
+		}
+
 		// TODO: Consider wrapping errors so the caller knows whether the failure came from start/wait/stdout/stderr.
 	}()
 
