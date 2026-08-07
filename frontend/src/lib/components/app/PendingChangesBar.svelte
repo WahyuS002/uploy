@@ -92,41 +92,49 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- No aria-hidden: `visibility: hidden` already takes the bar out of both the
-     accessibility tree and the tab order, and layering aria-hidden on top would
-     mute the live region at exactly the moment it has something to announce. -->
-<div class="bar" data-state={barState} data-no-pan>
-	<p class="count" role="status">
-		<span class="tabular-nums">{count}</span>
-		{count === 1 ? 'pending change' : 'pending changes'}
-	</p>
+<!-- The bar belongs to the canvas, so it travels with it. When the inspector
+     opens, the canvas slides left by half the panel width to re-centre the nodes
+     in what is left; without the same shift the bar stayed at viewport centre and
+     slid under the panel. Same transform, same 280ms curve as .inspector-shift —
+     the panel opening and everything on the canvas making room for it is one
+     gesture, so it runs on one clock. -->
+<div class="bar-shift">
+	<!-- No aria-hidden: `visibility: hidden` already takes the bar out of both the
+	     accessibility tree and the tab order, and layering aria-hidden on top would
+	     mute the live region at exactly the moment it has something to announce. -->
+	<div class="bar" data-state={barState} data-no-pan>
+		<p class="count" role="status">
+			<span class="tabular-nums">{count}</span>
+			{count === 1 ? 'pending change' : 'pending changes'}
+		</p>
 
-	<Button
-		variant="ghost"
-		size="sm"
-		class="h-8 px-2 text-xs text-muted-foreground"
-		disabled={!visible}
-		onclick={() => (detailsOpen = true)}
-	>
-		Details
-	</Button>
+		<Button
+			variant="ghost"
+			size="sm"
+			class="h-8 px-2 text-xs text-muted-foreground"
+			disabled={!visible}
+			onclick={() => (detailsOpen = true)}
+		>
+			Details
+		</Button>
 
-	<Button
-		size="sm"
-		class="h-8 px-3"
-		disabled={!visible || deploying}
-		loading={deploying}
-		onclick={onDeploy}
-		aria-keyshortcuts="Meta+Enter Control+Enter"
-	>
-		Deploy
-		<!-- A hint, not a key cap: a filled chip inside a filled button is a box
-		     inside a box, and at 11px it fought the label instead of supporting it.
-		     aria-hidden because the button already carries the real thing in
-		     aria-keyshortcuts; announcing "Deploy Command plus Enter" would just
-		     say it twice, in worse words. -->
-		<span class="shortcut" aria-hidden="true">{shortcutHint}</span>
-	</Button>
+		<Button
+			size="sm"
+			class="h-8 px-3"
+			disabled={!visible || deploying}
+			loading={deploying}
+			onclick={onDeploy}
+			aria-keyshortcuts="Meta+Enter Control+Enter"
+		>
+			Deploy
+			<!-- A hint, not a key cap: a filled chip inside a filled button is a box
+			     inside a box, and at 11px it fought the label instead of supporting it.
+			     aria-hidden because the button already carries the real thing in
+			     aria-keyshortcuts; announcing "Deploy Command plus Enter" would just
+			     say it twice, in worse words. -->
+			<span class="shortcut" aria-hidden="true">{shortcutHint}</span>
+		</Button>
+	</div>
 </div>
 
 <Dialog bind:open={detailsOpen}>
@@ -189,6 +197,23 @@
 </Dialog>
 
 <style>
+	/* Spans the canvas so the bar's own `left: 50%` and `max-width: 100%` still
+	   resolve against the same box they always did — this only moves that box.
+	   pointer-events: none because it covers the whole canvas: without it the
+	   wrapper would swallow every drag meant for panning. */
+	.bar-shift {
+		position: absolute;
+		inset: 0;
+		z-index: 20;
+		pointer-events: none;
+		transform: translate3d(calc(0px - var(--inspector-shift, 0px)), 0, 0);
+		transition: transform 280ms cubic-bezier(0.23, 1, 0.32, 1);
+	}
+
+	.bar-shift > .bar {
+		pointer-events: auto;
+	}
+
 	.bar {
 		position: absolute;
 		top: 0.75rem;
