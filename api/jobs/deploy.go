@@ -243,6 +243,10 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 		args = fmt.Sprintf("%s run -d --name %s -p %d:%d", docker, cfg.ContainerName, cfg.Port, cfg.Port)
 	}
 
+	// Survive server reboots and daemon restarts. Without this a reboot silently
+	// kills every deployed service until someone redeploys by hand.
+	args += " --restart unless-stopped"
+
 	for _, env := range cfg.EnvVars {
 		escaped := strings.ReplaceAll(env.Value, "'", "'\\''")
 		args += fmt.Sprintf(" --env '%s=%s'", env.Key, escaped)
@@ -250,6 +254,33 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 
 	args += " " + cfg.Image
 	return args
+}
+
+// RemoveContainer stops and removes a service's container on its server.
+// Called when a service is deleted so the container does not outlive the record
+// that describes it — an orphan keeps serving traffic and holds the container
+// name that the uq_services_container_server constraint hands out.
+//
+// Container names are validated against validContainerName before they ever
+// reach the database, so interpolating one into the command is safe.
+func RemoveContainer(server ssh.ServerConfig, containerName string) error {
+	client, err := ssh.NewClient(server)
+	if err != nil {
+		return fmt.Errorf("connect to server: %w", err)
+	}
+	defer client.Close()
+
+	if err := client.DetectDocker(); err != nil {
+		return err
+	}
+
+	// rm -f stops and removes in one call; "|| true" keeps a service that was
+	// never deployed from failing here.
+	cmd := fmt.Sprintf("%s rm -f %s 2>/dev/null || true", client.DockerBin(), containerName)
+	if _, err := captureStdoutLines(client, cmd); err != nil {
+		return fmt.Errorf("remove container %s: %w", containerName, err)
+	}
+	return nil
 }
 
 func runStep(ctx context.Context, client *ssh.Client, deploymentID, command string) bool {

@@ -30,6 +30,8 @@ jobs:
         working-directory: api
       - run: go vet ./...
         working-directory: api
+      - run: go test ./...
+        working-directory: api
 
   frontend:
     runs-on: ubuntu-latest

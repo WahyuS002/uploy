@@ -31,3 +31,20 @@ func TestBuildDockerRunCmdUsesContainerPort(t *testing.T) {
 		t.Errorf("proxy mode should not publish a host port: %s", proxied)
 	}
 }
+
+// A server reboot must not silently take every deployed service down with it,
+// so both paths have to set a restart policy.
+func TestBuildDockerRunCmdSetsRestartPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cfg  DeployConfig
+	}{
+		{"direct", DeployConfig{ContainerName: "redis-app", Image: "redis:7-alpine", Port: 6379}},
+		{"proxied", DeployConfig{ContainerName: "web-app", Image: "nginx", Port: 3000, Domains: []string{"example.com"}}},
+	} {
+		cmd := buildDockerRunCmd("docker", tc.cfg)
+		if !strings.Contains(cmd, "--restart unless-stopped") {
+			t.Errorf("%s mode has no restart policy: %s", tc.name, cmd)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -10,7 +11,9 @@ import (
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
+	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
+	"github.com/WahyuS002/uploy/ssh"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -285,7 +288,7 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id string
 func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 
-	svc, err := db.GetServiceByID(r.Context(), id)
+	svc, err := db.GetServiceWithServer(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
@@ -302,6 +305,25 @@ func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string
 	if sc.WorkspaceRole != "owner" {
 		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
 		return
+	}
+
+	// Tear the container down before dropping the record. Fail closed: if the
+	// server is unreachable we would otherwise leave a container serving traffic
+	// with nothing in Uploy pointing at it, and no way to reach it from the UI.
+	// A failed delete is recoverable, an orphan is not.
+	if svc.HasDeployed {
+		if err := jobs.RemoveContainer(ssh.ServerConfig{
+			Host:       svc.Host,
+			Port:       int(svc.ServerPort),
+			User:       svc.SSHUser,
+			PrivateKey: svc.PrivateKey,
+		}, svc.ContainerName); err != nil {
+			log.Printf("RemoveContainer service=%s container=%s error: %v", id, svc.ContainerName, err)
+			respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{
+				Error: "could not remove the container from the server, so the service was kept: " + err.Error(),
+			})
+			return
+		}
 	}
 
 	if err := db.DeleteService(r.Context(), id); err != nil {

@@ -1953,6 +1953,15 @@ export interface operations {
 					'application/json': components['schemas']['ErrorResponse'];
 				};
 			};
+			/** @description The container could not be removed from the server, so the service was kept. Retry once the server is reachable again. */
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
 		};
 	};
 	listServiceEnvs: {

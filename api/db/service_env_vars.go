@@ -2,10 +2,28 @@ package db
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"time"
 
+	"github.com/WahyuS002/uploy/crypto"
 	"github.com/WahyuS002/uploy/db/sqlcgen"
 )
+
+// decryptEnvValue reads a stored env var value.
+//
+// ponytail: rows written before env vars were encrypted are still plaintext and
+// fail to decrypt, so they are returned as-is. That makes an undecryptable value
+// indistinguishable from a legacy one. Drop the fallback once a backfill has
+// re-encrypted every existing row.
+func decryptEnvValue(serviceID, key, stored string) string {
+	plaintext, err := crypto.Decrypt(stored)
+	if err != nil {
+		log.Printf("env var service=%s key=%s: reading as legacy plaintext: %v", serviceID, key, err)
+		return stored
+	}
+	return plaintext
+}
 
 type ServiceEnvVar struct {
 	ID        int64     `json:"id"`
@@ -28,15 +46,22 @@ func envFromGen(e sqlcgen.ServiceEnvVar) ServiceEnvVar {
 }
 
 func UpsertServiceEnvVar(ctx context.Context, serviceID, key, value string) (ServiceEnvVar, error) {
+	encrypted, err := crypto.Encrypt(value)
+	if err != nil {
+		return ServiceEnvVar{}, fmt.Errorf("encrypt env var %s: %w", key, err)
+	}
 	e, err := Queries.UpsertServiceEnvVar(ctx, sqlcgen.UpsertServiceEnvVarParams{
 		ServiceID: serviceID,
 		Key:       key,
-		Value:     value,
+		Value:     encrypted,
 	})
 	if err != nil {
 		return ServiceEnvVar{}, err
 	}
-	return envFromGen(e), nil
+	// Hand back the plaintext, not the ciphertext the database echoed.
+	result := envFromGen(e)
+	result.Value = value
+	return result, nil
 }
 
 func ListServiceEnvVars(ctx context.Context, serviceID string) ([]ServiceEnvVar, error) {
@@ -47,6 +72,7 @@ func ListServiceEnvVars(ctx context.Context, serviceID string) ([]ServiceEnvVar,
 	envs := make([]ServiceEnvVar, len(rows))
 	for i, r := range rows {
 		envs[i] = envFromGen(r)
+		envs[i].Value = decryptEnvValue(serviceID, r.Key, r.Value)
 	}
 	return envs, nil
 }
@@ -71,7 +97,7 @@ func GetServiceEnvPairs(ctx context.Context, serviceID string) ([]EnvPair, error
 	}
 	pairs := make([]EnvPair, len(rows))
 	for i, r := range rows {
-		pairs[i] = EnvPair{Key: r.Key, Value: r.Value}
+		pairs[i] = EnvPair{Key: r.Key, Value: decryptEnvValue(serviceID, r.Key, r.Value)}
 	}
 	return pairs, nil
 }

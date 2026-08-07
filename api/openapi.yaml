@@ -981,6 +981,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: >-
+            The container could not be removed from the server, so the service
+            was kept. Retry once the server is reachable again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/services/{id}/envs:
     get:
