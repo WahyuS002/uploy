@@ -99,12 +99,19 @@
 	<div class="grid gap-4 {GRID_COLS}">
 		{#each [...Array(6).keys()] as i (i)}
 			<div class="flex flex-col rounded-lg border border-border bg-card">
+				<!-- The bars sit in the line box of the text they stand in for — h-6 for
+				     the 16px title, h-5 for the 13px footer — so the card is the same
+				     height before and after the data lands. -->
 				<div class="px-4 pt-3.5 pb-2.5">
-					<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
+					<div class="flex h-6 items-center">
+						<div class="h-4 w-32 animate-pulse rounded bg-muted"></div>
+					</div>
 				</div>
 				<div class="mx-3 h-40 animate-pulse rounded-md bg-muted"></div>
 				<div class="px-4 pt-3 pb-3.5">
-					<div class="h-3 w-40 animate-pulse rounded bg-muted"></div>
+					<div class="flex h-5 items-center">
+						<div class="h-3 w-40 animate-pulse rounded bg-muted"></div>
+					</div>
 				</div>
 			</div>
 		{/each}
@@ -139,7 +146,7 @@
 				class="group flex flex-col rounded-lg border border-border bg-card text-card-foreground transition-colors duration-150 outline-none hover:border-input focus-visible:border-input focus-visible:ring-3 focus-visible:ring-primary/30"
 			>
 				<div class="px-4 pt-3.5 pb-2.5">
-					<h3 class="truncate text-sm font-medium text-foreground">{project.name}</h3>
+					<h3 class="truncate text-base font-medium text-foreground">{project.name}</h3>
 				</div>
 				<!-- A miniature of the canvas this link opens, dots and all. The service
 				     marks are brand logos where we know the image and monograms where we
@@ -165,7 +172,7 @@
 					</div>
 				</div>
 				<div
-					class="mt-auto flex items-center gap-1.5 px-4 pt-3 pb-3.5 text-xs text-muted-foreground"
+					class="mt-auto flex items-center gap-1.5 px-4 pt-3 pb-3.5 text-[13px] leading-5 text-muted-foreground"
 				>
 					<span
 						class="inline-block h-1.5 w-1.5 shrink-0 rounded-full {svcCount > 0

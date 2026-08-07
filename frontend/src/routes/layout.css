@@ -28,6 +28,11 @@
 	--mint-edge: #2cc182;
 	--mint-deep: #097c4f;
 	--mint-tint: #e6f8f0;
+	/* One step down the same hue, for the edge of a tint fill. The neutral hairline
+	   is the app's border everywhere else, but against a tinted surface it reads as
+	   grime rather than as an edge — a tint needs its own hue to close on. Sits at
+	   1.17:1 against --mint-tint, the same fill-to-edge step Laravel Cloud uses. */
+	--mint-tint-edge: #beedd8;
 
 	--background: var(--paper-white);
 	--foreground: var(--obsidian);
@@ -108,6 +113,13 @@
 	   brand-coloured mark that must actually be seen — a checked control, a
 	   selected indicator — uses this instead. 5.1:1 on --card. */
 	--color-primary-deep: var(--mint-deep);
+	/* The faint end of the same ramp, for identity marks — a workspace or account
+	   initial. Paired with --color-primary-deep it lands at 4.8:1, the same
+	   tint-and-text recipe --success-muted uses, but named off the brand rather
+	   than off a state: an avatar is neither an action nor a status, and reusing
+	   the success alias here would say "healthy" about a letter. */
+	--color-brand-tint: var(--mint-tint);
+	--color-brand-tint-edge: var(--mint-tint-edge);
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
 	--color-muted: var(--muted);

@@ -33,15 +33,11 @@
 <header class="flex h-14 w-full flex-none items-center justify-between gap-4 bg-background px-3">
 	<div class="flex min-w-0 flex-1 items-center gap-2">
 		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<a
-			href="/projects"
-			class="flex flex-none items-center gap-2 rounded-md px-1 py-1.5 select-none"
-		>
-			<span
-				class="flex h-7 w-7 items-center justify-center rounded-md bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground"
-				>U</span
-			>
-			<span class="text-sm font-semibold tracking-tight text-foreground">Uploy</span>
+		<a href="/projects" class="flex flex-none items-center rounded-md px-1 py-1.5 select-none">
+			<!-- The mark is transparent inside and out, so it sits on either theme as-is.
+			     h-8 because the artwork carries its own margin — it reads at the same
+			     weight the 28px lockup did. -->
+			<img src="/logo.png" alt="Uploy" class="h-8 w-8" />
 		</a>
 		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		<span class="ml-2 hidden h-4 w-px bg-border sm:block"></span>
@@ -77,7 +73,7 @@
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger
 				title={userEmail}
-				class="ml-1 grid h-9 w-9 flex-none cursor-pointer place-content-center rounded-full bg-accent text-xs font-medium text-accent-foreground outline-none hover:bg-accent/70 focus-visible:ring-2 focus-visible:ring-ring/40"
+				class="ml-1 grid h-9 w-9 flex-none cursor-pointer place-content-center rounded-full border border-brand-tint-edge bg-brand-tint text-sm font-medium text-primary-deep transition-colors duration-150 outline-none hover:border-primary-deep focus-visible:ring-2 focus-visible:ring-ring/40"
 			>
 				{userEmail.charAt(0).toUpperCase()}
 			</DropdownMenu.Trigger>

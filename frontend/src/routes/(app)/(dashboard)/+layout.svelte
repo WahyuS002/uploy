@@ -21,7 +21,7 @@
 		{#snippet leading()}
 			<span class="flex min-w-0 items-center gap-2" title={workspaceTitle}>
 				<span
-					class="flex h-6 w-6 flex-none items-center justify-center rounded-md bg-sidebar-primary text-[11px] font-semibold text-sidebar-primary-foreground"
+					class="flex h-6 w-6 flex-none items-center justify-center rounded-md border border-brand-tint-edge bg-brand-tint text-[11px] font-semibold text-primary-deep"
 				>
 					{initial}
 				</span>
