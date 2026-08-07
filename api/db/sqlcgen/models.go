@@ -68,18 +68,19 @@ type Server struct {
 }
 
 type Service struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Image         string    `json:"image"`
-	ContainerName string    `json:"container_name"`
-	Port          int32     `json:"port"`
-	ServerID      string    `json:"server_id"`
-	WorkspaceID   string    `json:"workspace_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Kind          string    `json:"kind"`
-	ProjectID     string    `json:"project_id"`
-	EnvironmentID string    `json:"environment_id"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	Port          int32       `json:"port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	HostPort      pgtype.Int4 `json:"host_port"`
 }
 
 type ServiceDomain struct {

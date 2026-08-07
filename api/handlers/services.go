@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -27,17 +28,50 @@ var validImage = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_./:@-]*$`)
 // validFQDN matches valid hostnames: labels separated by dots, each 1-63 chars, total <= 253
 var validFQDN = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
 
+// The API models an optional port as *int while the database layer uses *int32;
+// this is the one place that gap is bridged.
+func int32PtrFromIntPtr(v *int) *int32 {
+	if v == nil {
+		return nil
+	}
+	i := int32(*v)
+	return &i
+}
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
-func validatePort(port int) string {
+// validatePorts checks the two ports a service has, which are not the same
+// thing and do not have the same rules.
+//
+// port is what the image listens on inside the container — a property of the
+// image, so 80 is perfectly normal there (nginx, caddy, httpd all use it).
+// hostPort is where the service is published on the machine, and 80/443 belong
+// to the Traefik proxy, so nothing else may take them.
+//
+// A nil hostPort means "publish on the same number", which is what a database
+// wants. That is exactly why the reserved check has to run against the
+// effective host port rather than against hostPort alone: an image listening on
+// 80 with no host port chosen would otherwise collide with the proxy.
+func validatePorts(port int, hostPort *int) string {
 	if port < 1 || port > 65535 {
 		return "port must be between 1 and 65535"
 	}
-	if port == 80 || port == 443 {
-		return "ports 80 and 443 are reserved for the Uploy proxy; use another port for direct access"
+	if hostPort != nil && (*hostPort < 1 || *hostPort > 65535) {
+		return "host port must be between 1 and 65535"
+	}
+
+	effective := port
+	if hostPort != nil {
+		effective = *hostPort
+	}
+	if effective == 80 || effective == 443 {
+		if hostPort == nil {
+			return fmt.Sprintf("this image listens on port %d, which is reserved for the Uploy proxy; choose a host port to reach it on", port)
+		}
+		return "ports 80 and 443 are reserved for the Uploy proxy; use another host port for direct access"
 	}
 	return ""
 }
@@ -97,7 +131,7 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if msg := validatePort(req.Port); msg != "" {
+	if msg := validatePorts(req.Port, req.HostPort); msg != "" {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: msg})
 		return
 	}
@@ -135,7 +169,7 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	svc, err := db.CreateService(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId, sc.WorkspaceID, kind, proj.ID, req.EnvironmentId)
+	svc, err := db.CreateService(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.Port), int32PtrFromIntPtr(req.HostPort), req.ServerId, sc.WorkspaceID, kind, proj.ID, req.EnvironmentId)
 	if err != nil {
 		if isUniqueViolation(err) {
 			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "container_name already in use on this server"})
@@ -267,12 +301,12 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 
-	if msg := validatePort(req.Port); msg != "" {
+	if msg := validatePorts(req.Port, req.HostPort); msg != "" {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: msg})
 		return
 	}
 
-	svc, err := db.UpdateService(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.Port), req.ServerId)
+	svc, err := db.UpdateService(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.Port), int32PtrFromIntPtr(req.HostPort), req.ServerId)
 	if err != nil {
 		if isUniqueViolation(err) {
 			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "container_name already in use on this server"})
@@ -334,6 +368,14 @@ func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func intPtrFromInt32Ptr(v *int32) *int {
+	if v == nil {
+		return nil
+	}
+	i := int(*v)
+	return &i
+}
+
 func serviceToResponse(svc db.Service) gen.ServiceResponse {
 	return gen.ServiceResponse{
 		Id:            svc.ID,
@@ -341,6 +383,7 @@ func serviceToResponse(svc db.Service) gen.ServiceResponse {
 		Image:         svc.Image,
 		ContainerName: svc.ContainerName,
 		Port:          int(svc.Port),
+		HostPort:      intPtrFromInt32Ptr(svc.HostPort),
 		ServerId:      svc.ServerID,
 		Kind:          gen.ServiceResponseKind(svc.Kind),
 		ProjectId:     svc.ProjectID,

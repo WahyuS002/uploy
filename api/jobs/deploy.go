@@ -31,7 +31,11 @@ type DeployConfig struct {
 	ServiceID     string
 	Image         string
 	ContainerName string
-	Port          int
+	// Port is what the image listens on inside the container; HostPort is where
+	// it is published on the machine. They are equal for a database reached on
+	// its own well-known number, and different for anything listening on 80.
+	Port     int
+	HostPort int
 	EnvVars       []db.EnvPair
 	Domains       []string
 	ServerID      string
@@ -237,10 +241,11 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls.certresolver=letsencrypt", routerName)
 		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=%d", routerName, cfg.Port)
 	} else {
-		// Direct mode: publish the container's port on the same host port, so
-		// redis reaches you on :6379 and postgres on :5432 — the number the
-		// image is already known by.
-		args = fmt.Sprintf("%s run -d --name %s -p %d:%d", docker, cfg.ContainerName, cfg.Port, cfg.Port)
+		// Direct mode: publish the container's port on the chosen host port.
+		// These are two different numbers whenever the image listens on 80 —
+		// publishing port:port made nginx unreachable, because nothing inside
+		// the container was listening on the number it was published as.
+		args = fmt.Sprintf("%s run -d --name %s -p %d:%d", docker, cfg.ContainerName, cfg.HostPort, cfg.Port)
 	}
 
 	// Survive server reboots and daemon restarts. Without this a reboot silently

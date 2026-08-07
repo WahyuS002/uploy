@@ -14,6 +14,13 @@
 		traefik: 80
 	};
 
+	// 80 and 443 belong to the Uploy proxy, so an image that listens on either
+	// has to be published somewhere else. Everything else is reachable on the
+	// number it already answers to, which is what a database wants.
+	export function defaultHostPort(containerPort: number) {
+		return containerPort === 80 || containerPort === 443 ? 8080 : containerPort;
+	}
+
 	// `ghcr.io/owner/repo:tag` -> `repo`, `postgres:16` -> `postgres`. Splitting on
 	// `/` before `:` is what keeps a registry port (`localhost:5000/nginx`) from
 	// being mistaken for the tag.
@@ -39,7 +46,7 @@
 		/** Rows shown under the port row — where the deploy target is spelled out. */
 		details?: Snippet;
 		onBack: () => void;
-		onSubmit: (image: string, port: number) => void;
+		onSubmit: (image: string, port: number, hostPort: number) => void;
 	};
 
 	let {
@@ -78,9 +85,20 @@
 		if (!portTouched) port = detected;
 	});
 
+	// Where the service is reachable from outside. It trails the listening port
+	// under the same rule, except when that port is one the proxy has claimed —
+	// then it has to differ, and 8080 is the suggestion.
+	let hostPort = $state(8080);
+	let hostPortTouched = $state(false);
+	$effect(() => {
+		const suggested = defaultHostPort(port);
+		if (!hostPortTouched) hostPort = suggested;
+	});
+
 	function pickExample(example: string) {
 		image = example;
 		portTouched = false;
+		hostPortTouched = false;
 	}
 
 	// The command-palette idiom: the arrow lives in the field, and the keyboard
@@ -114,9 +132,17 @@
 			localError = 'Port must be between 1 and 65535';
 			return;
 		}
+		if (!Number.isFinite(hostPort) || hostPort < 1 || hostPort > 65535) {
+			localError = 'Reachable-on port must be between 1 and 65535';
+			return;
+		}
+		if (hostPort === 80 || hostPort === 443) {
+			localError = 'Ports 80 and 443 are reserved for the Uploy proxy';
+			return;
+		}
 
 		localError = '';
-		onSubmit(trimmedImage, port);
+		onSubmit(trimmedImage, port, hostPort);
 	}
 </script>
 
@@ -184,6 +210,20 @@
 						size="sm"
 						bind:value={port}
 						oninput={() => (portTouched = true)}
+						min={1}
+						max={65535}
+						required
+						class="w-24"
+					/>
+				</label>
+
+				<label class="flex items-center justify-between gap-3">
+					<span class="text-xs text-muted-foreground">Reachable on port</span>
+					<Input
+						type="number"
+						size="sm"
+						bind:value={hostPort}
+						oninput={() => (hostPortTouched = true)}
 						min={1}
 						max={65535}
 						required

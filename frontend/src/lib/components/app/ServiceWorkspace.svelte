@@ -100,7 +100,17 @@
 	let metadata = $derived([
 		{ label: 'Image', value: service.image, mono: true },
 		{ label: 'Container', value: service.container_name, mono: true },
-		{ label: 'Port', value: String(service.port), mono: true },
+		// Two numbers, and which is which matters: the left one is where you reach
+		// it, the right one is where the image listens. Showing only one of them is
+		// what made a service that could never answer look correctly configured.
+		{
+			label: 'Port',
+			value:
+				(service.host_port ?? service.port) === service.port
+					? String(service.port)
+					: `${service.host_port} → ${service.port}`,
+			mono: true
+		},
 		{ label: 'Server', value: server ? `${server.name} (${server.host})` : '—', mono: false }
 	]);
 
@@ -652,8 +662,7 @@
 						<div class="min-w-0">
 							<p class="text-[15px] font-medium text-foreground">Delete service</p>
 							<p class="mt-0.5 text-[13px] text-muted-foreground">
-								Removes this service from Uploy. The container already running on the server is left
-								alone.
+								Removes this service from Uploy and stops its container on the server.
 							</p>
 						</div>
 						<Button
@@ -677,7 +686,8 @@
 			<DialogTitle>Delete {service.name}?</DialogTitle>
 		</DialogHeader>
 		<div class="px-5 pb-5 text-sm text-muted-foreground">
-			Its domains and environment variables go with it. This cannot be undone.
+			Its container is stopped and removed from the server, and its domains and environment
+			variables go with it. This cannot be undone.
 			{#if deleteError}
 				<p class="mt-2 text-destructive">{deleteError}</p>
 			{/if}

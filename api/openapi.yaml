@@ -1896,6 +1896,12 @@ components:
         port:
           type: integer
           description: Container port the service listens on.
+        host_port:
+          type: integer
+          description: >-
+            Host port the service is published on. Omit to publish on the same
+            number as `port`, which is what a database wants. Required when the
+            image listens on 80 or 443, since those belong to the Uploy proxy.
 
     CreateProjectFromImageResponse:
       type: object
@@ -1967,6 +1973,13 @@ components:
           type: string
         port:
           type: integer
+          description: Container port the image listens on.
+        host_port:
+          type: integer
+          description: >-
+            Host port the service is published on. Omit to publish on the same
+            number as `port`, which is what a database wants. Required when the
+            image listens on 80 or 443, since those belong to the Uploy proxy.
         server_id:
           type: string
         environment_id:
@@ -1994,6 +2007,13 @@ components:
           type: string
         port:
           type: integer
+          description: Container port the image listens on.
+        host_port:
+          type: integer
+          description: >-
+            Host port the service is published on. Omit to publish on the same
+            number as `port`, which is what a database wants. Required when the
+            image listens on 80 or 443, since those belong to the Uploy proxy.
         server_id:
           type: string
 
@@ -2024,6 +2044,13 @@ components:
           type: string
         port:
           type: integer
+          description: Container port the image listens on.
+        host_port:
+          type: integer
+          description: >-
+            Host port the service is published on. Omit to publish on the same
+            number as `port`, which is what a database wants. Required when the
+            image listens on 80 or 443, since those belong to the Uploy proxy.
         server_id:
           type: string
         kind:

@@ -583,6 +583,8 @@ export interface components {
 			image: string;
 			/** @description Container port the service listens on. */
 			port: number;
+			/** @description Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy. */
+			host_port?: number;
 		};
 		CreateProjectFromImageResponse: {
 			project: components['schemas']['ProjectResponse'];
@@ -608,7 +610,10 @@ export interface components {
 			name: string;
 			image: string;
 			container_name: string;
+			/** @description Container port the image listens on. */
 			port: number;
+			/** @description Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy. */
+			host_port?: number;
 			server_id: string;
 			environment_id: string;
 			/**
@@ -621,7 +626,10 @@ export interface components {
 			name: string;
 			image: string;
 			container_name: string;
+			/** @description Container port the image listens on. */
 			port: number;
+			/** @description Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy. */
+			host_port?: number;
 			server_id: string;
 		};
 		ServiceResponse: {
@@ -629,7 +637,10 @@ export interface components {
 			name: string;
 			image: string;
 			container_name: string;
+			/** @description Container port the image listens on. */
 			port: number;
+			/** @description Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy. */
+			host_port?: number;
 			server_id: string;
 			/** @enum {string} */
 			kind: 'application';

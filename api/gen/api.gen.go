@@ -191,6 +191,9 @@ type CreateEnvironmentRequest struct {
 
 // CreateProjectFromImageRequest defines model for CreateProjectFromImageRequest.
 type CreateProjectFromImageRequest struct {
+	// HostPort Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy.
+	HostPort *int `json:"host_port,omitempty"`
+
 	// Image Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`.
 	Image string `json:"image"`
 
@@ -230,13 +233,18 @@ type CreateServerRequest struct {
 
 // CreateServiceRequest defines model for CreateServiceRequest.
 type CreateServiceRequest struct {
-	ContainerName string                    `json:"container_name"`
-	EnvironmentId string                    `json:"environment_id"`
-	Image         string                    `json:"image"`
-	Kind          *CreateServiceRequestKind `json:"kind,omitempty"`
-	Name          string                    `json:"name"`
-	Port          int                       `json:"port"`
-	ServerId      string                    `json:"server_id"`
+	ContainerName string `json:"container_name"`
+	EnvironmentId string `json:"environment_id"`
+
+	// HostPort Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy.
+	HostPort *int                      `json:"host_port,omitempty"`
+	Image    string                    `json:"image"`
+	Kind     *CreateServiceRequestKind `json:"kind,omitempty"`
+	Name     string                    `json:"name"`
+
+	// Port Container port the image listens on.
+	Port     int    `json:"port"`
+	ServerId string `json:"server_id"`
 }
 
 // CreateServiceRequestKind defines model for CreateServiceRequest.Kind.
@@ -384,15 +392,20 @@ type ServiceResponse struct {
 	HasDeployed bool `json:"has_deployed"`
 
 	// HasPendingChanges True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored.
-	HasPendingChanges bool                `json:"has_pending_changes"`
-	Id                string              `json:"id"`
-	Image             string              `json:"image"`
-	Kind              ServiceResponseKind `json:"kind"`
-	Name              string              `json:"name"`
-	Port              int                 `json:"port"`
-	ProjectId         string              `json:"project_id"`
-	ServerId          string              `json:"server_id"`
-	UpdatedAt         time.Time           `json:"updated_at"`
+	HasPendingChanges bool `json:"has_pending_changes"`
+
+	// HostPort Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy.
+	HostPort *int                `json:"host_port,omitempty"`
+	Id       string              `json:"id"`
+	Image    string              `json:"image"`
+	Kind     ServiceResponseKind `json:"kind"`
+	Name     string              `json:"name"`
+
+	// Port Container port the image listens on.
+	Port      int       `json:"port"`
+	ProjectId string    `json:"project_id"`
+	ServerId  string    `json:"server_id"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ServiceResponseKind defines model for ServiceResponse.Kind.
@@ -416,10 +429,15 @@ type UpdateProjectRequest struct {
 // UpdateServiceRequest defines model for UpdateServiceRequest.
 type UpdateServiceRequest struct {
 	ContainerName string `json:"container_name"`
-	Image         string `json:"image"`
-	Name          string `json:"name"`
-	Port          int    `json:"port"`
-	ServerId      string `json:"server_id"`
+
+	// HostPort Host port the service is published on. Omit to publish on the same number as `port`, which is what a database wants. Required when the image listens on 80 or 443, since those belong to the Uploy proxy.
+	HostPort *int   `json:"host_port,omitempty"`
+	Image    string `json:"image"`
+	Name     string `json:"name"`
+
+	// Port Container port the image listens on.
+	Port     int    `json:"port"`
+	ServerId string `json:"server_id"`
 }
 
 // UpsertEnvRequest defines model for UpsertEnvRequest.
