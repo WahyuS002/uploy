@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
-	import PageHeader from '$lib/components/app/PageHeader.svelte';
 	import PublicKeyHelper from '$lib/components/app/PublicKeyHelper.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
@@ -39,30 +38,25 @@
 </svelte:head>
 
 <section class="flex flex-1 flex-col">
-	<PageHeader>
-		{#snippet actions()}
-			<div
-				class="flex w-full flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3"
-			>
-				{#if servers.length > 0}
-					<p class="text-sm text-muted-foreground">
-						{servers.length}
-						{servers.length === 1 ? 'server' : 'servers'} reachable over SSH.
-					</p>
-				{/if}
-				{#if isOwner}
-					<div class="ms-auto">
-						<Button variant="primary" size="sm" onclick={openCreate}>
-							<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
-							Add server
-						</Button>
-					</div>
-				{/if}
-			</div>
-		{/snippet}
-	</PageHeader>
+	<div class="mb-5 flex items-center justify-between gap-4">
+		<div class="min-w-0">
+			<h1 class="text-xl font-semibold tracking-tight text-foreground">All servers</h1>
+			{#if servers.length > 0}
+				<p class="mt-1 text-sm text-muted-foreground">
+					{servers.length}
+					{servers.length === 1 ? 'server' : 'servers'} reachable over SSH.
+				</p>
+			{/if}
+		</div>
+		{#if isOwner}
+			<Button variant="primary" size="sm" onclick={openCreate}>
+				<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
+				Add server
+			</Button>
+		{/if}
+	</div>
 
-	<div class="flex flex-1 flex-col px-4 pt-4">
+	<div class="flex flex-1 flex-col">
 		{#if servers.length > 0}
 			<div class="overflow-x-auto">
 				<table class="w-full min-w-[44rem] text-left text-sm">

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import BuilderTopbar from '$lib/components/BuilderTopbar.svelte';
+	import AppTopbar from '$lib/components/AppTopbar.svelte';
 	import {
 		provideBuilderTopbar,
 		type BuilderTopbarState
@@ -33,7 +33,7 @@
 </script>
 
 <div class="flex min-h-screen flex-col bg-background">
-	<BuilderTopbar
+	<AppTopbar
 		userEmail={data.user?.email ?? ''}
 		label={resolvedLabel}
 		leading={topbar.leading ?? undefined}

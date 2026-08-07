@@ -31,7 +31,8 @@
 </svelte:head>
 
 {#if data.service}
-	<div class="mx-auto w-full max-w-4xl px-4 py-6">
+	<!-- The dashboard panel already pads and centres; this only narrows the column. -->
+	<div class="mx-auto w-full max-w-4xl">
 		<header class="mb-4">
 			<h2 class="text-xl font-semibold text-foreground">{data.service.name}</h2>
 			<p class="mt-1 text-sm text-muted-foreground">{data.service.image}</p>
