@@ -5,7 +5,8 @@
 	import { serviceLogo, serviceInitial } from '$lib/service-logo';
 	import { Button, EmptyState } from '$lib/components/ui';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Plus, Cube } from '@steeze-ui/heroicons';
+	import { Plus, Cube, CubeTransparent, GlobeAlt } from '@steeze-ui/heroicons';
+	import { formatRelativeTime } from '$lib/format-date';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ProjectResponse = components['schemas']['ProjectResponse'];
@@ -17,6 +18,7 @@
 	let projects = $state<ProjectResponse[]>([]);
 	let services = $state<ServiceResponse[]>([]);
 	let projectEnvs = $state<Record<string, EnvironmentResponse[]>>({});
+	let projectDomains = $state<Record<string, string[]>>({});
 	let loading = $state(true);
 
 	let sortedProjects = $derived(
@@ -69,6 +71,27 @@
 					if (envResults[i].data) envMap[p.id] = envResults[i].data!;
 				});
 				projectEnvs = envMap;
+
+				// Domains hang off services, not projects, so the address line costs one
+				// call per service in the previewed env. Only that env's services, and all
+				// of them in one flight, so the fan-out matches the env calls above.
+				const pairs = projRes.data.flatMap((p) => getEnvServices(p.id).map((s) => [p.id, s.id]));
+				const domainResults = await Promise.all(
+					pairs.map(([, serviceId]) =>
+						api.GET('/api/services/{id}/domains', { params: { path: { id: serviceId } } })
+					)
+				);
+				const domainMap: Record<string, string[]> = {};
+				pairs.forEach(([projectId], i) => {
+					const list = domainResults[i].data;
+					if (!list?.length) return;
+					// Primary first: it's the one address the card has room to show.
+					const names = [...list]
+						.sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+						.map((d) => d.domain);
+					domainMap[projectId] = [...(domainMap[projectId] ?? []), ...names];
+				});
+				projectDomains = domainMap;
 			}
 		} finally {
 			loading = false;
@@ -108,10 +131,13 @@
 					</div>
 				</div>
 				<div class="mx-3 h-40 animate-pulse rounded-md bg-muted"></div>
-				<div class="px-4 pt-3 pb-3.5">
-					<div class="flex h-5 items-center">
-						<div class="h-3 w-40 animate-pulse rounded bg-muted"></div>
-					</div>
+				<!-- Three footer lines now, at the widths of the text they stand in for. -->
+				<div class="space-y-1 px-4 pt-3 pb-3.5">
+					{#each ['w-40', 'w-32', 'w-36'] as w (w)}
+						<div class="flex h-5 items-center">
+							<div class="h-3 {w} animate-pulse rounded bg-muted"></div>
+						</div>
+					{/each}
 				</div>
 			</div>
 		{/each}
@@ -140,6 +166,8 @@
 			{@const envServices = getEnvServices(project.id)}
 			{@const svcCount = envServices.length}
 			{@const env = getProjectEnv(project.id)}
+			{@const domains = projectDomains[project.id] ?? []}
+			{@const pending = envServices.some((s) => s.has_pending_changes)}
 			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 			<a
 				href="/projects/{project.id}"
@@ -171,23 +199,46 @@
 						{/if}
 					</div>
 				</div>
-				<div
-					class="mt-auto flex items-center gap-1.5 px-4 pt-3 pb-3.5 text-[13px] leading-5 text-muted-foreground"
-				>
-					<span
-						class="inline-block h-1.5 w-1.5 shrink-0 rounded-full {svcCount > 0
-							? 'bg-success'
-							: 'bg-input'}"
-					></span>
-					{#if env}
-						<span class="truncate">{env.name}</span>
-						<span class="text-input">&middot;</span>
-					{/if}
-					<span class="shrink-0">
-						{svcCount === 0
-							? 'No services'
-							: `${svcCount} ${svcCount === 1 ? 'service' : 'services'}`}
-					</span>
+				<!-- What the project is, where it answers, and how current it is — the three
+				     facts you'd otherwise open the project to read. Each line degrades to
+				     the reason it's empty rather than disappearing, so the card keeps its
+				     height whether or not a service has a domain yet. -->
+				<div class="mt-auto space-y-1 px-4 pt-3 pb-3.5 text-[13px] leading-5 text-muted-foreground">
+					<div class="flex min-w-0 items-center gap-1.5">
+						<Icon src={CubeTransparent} theme="outline" class="h-3.5 w-3.5 flex-none" />
+						<span class="truncate font-mono text-xs">
+							{envServices[0]?.image ?? 'No services'}
+						</span>
+						{#if svcCount > 1}
+							<span class="flex-none">+{svcCount - 1}</span>
+						{/if}
+					</div>
+					<div class="flex min-w-0 items-center gap-1.5">
+						<Icon src={GlobeAlt} theme="outline" class="h-3.5 w-3.5 flex-none" />
+						<span class="truncate">{domains[0] ?? 'No domain attached'}</span>
+						{#if domains.length > 1}
+							<span class="flex-none">+{domains.length - 1}</span>
+						{/if}
+					</div>
+					<div class="flex min-w-0 items-center gap-1.5">
+						<!-- Amber is the one thing you can act on from here: something was edited
+						     and never deployed, so what's running isn't what the canvas says. -->
+						<span
+							class="inline-block h-1.5 w-1.5 flex-none rounded-full {svcCount === 0
+								? 'bg-input'
+								: pending
+									? 'bg-warning'
+									: 'bg-success'}"
+						></span>
+						{#if env}
+							<span
+								class="flex-none rounded border border-border px-1.5 font-mono text-xs text-foreground"
+							>
+								{env.name}
+							</span>
+						{/if}
+						<span class="truncate">Updated {formatRelativeTime(project.updated_at)}</span>
+					</div>
 				</div>
 			</a>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
