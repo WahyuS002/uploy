@@ -83,7 +83,21 @@ func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - %s:/traefik
+    # An access log is a line per request, and Docker's json-file driver grows
+    # without a bound of its own — on a server that gets traffic that is how you
+    # fill a disk. Three 10MB files is a few hundred thousand requests of
+    # history, which is more than anyone reads and far less than anyone misses.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     command:
+      # To stdout, deliberately: the proxy log panel tails the container, so an
+      # access log written to a file inside it would be invisible. Common format
+      # rather than JSON — this is read by people, and one request as JSON is
+      # 400 characters of quoting around the four fields anyone wants.
+      - --accesslog=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=%s

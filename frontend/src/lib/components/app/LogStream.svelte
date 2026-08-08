@@ -3,15 +3,43 @@
 	import { cn } from '$lib/components/ui/cn.js';
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 
 	interface Props {
-		serviceId: string;
+		/** SSE endpoint, without a query string — this adds `since` itself. */
+		endpoint: string;
+		/**
+		 * What is doing the writing, for the sentences the panel says when there is
+		 * nothing to read. "container" for a service, "proxy" for Traefik.
+		 */
+		subject?: string;
 		class?: string;
 	}
 
-	let { serviceId, class: className }: Props = $props();
+	let { endpoint, subject = 'container', class: className }: Props = $props();
 
 	type Line = { output: string; type: string };
+
+	/**
+	 * How far back Docker replays before the stream catches up to live. 'all' is
+	 * the absence of a range rather than a value the API knows, so it is the one
+	 * option that sends no parameter — the endpoint's own default.
+	 */
+	const ranges = [
+		{ value: 'all', label: 'All time' },
+		{ value: '1h', label: 'Last hour' },
+		{ value: '6h', label: 'Last 6 hours' },
+		{ value: '24h', label: 'Last 24 hours' },
+		{ value: '7d', label: 'Last 7 days' },
+		{ value: '30d', label: 'Last 30 days' }
+	];
+
+	let range = $state('all');
+	// Client-side, because the whole window is already here: 2000 lines is nothing
+	// to scan per keystroke, and going back to the server would mean tearing down
+	// an SSH session to answer a typo.
+	let query = $state('');
 
 	/**
 	 * Four states, not two. "Streaming or not" collapsed a container that is
@@ -43,15 +71,19 @@
 		eventSource = null;
 	}
 
+	// 'all' is the endpoint's default, so it is expressed by not asking.
+	const logUrl = (base: string, since: string) =>
+		since === 'all' ? base : `${base}?since=${encodeURIComponent(since)}`;
+
 	/**
 	 * EventSource hides the response of a failed open, so the reason the backend
 	 * took the trouble to send — an unreachable server, no Docker — never reaches
 	 * the reader. Ask the endpoint once more, plainly, just to read it.
 	 */
-	async function explainOpenFailure(id: string, forAttempt: number) {
+	async function explainOpenFailure(url: string, forAttempt: number) {
 		const abort = new AbortController();
 		try {
-			const res = await fetch(`/api/services/${id}/logs`, { signal: abort.signal });
+			const res = await fetch(url, { signal: abort.signal });
 			// It opened this time: a blip, not a broken server. Leave the generic
 			// message and let the reader hit Reconnect.
 			if (res.ok) return;
@@ -65,14 +97,15 @@
 		}
 	}
 
-	function connect(id: string) {
+	function connect(base: string, since: string) {
 		disconnect();
 		lines = [];
 		streamError = '';
 		phase = 'connecting';
 		attempt += 1;
 
-		const es = new EventSource(`/api/services/${id}/logs`);
+		const url = logUrl(base, since);
+		const es = new EventSource(url);
 		eventSource = es;
 
 		es.onopen = () => {
@@ -86,7 +119,7 @@
 
 		es.addEventListener('done', () => {
 			phase = 'ended';
-			streamError = 'The container stopped writing output.';
+			streamError = `The ${subject} stopped writing output.`;
 			disconnect();
 		});
 
@@ -112,21 +145,32 @@
 				return;
 			}
 			streamError = 'Could not open the log stream.';
-			explainOpenFailure(id, attempt);
+			explainOpenFailure(url, attempt);
 		};
 	}
 
+	// Changing the range reconnects: how far back Docker replays is decided when
+	// the stream opens, so it is not something the open stream can be asked for.
 	$effect(() => {
-		connect(serviceId);
+		connect(endpoint, range);
 		return disconnect;
 	});
+
+	// Case-insensitive substring, not a regex: people type `error` and `500`, and
+	// a half-typed regex would throw on the way to the one they meant.
+	let visible = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		if (!q) return lines;
+		return lines.filter((l) => l.output.toLowerCase().includes(q));
+	});
+	let filtering = $derived(query.trim() !== '');
 
 	// Follow the tail only from the tail. Same rule as the deployment log: pulling
 	// someone back down while they are reading something further up is worse than
 	// not following.
 	let scroller = $state<HTMLDivElement | null>(null);
 	$effect(() => {
-		const count = lines.length;
+		const count = visible.length;
 		const el = scroller;
 		if (!el || count === 0) return;
 		const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -149,35 +193,44 @@
 	 * button that can change it.
 	 */
 	const empty = $derived(
-		{
-			connecting: {
-				icon: CommandLine,
-				title: 'Opening the log stream',
-				description:
-					'Connecting to the server over SSH to follow this container. It takes a moment.'
-			},
-			live: {
-				icon: CommandLine,
-				title: 'No output yet',
-				description:
-					'This container has not written anything since the stream opened. Lines show up here the moment it does.'
-			},
-			ended: {
-				icon: CommandLine,
-				title: 'No logs to show',
-				description: 'The stream ended before any output arrived — the container may have stopped.'
-			},
-			failed: {
-				icon: ExclamationTriangle,
-				title: 'Can’t reach the logs',
-				description: streamError
-			}
-		}[phase]
+		// A narrowed range that came back empty is not the same story as a quiet
+		// container: nothing is wrong, the window is just too small, and the fix is
+		// the control directly above rather than the Try again button.
+		range !== 'all' && (phase === 'live' || phase === 'ended')
+			? {
+					icon: CommandLine,
+					title: 'No logs in this time range',
+					description: 'Nothing was written in the range you picked. Widen it to look further back.'
+				}
+			: {
+					connecting: {
+						icon: CommandLine,
+						title: 'Opening the log stream',
+						description: `Connecting to the server over SSH to follow the ${subject}. It takes a moment.`
+					},
+					live: {
+						icon: CommandLine,
+						title: 'No output yet',
+						description: `The ${subject} has not written anything since the stream opened. Lines show up here the moment it does.`
+					},
+					ended: {
+						icon: CommandLine,
+						title: 'No logs to show',
+						description: `The stream ended before any output arrived — the ${subject} may have stopped.`
+					},
+					failed: {
+						icon: ExclamationTriangle,
+						title: 'Can’t reach the logs',
+						description: streamError
+					}
+				}[phase]
 	);
 
 	// Only a stopped stream is worth a button; connecting and live are already
-	// doing the only thing that would happen if you pressed one.
-	const canRetry = $derived(phase === 'ended' || phase === 'failed');
+	// doing the only thing that would happen if you pressed one. An empty range is
+	// the exception: nothing failed, and reconnecting would find nothing again —
+	// the range control above it is the button that helps.
+	const canRetry = $derived(phase === 'failed' || (phase === 'ended' && range === 'all'));
 </script>
 
 <div
@@ -192,14 +245,44 @@
 			{statusLabel}
 		</span>
 		{#if lines.length > 0}
+			<!-- While filtering the count is the answer to what was typed, so it counts
+			     matches and keeps the total for scale. -->
 			<span class="flex-none text-[12px] text-muted-foreground tabular-nums">
-				{lines.length.toLocaleString()}
-				{lines.length === 1 ? 'line' : 'lines'}
+				{#if filtering}
+					{visible.length.toLocaleString()} of {lines.length.toLocaleString()}
+				{:else}
+					{lines.length.toLocaleString()}
+					{lines.length === 1 ? 'line' : 'lines'}
+				{/if}
 			</span>
 			{#if !streaming}
-				<Button variant="ghost" size="sm" onclick={() => connect(serviceId)}>Reconnect</Button>
+				<Button variant="ghost" size="sm" onclick={() => connect(endpoint, range)}>
+					Reconnect
+				</Button>
 			{/if}
 		{/if}
+	</div>
+
+	<!-- Always present, never conditional on there being lines: an empty panel is
+	     exactly when someone reaches for the range control, and a row that appears
+	     with the first line would move the output the moment it arrived. -->
+	<div class="flex flex-none items-center gap-2 border-b border-border px-3 py-2">
+		<!-- type=search for the clear button the platform already draws. -->
+		<Input
+			type="search"
+			size="sm"
+			bind:value={query}
+			placeholder="Filter logs"
+			aria-label="Filter {subject} output"
+			class="min-w-0 flex-1"
+		/>
+		<Select
+			size="sm"
+			items={ranges}
+			bind:value={range}
+			class="w-32 flex-none"
+			aria-label="Time range"
+		/>
 	</div>
 
 	{#if lines.length === 0}
@@ -218,7 +301,7 @@
 					class="pb-10"
 				>
 					{#snippet actions()}
-						<Button variant="secondary" size="sm" onclick={() => connect(serviceId)}>
+						<Button variant="secondary" size="sm" onclick={() => connect(endpoint, range)}>
 							Try again
 						</Button>
 					{/snippet}
@@ -234,6 +317,23 @@
 				/>
 			{/if}
 		</div>
+	{:else if visible.length === 0}
+		<!-- Lines arrived, the filter hides all of them. Its own state rather than
+		     the ones above: nothing is wrong with the stream, and offering Try again
+		     here would point at the wrong thing entirely. -->
+		<div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+			<EmptyState
+				variant="canvas"
+				icon={CommandLine}
+				title="No matching lines"
+				description="None of the {lines.length.toLocaleString()} lines held so far contain “{query.trim()}”."
+				class="pb-10"
+			>
+				{#snippet actions()}
+					<Button variant="secondary" size="sm" onclick={() => (query = '')}>Clear filter</Button>
+				{/snippet}
+			</EmptyState>
+		</div>
 	{:else}
 		<!-- aria-live off, deliberately: role="log" is polite by default and a
 		     chatty container would read every line aloud forever. The header's
@@ -243,9 +343,9 @@
 			class="log-output"
 			role="log"
 			aria-live="off"
-			aria-label="Container output"
+			aria-label="{subject} output"
 		>
-			{#each lines as line, i (i)}
+			{#each visible as line, i (i)}
 				<p class:err={line.type === 'stderr'}>{line.output}</p>
 			{/each}
 		</div>
@@ -318,5 +418,4 @@
 	.log-output p.err {
 		color: var(--destructive);
 	}
-
 </style>

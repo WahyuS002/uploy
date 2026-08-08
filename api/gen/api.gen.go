@@ -160,6 +160,60 @@ func (e ServiceResponseKind) Valid() bool {
 	}
 }
 
+// Defines values for GetProxyLogsParamsSince.
+const (
+	GetProxyLogsParamsSinceN1h  GetProxyLogsParamsSince = "1h"
+	GetProxyLogsParamsSinceN24h GetProxyLogsParamsSince = "24h"
+	GetProxyLogsParamsSinceN30d GetProxyLogsParamsSince = "30d"
+	GetProxyLogsParamsSinceN6h  GetProxyLogsParamsSince = "6h"
+	GetProxyLogsParamsSinceN7d  GetProxyLogsParamsSince = "7d"
+)
+
+// Valid indicates whether the value is a known member of the GetProxyLogsParamsSince enum.
+func (e GetProxyLogsParamsSince) Valid() bool {
+	switch e {
+	case GetProxyLogsParamsSinceN1h:
+		return true
+	case GetProxyLogsParamsSinceN24h:
+		return true
+	case GetProxyLogsParamsSinceN30d:
+		return true
+	case GetProxyLogsParamsSinceN6h:
+		return true
+	case GetProxyLogsParamsSinceN7d:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetServiceLogsParamsSince.
+const (
+	GetServiceLogsParamsSinceN1h  GetServiceLogsParamsSince = "1h"
+	GetServiceLogsParamsSinceN24h GetServiceLogsParamsSince = "24h"
+	GetServiceLogsParamsSinceN30d GetServiceLogsParamsSince = "30d"
+	GetServiceLogsParamsSinceN6h  GetServiceLogsParamsSince = "6h"
+	GetServiceLogsParamsSinceN7d  GetServiceLogsParamsSince = "7d"
+)
+
+// Valid indicates whether the value is a known member of the GetServiceLogsParamsSince enum.
+func (e GetServiceLogsParamsSince) Valid() bool {
+	switch e {
+	case GetServiceLogsParamsSinceN1h:
+		return true
+	case GetServiceLogsParamsSinceN24h:
+		return true
+	case GetServiceLogsParamsSinceN30d:
+		return true
+	case GetServiceLogsParamsSinceN6h:
+		return true
+	case GetServiceLogsParamsSinceN7d:
+		return true
+	default:
+		return false
+	}
+}
+
 // AuthResponse defines model for AuthResponse.
 type AuthResponse struct {
 	User      User      `json:"user"`
@@ -460,10 +514,28 @@ type Workspace struct {
 	Role *string `json:"role,omitempty"`
 }
 
+// GetProxyLogsParams defines parameters for GetProxyLogs.
+type GetProxyLogsParams struct {
+	// Since Only replay history from this far back. Omitted, the stream starts from the last 200 lines however old they are.
+	Since *GetProxyLogsParamsSince `form:"since,omitempty" json:"since,omitempty"`
+}
+
+// GetProxyLogsParamsSince defines parameters for GetProxyLogs.
+type GetProxyLogsParamsSince string
+
 // ListServiceDeploymentsParams defines parameters for ListServiceDeployments.
 type ListServiceDeploymentsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// GetServiceLogsParams defines parameters for GetServiceLogs.
+type GetServiceLogsParams struct {
+	// Since Only replay history from this far back. Omitted, the stream starts from the last 200 lines however old they are.
+	Since *GetServiceLogsParamsSince `form:"since,omitempty" json:"since,omitempty"`
+}
+
+// GetServiceLogsParamsSince defines parameters for GetServiceLogs.
+type GetServiceLogsParamsSince string
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -581,6 +653,9 @@ type ServerInterface interface {
 	// Test SSH connectivity to a server
 	// (POST /api/servers/check-connection)
 	CheckConnection(w http.ResponseWriter, r *http.Request)
+	// Stream the reverse proxy's logs via SSE
+	// (GET /api/servers/{id}/proxy-logs)
+	GetProxyLogs(w http.ResponseWriter, r *http.Request, id string, params GetProxyLogsParams)
 	// List services in workspace
 	// (GET /api/services)
 	ListServices(w http.ResponseWriter, r *http.Request)
@@ -622,7 +697,7 @@ type ServerInterface interface {
 	DeleteServiceEnv(w http.ResponseWriter, r *http.Request, id string, key string)
 	// Stream a running container's logs via SSE
 	// (GET /api/services/{id}/logs)
-	GetServiceLogs(w http.ResponseWriter, r *http.Request, id string)
+	GetServiceLogs(w http.ResponseWriter, r *http.Request, id string, params GetServiceLogsParams)
 	// List stored SSH keys
 	// (GET /api/ssh-keys)
 	ListSSHKeys(w http.ResponseWriter, r *http.Request)
@@ -1188,6 +1263,48 @@ func (siw *ServerInterfaceWrapper) CheckConnection(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetProxyLogs operation middleware
+func (siw *ServerInterfaceWrapper) GetProxyLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProxyLogsParams
+
+	// ------------- Optional query parameter "since" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "since", r.URL.Query(), &params.Since, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "since", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProxyLogs(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListServices operation middleware
 func (siw *ServerInterfaceWrapper) ListServices(w http.ResponseWriter, r *http.Request) {
 
@@ -1627,8 +1744,19 @@ func (siw *ServerInterfaceWrapper) GetServiceLogs(w http.ResponseWriter, r *http
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetServiceLogsParams
+
+	// ------------- Optional query parameter "since" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "since", r.URL.Query(), &params.Since, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "since", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetServiceLogs(w, r, id)
+		siw.Handler.GetServiceLogs(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1839,6 +1967,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers", wrapper.ListServers)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers", wrapper.CreateServer)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/check-connection", wrapper.CheckConnection)
+	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/proxy-logs", wrapper.GetProxyLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services", wrapper.ListServices)
 	m.HandleFunc("POST "+options.BaseURL+"/api/services", wrapper.CreateService)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}", wrapper.DeleteService)

@@ -133,6 +133,38 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/servers/{id}/proxy-logs': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Stream the reverse proxy's logs via SSE
+		 * @description Returns a Server-Sent Events stream of Traefik's output on this server —
+		 *     its own startup and certificate messages, and one access-log line per
+		 *     request it routes. OpenAPI does not natively model SSE, so this endpoint
+		 *     is documented for reference only.
+		 *
+		 *     This is per server rather than per service: one proxy answers for every
+		 *     service on the machine, so the log is one stream and the service a line
+		 *     belongs to is named in the line itself.
+		 *
+		 *     **SSE events (not modeled by this schema):**
+		 *     - Default message event: JSON object with "output" and "type" ("stdout" or "stderr")
+		 *     - `done` event: the proxy's stream ended
+		 *     - `stream-error` event: JSON object with "message" field
+		 */
+		get: operations['getProxyLogs'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/projects': {
 		parameters: {
 			query?: never;
@@ -1121,6 +1153,76 @@ export interface operations {
 			};
 		};
 	};
+	getProxyLogs: {
+		parameters: {
+			query?: {
+				/** @description Only replay history from this far back. Omitted, the stream starts from the last 200 lines however old they are. */
+				since?: '1h' | '6h' | '24h' | '7d' | '30d';
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description SSE log stream */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/event-stream': string;
+				};
+			};
+			/** @description `since` is not one of the listed values */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Internal server error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description The server could not be reached, or has no usable Docker */
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
 	listProjects: {
 		parameters: {
 			query?: never;
@@ -2007,7 +2109,10 @@ export interface operations {
 	};
 	getServiceLogs: {
 		parameters: {
-			query?: never;
+			query?: {
+				/** @description Only replay history from this far back. Omitted, the stream starts from the last 200 lines however old they are. */
+				since?: '1h' | '6h' | '24h' | '7d' | '30d';
+			};
 			header?: never;
 			path: {
 				id: string;
@@ -2025,7 +2130,7 @@ export interface operations {
 					'text/event-stream': string;
 				};
 			};
-			/** @description Service has not been deployed yet */
+			/** @description Service has not been deployed yet, or `since` is not one of the listed values */
 			400: {
 				headers: {
 					[name: string]: unknown;

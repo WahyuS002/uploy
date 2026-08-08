@@ -3,7 +3,7 @@
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
-	import ServiceLogs from '$lib/components/app/ServiceLogs.svelte';
+	import LogStream from '$lib/components/app/LogStream.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -553,7 +553,7 @@
 			     container there is nothing to follow, and the endpoint's 400 would
 			     only make EventSource retry it forever. -->
 			{#if service.has_deployed}
-				<ServiceLogs serviceId={svcId} class="h-full" />
+				<LogStream endpoint="/api/services/{svcId}/logs" class="h-full" />
 			{:else}
 				<EmptyState
 					icon={Server}

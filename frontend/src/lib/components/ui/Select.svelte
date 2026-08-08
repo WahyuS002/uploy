@@ -46,6 +46,9 @@
 		name?: string;
 		size?: SelectSize;
 		class?: string;
+		/** For triggers with no visible <Label> next to them — the selected value
+		    alone does not say what it selects. */
+		'aria-label'?: string;
 	};
 
 	let {
@@ -57,14 +60,15 @@
 		required = false,
 		name,
 		size,
-		class: className
+		class: className,
+		'aria-label': ariaLabel
 	}: Props = $props();
 
 	let selectedLabel = $derived(items.find((i) => i.value === value)?.label ?? '');
 </script>
 
 <Select.Root type="single" bind:value {onValueChange} {disabled} {required} {name} {items}>
-	<Select.Trigger class={cn(selectTriggerVariants({ size }), className)}>
+	<Select.Trigger aria-label={ariaLabel} class={cn(selectTriggerVariants({ size }), className)}>
 		<span class={cn(!selectedLabel && 'text-muted-foreground')}>
 			{selectedLabel || placeholder}
 		</span>

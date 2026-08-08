@@ -4,6 +4,7 @@
 	import PublicKeyHelper from '$lib/components/app/PublicKeyHelper.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
+	import LogStream from '$lib/components/app/LogStream.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
 	import { Button, EmptyState } from '$lib/components/ui';
@@ -19,6 +20,10 @@
 
 	let dialogOpen = $state(false);
 	let expandedServerId = $state<string | null>(null);
+
+	// The server whose proxy log is open, or null. Held whole rather than by id so
+	// the dialog can name the machine without looking it back up.
+	let logServer = $state<(typeof servers)[number] | null>(null);
 
 	const serverController = new ServerCreateController({
 		onSuccess: async () => {
@@ -109,6 +114,16 @@
 												: server.proxy_last_error}
 										</p>
 									{/if}
+									<!-- Under the status, not in a column of its own: the log is what you
+									     reach for to find out what the badge means, and a proxy that never
+									     came up is exactly when it is worth reading. -->
+									<button
+										type="button"
+										onclick={() => (logServer = server)}
+										class="mt-1 cursor-pointer rounded text-xs text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+									>
+										Proxy logs
+									</button>
 								</td>
 								<td class="py-2.5 align-top text-muted-foreground">
 									{formatDate(server.created_at)}
@@ -172,5 +187,39 @@
 			bodyClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
 			actionsClass="rounded-b-xl border-t border-border px-5 py-3"
 		/>
+	</DialogContent>
+</Dialog>
+
+<!-- A dialog rather than a page of its own: there is no server detail view to
+     hang it off, and the log is something you glance at from the row you were
+     already reading. -->
+<Dialog open={logServer !== null} onOpenChange={(open) => !open && (logServer = null)}>
+	<DialogContent class="w-[min(92vw,56rem)] max-w-none overflow-hidden">
+		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
+			<DialogTitle class="flex min-w-0 items-center gap-2 text-sm">
+				<span class="flex-none font-medium text-muted-foreground">Proxy logs</span>
+				<Icon
+					src={ChevronRight}
+					theme="outline"
+					class="h-3.5 w-3.5 flex-none text-muted-foreground"
+				/>
+				<span class="truncate">{logServer?.name}</span>
+			</DialogTitle>
+		</DialogHeader>
+		<!-- A fixed height, not a max: the panel scrolls its own output, and a box
+		     that grows as lines arrive would move the whole dialog under the cursor. -->
+		<div class="h-[min(66vh,34rem)] p-5">
+			<!-- Keyed so opening a second server's log tears the first stream down
+			     instead of leaving one SSH session per row you clicked. -->
+			{#if logServer}
+				{#key logServer.id}
+					<LogStream
+						endpoint="/api/servers/{logServer.id}/proxy-logs"
+						subject="proxy"
+						class="h-full"
+					/>
+				{/key}
+			{/if}
+		</div>
 	</DialogContent>
 </Dialog>

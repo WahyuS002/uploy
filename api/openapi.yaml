@@ -313,6 +313,79 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/servers/{id}/proxy-logs:
+    get:
+      operationId: getProxyLogs
+      summary: Stream the reverse proxy's logs via SSE
+      description: |
+        Returns a Server-Sent Events stream of Traefik's output on this server —
+        its own startup and certificate messages, and one access-log line per
+        request it routes. OpenAPI does not natively model SSE, so this endpoint
+        is documented for reference only.
+
+        This is per server rather than per service: one proxy answers for every
+        service on the machine, so the log is one stream and the service a line
+        belongs to is named in the line itself.
+
+        **SSE events (not modeled by this schema):**
+        - Default message event: JSON object with "output" and "type" ("stdout" or "stderr")
+        - `done` event: the proxy's stream ended
+        - `stream-error` event: JSON object with "message" field
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          description: >-
+            Only replay history from this far back. Omitted, the stream starts
+            from the last 200 lines however old they are.
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+      responses:
+        "200":
+          description: SSE log stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: "`since` is not one of the listed values"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The server could not be reached, or has no usable Docker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/projects:
     post:
       operationId: createProject
@@ -1014,6 +1087,15 @@ paths:
           required: true
           schema:
             type: string
+        - name: since
+          in: query
+          required: false
+          description: >-
+            Only replay history from this far back. Omitted, the stream starts
+            from the last 200 lines however old they are.
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
       responses:
         "200":
           description: SSE log stream
@@ -1022,7 +1104,7 @@ paths:
               schema:
                 type: string
         "400":
-          description: Service has not been deployed yet
+          description: Service has not been deployed yet, or `since` is not one of the listed values
           content:
             application/json:
               schema:
