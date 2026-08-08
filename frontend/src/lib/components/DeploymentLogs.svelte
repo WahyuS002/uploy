@@ -315,10 +315,4 @@
 	.log-output p.err {
 		color: var(--destructive);
 	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.status-mark[data-status='active'] {
-			animation: none;
-		}
-	}
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Icon, type IconSource } from '@steeze-ui/svelte-icon';
 	import { cn } from './cn.js';
+	import Spinner from './Spinner.svelte';
 	import type { Snippet } from 'svelte';
 
 	type Variant = 'default' | 'canvas';
@@ -11,6 +12,11 @@
 		title: string;
 		description?: string;
 		variant?: Variant;
+		/**
+		 * The same empty state, still waiting to find out which one it is. Spins in
+		 * the icon's place so the block does not move when the answer arrives.
+		 */
+		busy?: boolean;
 		class?: string;
 		actions?: Snippet;
 	};
@@ -21,6 +27,7 @@
 		title,
 		description,
 		variant = 'default',
+		busy = false,
 		class: className,
 		actions
 	}: Props = $props();
@@ -92,7 +99,11 @@
 				<path d="M0 16L215 16" stroke="currentColor" stroke-width="0.8" stroke-miterlimit="10" />
 				<path d="M0 124L215 124" stroke="currentColor" stroke-width="0.8" stroke-miterlimit="10" />
 			</svg>
-			{#if displayIcon}
+			{#if busy}
+				<div class="absolute inset-0 grid place-items-center">
+					<Spinner class="text-[2rem] text-muted-foreground" />
+				</div>
+			{:else if displayIcon}
 				<div class="absolute inset-0 grid place-items-center">
 					<Icon src={displayIcon} theme="outline" class="h-10 w-10 text-muted-foreground" />
 				</div>
@@ -110,11 +121,15 @@
 	</div>
 {:else}
 	<div class={cn('flex flex-col items-center px-6 py-12 text-center', className)}>
-		{#if displayIcon}
+		{#if busy || displayIcon}
 			<div
 				class="mb-5 grid h-12 w-12 place-content-center rounded-xl bg-muted text-muted-foreground"
 			>
-				<Icon src={displayIcon} theme="outline" class="h-5 w-5" />
+				{#if busy}
+					<Spinner class="text-[1.25rem]" />
+				{:else if displayIcon}
+					<Icon src={displayIcon} theme="outline" class="h-5 w-5" />
+				{/if}
 			</div>
 		{/if}
 		<h3 class="text-base font-semibold text-foreground">{title}</h3>
