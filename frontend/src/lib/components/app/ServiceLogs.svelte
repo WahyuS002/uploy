@@ -22,6 +22,9 @@
 	let streamError = $state('');
 	let streaming = $state(false);
 	let eventSource: EventSource | null = null;
+	// Reconnecting while the previous attempt's explanation is still in flight
+	// would otherwise let a stale message land on top of the new one.
+	let attempt = 0;
 
 	function disconnect() {
 		eventSource?.close();
@@ -29,10 +32,33 @@
 		streaming = false;
 	}
 
+	/**
+	 * EventSource hides the response of a failed open, so the reason the backend
+	 * took the trouble to send — an unreachable server, no Docker — never reaches
+	 * the reader. Ask the endpoint once more, plainly, just to read it.
+	 */
+	async function explainOpenFailure(id: string, forAttempt: number) {
+		const abort = new AbortController();
+		try {
+			const res = await fetch(`/api/services/${id}/logs`, { signal: abort.signal });
+			// It opened this time: a blip, not a broken server. Leave the generic
+			// message and let the reader hit Reconnect.
+			if (res.ok) return;
+			const { error } = await res.json();
+			if (error && forAttempt === attempt) streamError = error;
+		} catch {
+			// The API itself is unreachable; the generic message already says so.
+		} finally {
+			// Never leave the second request streaming: it is a whole SSH session.
+			abort.abort();
+		}
+	}
+
 	function connect(id: string) {
 		disconnect();
 		lines = [];
 		streamError = '';
+		attempt += 1;
 
 		const es = new EventSource(`/api/services/${id}/logs`);
 		eventSource = es;
@@ -61,12 +87,15 @@
 		// unreachable server, and retrying either just hammers it. Close and let
 		// the reader decide when to try again.
 		es.onerror = () => {
-			if (!streamError) {
-				streamError = streaming
-					? 'Lost connection to the log stream.'
-					: 'Could not open the log stream.';
-			}
+			const wasStreaming = streaming;
 			disconnect();
+			if (streamError) return;
+			if (wasStreaming) {
+				streamError = 'Lost connection to the log stream.';
+				return;
+			}
+			streamError = 'Could not open the log stream.';
+			explainOpenFailure(id, attempt);
 		};
 	}
 
