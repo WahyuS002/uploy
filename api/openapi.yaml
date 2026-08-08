@@ -1899,9 +1899,11 @@ components:
         host_port:
           type: integer
           description: >-
-            Host port the service is published on. Omit to publish on the same
-            number as `port`, which is what a database wants. Required when the
-            image listens on 80 or 443, since those belong to the Uploy proxy.
+            Host port the service is published on. Omit to keep the service
+            internal — reachable by other services on the uploy network and by
+            nothing outside the machine, which is what a database wants. 80 and
+            443 are rejected: they belong to the Uploy proxy. Ignored while the
+            service has a domain, since that traffic goes through the proxy.
 
     CreateProjectFromImageResponse:
       type: object
@@ -1977,9 +1979,11 @@ components:
         host_port:
           type: integer
           description: >-
-            Host port the service is published on. Omit to publish on the same
-            number as `port`, which is what a database wants. Required when the
-            image listens on 80 or 443, since those belong to the Uploy proxy.
+            Host port the service is published on. Omit to keep the service
+            internal — reachable by other services on the uploy network and by
+            nothing outside the machine, which is what a database wants. 80 and
+            443 are rejected: they belong to the Uploy proxy. Ignored while the
+            service has a domain, since that traffic goes through the proxy.
         server_id:
           type: string
         environment_id:
@@ -2011,9 +2015,11 @@ components:
         host_port:
           type: integer
           description: >-
-            Host port the service is published on. Omit to publish on the same
-            number as `port`, which is what a database wants. Required when the
-            image listens on 80 or 443, since those belong to the Uploy proxy.
+            Host port the service is published on. Omit to keep the service
+            internal — reachable by other services on the uploy network and by
+            nothing outside the machine, which is what a database wants. 80 and
+            443 are rejected: they belong to the Uploy proxy. Ignored while the
+            service has a domain, since that traffic goes through the proxy.
         server_id:
           type: string
 
@@ -2048,9 +2054,11 @@ components:
         host_port:
           type: integer
           description: >-
-            Host port the service is published on. Omit to publish on the same
-            number as `port`, which is what a database wants. Required when the
-            image listens on 80 or 443, since those belong to the Uploy proxy.
+            Host port the service is published on. Omit to keep the service
+            internal — reachable by other services on the uploy network and by
+            nothing outside the machine, which is what a database wants. 80 and
+            443 are rejected: they belong to the Uploy proxy. Ignored while the
+            service has a domain, since that traffic goes through the proxy.
         server_id:
           type: string
         kind:

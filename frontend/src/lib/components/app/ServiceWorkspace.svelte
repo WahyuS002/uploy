@@ -105,7 +105,23 @@
 	// editable: the container is found by name on one server, so changing either
 	// would leave the running one behind with nothing in Uploy pointing at it —
 	// the same orphan that deleting a service used to create.
+	// Image and the ports are only here for readers who cannot edit: for everyone
+	// else the form below is the live version of the same two facts, and printing
+	// them twice makes the card look like a second, stale copy.
 	let fixedMetadata = $derived([
+		...(canEdit
+			? []
+			: [
+					{ label: 'Image', value: service.image, mono: true },
+					{
+						label: 'Port',
+						value:
+							service.host_port != null
+								? `${service.host_port} → ${service.port}`
+								: `${service.port} (internal only)`,
+						mono: true
+					}
+				]),
 		{ label: 'Container', value: service.container_name, mono: true },
 		{ label: 'Server', value: server ? `${server.name} (${server.host})` : '—', mono: false }
 	]);
@@ -174,6 +190,8 @@
 			// value it normalised does not leave the form looking unsaved.
 			resetEditForm(data);
 			savedAt = Date.now();
+		} catch {
+			saveError = 'Network error';
 		} finally {
 			saving = false;
 		}
@@ -725,23 +743,44 @@
 						<Input type="text" bind:value={editImage} size="sm" required class="font-mono" />
 					</FormField>
 
+					<div class="flex flex-col gap-1.5">
+						<label class="flex items-center gap-2 text-[15px] text-foreground">
+							<input type="checkbox" bind:checked={editExposed} class="publish-toggle" />
+							Publish to the internet
+						</label>
+						{#if !editExposed}
+							<p class="text-[13px] text-muted-foreground">
+								Only other services in this project can reach it.
+							</p>
+						{:else if domains.length > 0}
+							<p class="text-[13px] text-muted-foreground">
+								Domain traffic goes through the Uploy proxy — the host port below only applies once
+								every domain is removed.
+							</p>
+						{/if}
+					</div>
+
 					<!-- Side by side because they are one decision read left to right:
 					     reached here, answered there. Stacked, they read as two unrelated
 					     numbers, which is exactly the confusion that made a service look
-					     configured when it could never answer. -->
+					     configured when it could never answer. Unpublished there is no left
+					     half to read, so the field goes away rather than sitting there
+					     disabled with a number nothing is listening on. -->
 					<div class="flex gap-3">
-						<div class="min-w-0 flex-1">
-							<FormField label="Reachable on port">
-								<Input
-									type="number"
-									bind:value={editHostPort}
-									min={1}
-									max={65535}
-									size="sm"
-									required
-								/>
-							</FormField>
-						</div>
+						{#if editExposed}
+							<div class="min-w-0 flex-1">
+								<FormField label="Reachable on port">
+									<Input
+										type="number"
+										bind:value={editHostPort}
+										min={1}
+										max={65535}
+										size="sm"
+										required
+									/>
+								</FormField>
+							</div>
+						{/if}
 						<div class="min-w-0 flex-1">
 							<FormField label="Listens on port">
 								<Input type="number" bind:value={editPort} min={1} max={65535} size="sm" required />
