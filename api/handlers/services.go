@@ -45,16 +45,16 @@ func isUniqueViolation(err error) bool {
 // validatePorts checks the two ports a service has, which are not the same
 // thing and do not have the same rules.
 //
-// port is what the image listens on inside the container — a property of the
-// image, so 80 is perfectly normal there (nginx, caddy, httpd all use it).
+// containerPort is what the image listens on inside the container — a property
+// of the image, so 80 is perfectly normal there (nginx, caddy, httpd all use it).
 //
 // hostPort is where the service is published on the machine. Nil means it is
 // not published at all: other services still reach it over the uploy network,
 // but nothing outside the machine can. 80 and 443 belong to the Traefik proxy,
 // so nothing else may take them.
-func validatePorts(port int, hostPort *int) string {
-	if port < 1 || port > 65535 {
-		return "port must be between 1 and 65535"
+func validatePorts(containerPort int, hostPort *int) string {
+	if containerPort < 1 || containerPort > 65535 {
+		return "container port must be between 1 and 65535"
 	}
 	if hostPort == nil {
 		return ""
@@ -123,7 +123,7 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if msg := validatePorts(req.Port, req.HostPort); msg != "" {
+	if msg := validatePorts(req.ContainerPort, req.HostPort); msg != "" {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: msg})
 		return
 	}
@@ -161,7 +161,7 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	svc, err := db.CreateService(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.Port), int32PtrFromIntPtr(req.HostPort), req.ServerId, sc.WorkspaceID, kind, proj.ID, req.EnvironmentId)
+	svc, err := db.CreateService(r.Context(), req.Name, req.Image, req.ContainerName, int32(req.ContainerPort), int32PtrFromIntPtr(req.HostPort), req.ServerId, sc.WorkspaceID, kind, proj.ID, req.EnvironmentId)
 	if err != nil {
 		if isUniqueViolation(err) {
 			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "container_name already in use on this server"})
@@ -293,12 +293,12 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 
-	if msg := validatePorts(req.Port, req.HostPort); msg != "" {
+	if msg := validatePorts(req.ContainerPort, req.HostPort); msg != "" {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: msg})
 		return
 	}
 
-	svc, err := db.UpdateService(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.Port), int32PtrFromIntPtr(req.HostPort), req.ServerId)
+	svc, err := db.UpdateService(r.Context(), id, req.Name, req.Image, req.ContainerName, int32(req.ContainerPort), int32PtrFromIntPtr(req.HostPort), req.ServerId)
 	if err != nil {
 		if isUniqueViolation(err) {
 			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "container_name already in use on this server"})
@@ -383,7 +383,7 @@ func serviceToResponse(svc db.Service) gen.ServiceResponse {
 		Name:          svc.Name,
 		Image:         svc.Image,
 		ContainerName: svc.ContainerName,
-		Port:          int(svc.Port),
+		ContainerPort: int(svc.ContainerPort),
 		HostPort:      intPtrFromInt32Ptr(svc.HostPort),
 		ServerId:      svc.ServerID,
 		Kind:          gen.ServiceResponseKind(svc.Kind),

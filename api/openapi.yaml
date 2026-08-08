@@ -1886,14 +1886,14 @@ components:
       required:
         - server_id
         - image
-        - port
+        - container_port
       properties:
         server_id:
           type: string
         image:
           type: string
           description: Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`.
-        port:
+        container_port:
           type: integer
           description: Container port the service listens on.
         host_port:
@@ -1963,7 +1963,7 @@ components:
         - name
         - image
         - container_name
-        - port
+        - container_port
         - server_id
         - environment_id
       properties:
@@ -1973,7 +1973,7 @@ components:
           type: string
         container_name:
           type: string
-        port:
+        container_port:
           type: integer
           description: Container port the image listens on.
         host_port:
@@ -2000,7 +2000,7 @@ components:
         - name
         - image
         - container_name
-        - port
+        - container_port
         - server_id
       properties:
         name:
@@ -2009,7 +2009,7 @@ components:
           type: string
         container_name:
           type: string
-        port:
+        container_port:
           type: integer
           description: Container port the image listens on.
         host_port:
@@ -2030,7 +2030,7 @@ components:
         - name
         - image
         - container_name
-        - port
+        - container_port
         - server_id
         - kind
         - project_id
@@ -2048,7 +2048,7 @@ components:
           type: string
         container_name:
           type: string
-        port:
+        container_port:
           type: integer
           description: Container port the image listens on.
         host_port:

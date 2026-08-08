@@ -191,14 +191,14 @@ type CreateEnvironmentRequest struct {
 
 // CreateProjectFromImageRequest defines model for CreateProjectFromImageRequest.
 type CreateProjectFromImageRequest struct {
+	// ContainerPort Container port the service listens on.
+	ContainerPort int `json:"container_port"`
+
 	// HostPort Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy.
 	HostPort *int `json:"host_port,omitempty"`
 
 	// Image Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`.
-	Image string `json:"image"`
-
-	// Port Container port the service listens on.
-	Port     int    `json:"port"`
+	Image    string `json:"image"`
 	ServerId string `json:"server_id"`
 }
 
@@ -234,6 +234,9 @@ type CreateServerRequest struct {
 // CreateServiceRequest defines model for CreateServiceRequest.
 type CreateServiceRequest struct {
 	ContainerName string `json:"container_name"`
+
+	// ContainerPort Container port the image listens on.
+	ContainerPort int    `json:"container_port"`
 	EnvironmentId string `json:"environment_id"`
 
 	// HostPort Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy.
@@ -241,10 +244,7 @@ type CreateServiceRequest struct {
 	Image    string                    `json:"image"`
 	Kind     *CreateServiceRequestKind `json:"kind,omitempty"`
 	Name     string                    `json:"name"`
-
-	// Port Container port the image listens on.
-	Port     int    `json:"port"`
-	ServerId string `json:"server_id"`
+	ServerId string                    `json:"server_id"`
 }
 
 // CreateServiceRequestKind defines model for CreateServiceRequest.Kind.
@@ -384,7 +384,10 @@ type ServiceEnvResponse struct {
 
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
-	ContainerName string    `json:"container_name"`
+	ContainerName string `json:"container_name"`
+
+	// ContainerPort Container port the image listens on.
+	ContainerPort int       `json:"container_port"`
 	CreatedAt     time.Time `json:"created_at"`
 	EnvironmentId string    `json:"environment_id"`
 
@@ -395,17 +398,14 @@ type ServiceResponse struct {
 	HasPendingChanges bool `json:"has_pending_changes"`
 
 	// HostPort Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy.
-	HostPort *int                `json:"host_port,omitempty"`
-	Id       string              `json:"id"`
-	Image    string              `json:"image"`
-	Kind     ServiceResponseKind `json:"kind"`
-	Name     string              `json:"name"`
-
-	// Port Container port the image listens on.
-	Port      int       `json:"port"`
-	ProjectId string    `json:"project_id"`
-	ServerId  string    `json:"server_id"`
-	UpdatedAt time.Time `json:"updated_at"`
+	HostPort  *int                `json:"host_port,omitempty"`
+	Id        string              `json:"id"`
+	Image     string              `json:"image"`
+	Kind      ServiceResponseKind `json:"kind"`
+	Name      string              `json:"name"`
+	ProjectId string              `json:"project_id"`
+	ServerId  string              `json:"server_id"`
+	UpdatedAt time.Time           `json:"updated_at"`
 }
 
 // ServiceResponseKind defines model for ServiceResponse.Kind.
@@ -430,13 +430,13 @@ type UpdateProjectRequest struct {
 type UpdateServiceRequest struct {
 	ContainerName string `json:"container_name"`
 
+	// ContainerPort Container port the image listens on.
+	ContainerPort int `json:"container_port"`
+
 	// HostPort Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy.
 	HostPort *int   `json:"host_port,omitempty"`
 	Image    string `json:"image"`
 	Name     string `json:"name"`
-
-	// Port Container port the image listens on.
-	Port     int    `json:"port"`
 	ServerId string `json:"server_id"`
 }
 

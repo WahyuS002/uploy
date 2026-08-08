@@ -31,11 +31,12 @@ type DeployConfig struct {
 	ServiceID     string
 	Image         string
 	ContainerName string
-	// Port is what the image listens on inside the container; HostPort is where
-	// it is published on the machine. They are equal for a database reached on
-	// its own well-known number, and different for anything listening on 80.
-	Port     int
-	HostPort int
+	// ContainerPort is what the image listens on inside the container; HostPort
+	// is where it is published on the machine. They are equal for a database
+	// reached on its own well-known number, and different for anything
+	// listening on 80.
+	ContainerPort int
+	HostPort      int
 	EnvVars       []db.EnvPair
 	Domains       []string
 	ServerID      string
@@ -250,13 +251,13 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.entrypoints=https", routerName)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls=true", routerName)
 		args += fmt.Sprintf(" --label traefik.http.routers.%s.tls.certresolver=letsencrypt", routerName)
-		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=%d", routerName, cfg.Port)
+		args += fmt.Sprintf(" --label traefik.http.services.%s.loadbalancer.server.port=%d", routerName, cfg.ContainerPort)
 	} else if cfg.HostPort > 0 {
 		// Publish on the chosen host port. Host and container port are two
 		// different numbers whenever the image listens on 80 — publishing
 		// port:port made nginx unreachable, because nothing inside the container
 		// was listening on the number it was published as.
-		args += fmt.Sprintf(" -p %d:%d", cfg.HostPort, cfg.Port)
+		args += fmt.Sprintf(" -p %d:%d", cfg.HostPort, cfg.ContainerPort)
 	}
 	// No domains and no host port means internal only: reachable by other
 	// services on the uploy network, and by nothing outside the machine. That is

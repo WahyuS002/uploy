@@ -59,7 +59,7 @@
 		details?: Snippet;
 		onBack: () => void;
 		/** hostPort null means the service is not published to the host at all. */
-		onSubmit: (image: string, port: number, hostPort: number | null) => void;
+		onSubmit: (image: string, containerPort: number, hostPort: number | null) => void;
 	};
 
 	let {
@@ -87,15 +87,15 @@
 		'ghcr.io/owner/repo:tag'
 	];
 
-	let port = $state(8080);
+	let containerPort = $state(8080);
 
 	// The port trails the image right up until it is edited, then it stops moving
 	// — an auto-filled value that overwrites a deliberate one is worse than no
 	// auto-fill at all.
-	let portTouched = $state(false);
+	let containerPortTouched = $state(false);
 	$effect(() => {
 		const detected = detectPort(image);
-		if (!portTouched) port = detected;
+		if (!containerPortTouched) containerPort = detected;
 	});
 
 	// Where the service is reachable from outside. It trails the listening port
@@ -104,7 +104,7 @@
 	let hostPort = $state(8080);
 	let hostPortTouched = $state(false);
 	$effect(() => {
-		const suggested = defaultHostPort(port);
+		const suggested = defaultHostPort(containerPort);
 		if (!hostPortTouched) hostPort = suggested;
 	});
 
@@ -119,7 +119,7 @@
 
 	function pickExample(example: string) {
 		image = example;
-		portTouched = false;
+		containerPortTouched = false;
 		hostPortTouched = false;
 		exposedTouched = false;
 	}
@@ -151,8 +151,8 @@
 			localError = 'Image is required';
 			return;
 		}
-		if (!Number.isFinite(port) || port < 1 || port > 65535) {
-			localError = 'Port must be between 1 and 65535';
+		if (!Number.isFinite(containerPort) || containerPort < 1 || containerPort > 65535) {
+			localError = 'Container port must be between 1 and 65535';
 			return;
 		}
 		if (exposed) {
@@ -167,7 +167,7 @@
 		}
 
 		localError = '';
-		onSubmit(trimmedImage, port, exposed ? hostPort : null);
+		onSubmit(trimmedImage, containerPort, exposed ? hostPort : null);
 	}
 </script>
 
@@ -233,8 +233,8 @@
 					<Input
 						type="number"
 						size="sm"
-						bind:value={port}
-						oninput={() => (portTouched = true)}
+						bind:value={containerPort}
+						oninput={() => (containerPortTouched = true)}
 						min={1}
 						max={65535}
 						required

@@ -582,7 +582,7 @@ export interface components {
 			/** @description Docker image reference, e.g. `nginx:latest` or `ghcr.io/owner/repo:tag`. */
 			image: string;
 			/** @description Container port the service listens on. */
-			port: number;
+			container_port: number;
 			/** @description Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy. */
 			host_port?: number;
 		};
@@ -611,7 +611,7 @@ export interface components {
 			image: string;
 			container_name: string;
 			/** @description Container port the image listens on. */
-			port: number;
+			container_port: number;
 			/** @description Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy. */
 			host_port?: number;
 			server_id: string;
@@ -627,7 +627,7 @@ export interface components {
 			image: string;
 			container_name: string;
 			/** @description Container port the image listens on. */
-			port: number;
+			container_port: number;
 			/** @description Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy. */
 			host_port?: number;
 			server_id: string;
@@ -638,7 +638,7 @@ export interface components {
 			image: string;
 			container_name: string;
 			/** @description Container port the image listens on. */
-			port: number;
+			container_port: number;
 			/** @description Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy. */
 			host_port?: number;
 			server_id: string;

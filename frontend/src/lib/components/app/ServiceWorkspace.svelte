@@ -117,8 +117,8 @@
 						label: 'Port',
 						value:
 							service.host_port != null
-								? `${service.host_port} → ${service.port}`
-								: `${service.port} (internal only)`,
+								? `${service.host_port} → ${service.container_port}`
+								: `${service.container_port} (internal only)`,
 						mono: true
 					}
 				]),
@@ -128,7 +128,7 @@
 
 	let editName = $state('');
 	let editImage = $state('');
-	let editPort = $state(80);
+	let editContainerPort = $state(80);
 	let editHostPort = $state(8080);
 	let editExposed = $state(true);
 	let saving = $state(false);
@@ -138,18 +138,18 @@
 	function resetEditForm(svc: ServiceResponse) {
 		editName = svc.name;
 		editImage = svc.image;
-		editPort = svc.port;
+		editContainerPort = svc.container_port;
 		// No host port means the service is internal only. Seed the field with a
 		// plausible number anyway, so turning publishing on has something to offer.
 		editExposed = svc.host_port != null;
-		editHostPort = svc.host_port ?? svc.port;
+		editHostPort = svc.host_port ?? svc.container_port;
 		saveError = '';
 	}
 
 	let edited = $derived(
 		editName !== service.name ||
 			editImage !== service.image ||
-			editPort !== service.port ||
+			editContainerPort !== service.container_port ||
 			editExposed !== (service.host_port != null) ||
 			(editExposed && editHostPort !== service.host_port)
 	);
@@ -176,7 +176,7 @@
 					image: editImage.trim(),
 					// Unchanged, but the API takes the whole resource.
 					container_name: service.container_name,
-					port: editPort,
+					container_port: editContainerPort,
 					host_port: editExposed ? editHostPort : undefined,
 					server_id: service.server_id
 				}
@@ -783,7 +783,14 @@
 						{/if}
 						<div class="min-w-0 flex-1">
 							<FormField label="Listens on port">
-								<Input type="number" bind:value={editPort} min={1} max={65535} size="sm" required />
+								<Input
+									type="number"
+									bind:value={editContainerPort}
+									min={1}
+									max={65535}
+									size="sm"
+									required
+								/>
 							</FormField>
 						</div>
 					</div>

@@ -53,7 +53,7 @@
 		void goto('/projects/new');
 	}
 
-	async function submit(image: string, port: number, hostPort: number | null) {
+	async function submit(image: string, containerPort: number, hostPort: number | null) {
 		if (submitting || !server) return;
 
 		error = '';
@@ -63,7 +63,7 @@
 				body: {
 					server_id: server.id,
 					image,
-					port,
+					container_port: containerPort,
 					host_port: hostPort ?? undefined
 				}
 			});

@@ -16,7 +16,7 @@ func TestBuildDockerRunCmdMapsHostPortToContainerPort(t *testing.T) {
 	web := buildDockerRunCmd("docker", DeployConfig{
 		ContainerName: "nginx-app",
 		Image:         "nginx:latest",
-		Port:          80,
+		ContainerPort: 80,
 		HostPort:      9090,
 	})
 	if !strings.Contains(web, "-p 9090:80") {
@@ -28,7 +28,7 @@ func TestBuildDockerRunCmdMapsHostPortToContainerPort(t *testing.T) {
 	direct := buildDockerRunCmd("docker", DeployConfig{
 		ContainerName: "redis-app",
 		Image:         "redis:7-alpine",
-		Port:          6379,
+		ContainerPort: 6379,
 		HostPort:      6379,
 	})
 	if !strings.Contains(direct, "-p 6379:6379") {
@@ -38,7 +38,7 @@ func TestBuildDockerRunCmdMapsHostPortToContainerPort(t *testing.T) {
 	proxied := buildDockerRunCmd("docker", DeployConfig{
 		ContainerName: "web-app",
 		Image:         "ghcr.io/owner/repo:tag",
-		Port:          3000,
+		ContainerPort: 3000,
 		HostPort:      3000,
 		Domains:       []string{"example.com"},
 	})
@@ -57,7 +57,7 @@ func TestBuildDockerRunCmdKeepsUnpublishedServiceInternal(t *testing.T) {
 	internal := buildDockerRunCmd("docker", DeployConfig{
 		ContainerName: "postgres-app",
 		Image:         "postgres:16",
-		Port:          5432,
+		ContainerPort: 5432,
 		// no HostPort, no Domains
 	})
 	if strings.Contains(internal, "-p ") {
@@ -75,9 +75,9 @@ func TestBuildDockerRunCmdAlwaysJoinsNetwork(t *testing.T) {
 		name string
 		cfg  DeployConfig
 	}{
-		{"published", DeployConfig{ContainerName: "a", Image: "redis", Port: 6379, HostPort: 6379}},
-		{"proxied", DeployConfig{ContainerName: "b", Image: "nginx", Port: 80, Domains: []string{"example.com"}}},
-		{"internal", DeployConfig{ContainerName: "c", Image: "postgres:16", Port: 5432}},
+		{"published", DeployConfig{ContainerName: "a", Image: "redis", ContainerPort: 6379, HostPort: 6379}},
+		{"proxied", DeployConfig{ContainerName: "b", Image: "nginx", ContainerPort: 80, Domains: []string{"example.com"}}},
+		{"internal", DeployConfig{ContainerName: "c", Image: "postgres:16", ContainerPort: 5432}},
 	} {
 		cmd := buildDockerRunCmd("docker", tc.cfg)
 		if !strings.Contains(cmd, "--network uploy") {
@@ -93,8 +93,8 @@ func TestBuildDockerRunCmdSetsRestartPolicy(t *testing.T) {
 		name string
 		cfg  DeployConfig
 	}{
-		{"direct", DeployConfig{ContainerName: "redis-app", Image: "redis:7-alpine", Port: 6379, HostPort: 6379}},
-		{"proxied", DeployConfig{ContainerName: "web-app", Image: "nginx", Port: 3000, HostPort: 3000, Domains: []string{"example.com"}}},
+		{"direct", DeployConfig{ContainerName: "redis-app", Image: "redis:7-alpine", ContainerPort: 6379, HostPort: 6379}},
+		{"proxied", DeployConfig{ContainerName: "web-app", Image: "nginx", ContainerPort: 3000, HostPort: 3000, Domains: []string{"example.com"}}},
 	} {
 		cmd := buildDockerRunCmd("docker", tc.cfg)
 		if !strings.Contains(cmd, "--restart unless-stopped") {

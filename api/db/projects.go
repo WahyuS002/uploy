@@ -103,7 +103,7 @@ func CreateProjectWithDefaultEnvironmentAndService(
 	ctx context.Context,
 	workspaceID string,
 	svcName, image, containerName string,
-	port int32,
+	containerPort int32,
 	hostPort *int32,
 	serverID, kind string,
 ) (Project, Environment, Service, error) {
@@ -144,7 +144,7 @@ func CreateProjectWithDefaultEnvironmentAndService(
 		Name:          svcName,
 		Image:         image,
 		ContainerName: containerName,
-		Port:          port,
+		ContainerPort: containerPort,
 		HostPort:      pgInt4FromInt32Ptr(hostPort),
 		ServerID:      serverID,
 		WorkspaceID:   workspaceID,
@@ -168,7 +168,7 @@ func CreateProjectWithDefaultEnvironmentAndService(
 			CreatedAt: er.CreatedAt, UpdatedAt: er.UpdatedAt,
 		}, Service{
 			ID: sr.ID, Name: sr.Name, Image: sr.Image, ContainerName: sr.ContainerName,
-			Port: sr.Port, HostPort: int32PtrFromPgInt4(sr.HostPort), ServerID: sr.ServerID, WorkspaceID: sr.WorkspaceID,
+			ContainerPort: sr.ContainerPort, HostPort: int32PtrFromPgInt4(sr.HostPort), ServerID: sr.ServerID, WorkspaceID: sr.WorkspaceID,
 			Kind: sr.Kind, ProjectID: sr.ProjectID, EnvironmentID: sr.EnvironmentID,
 			CreatedAt: sr.CreatedAt, UpdatedAt: sr.UpdatedAt,
 		}, nil

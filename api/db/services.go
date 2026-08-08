@@ -10,11 +10,11 @@ import (
 )
 
 type Service struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Image         string    `json:"image"`
-	ContainerName string    `json:"container_name"`
-	Port          int32     `json:"port"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Image         string `json:"image"`
+	ContainerName string `json:"container_name"`
+	ContainerPort int32  `json:"container_port"`
 	// HostPort is the port the service is published on, or nil for a service
 	// that is not published at all — reachable by other services on the uploy
 	// network, and by nothing outside the machine.
@@ -41,12 +41,12 @@ type ServiceWithServer struct {
 	ProxyStatus string `json:"-"`
 }
 
-func CreateService(ctx context.Context, name, image, containerName string, port int32, hostPort *int32, serverID, workspaceID, kind, projectID, environmentID string) (Service, error) {
+func CreateService(ctx context.Context, name, image, containerName string, containerPort int32, hostPort *int32, serverID, workspaceID, kind, projectID, environmentID string) (Service, error) {
 	r, err := Queries.CreateService(ctx, sqlcgen.CreateServiceParams{
 		Name:          name,
 		Image:         image,
 		ContainerName: containerName,
-		Port:          port,
+		ContainerPort: containerPort,
 		HostPort:      pgInt4FromInt32Ptr(hostPort),
 		ServerID:      serverID,
 		WorkspaceID:   workspaceID,
@@ -59,7 +59,7 @@ func CreateService(ctx context.Context, name, image, containerName string, port 
 	}
 	return Service{
 		ID: r.ID, Name: r.Name, Image: r.Image, ContainerName: r.ContainerName,
-		Port: r.Port, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
+		ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
@@ -73,7 +73,7 @@ func GetServiceByID(ctx context.Context, id string) (Service, error) {
 	}
 	return Service{
 		ID: r.ID, Name: r.Name, Image: r.Image, ContainerName: r.ContainerName,
-		Port: r.Port, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
+		ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
@@ -89,7 +89,7 @@ func ListServicesByWorkspace(ctx context.Context, workspaceID string) ([]Service
 	for i, r := range rows {
 		services[i] = Service{
 			ID: r.ID, Name: r.Name, Image: r.Image, ContainerName: r.ContainerName,
-			Port: r.Port, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
+			ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 			HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
@@ -107,7 +107,7 @@ func ListServicesByEnvironment(ctx context.Context, environmentID string) ([]Ser
 	for i, r := range rows {
 		services[i] = Service{
 			ID: r.ID, Name: r.Name, Image: r.Image, ContainerName: r.ContainerName,
-			Port: r.Port, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
+			ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 			HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
@@ -125,7 +125,7 @@ func ListServicesByProject(ctx context.Context, projectID string) ([]Service, er
 	for i, r := range rows {
 		services[i] = Service{
 			ID: r.ID, Name: r.Name, Image: r.Image, ContainerName: r.ContainerName,
-			Port: r.Port, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
+			ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 			HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
@@ -134,13 +134,13 @@ func ListServicesByProject(ctx context.Context, projectID string) ([]Service, er
 	return services, nil
 }
 
-func UpdateService(ctx context.Context, id, name, image, containerName string, port int32, hostPort *int32, serverID string) (Service, error) {
+func UpdateService(ctx context.Context, id, name, image, containerName string, containerPort int32, hostPort *int32, serverID string) (Service, error) {
 	r, err := Queries.UpdateService(ctx, sqlcgen.UpdateServiceParams{
 		ID:            id,
 		Name:          name,
 		Image:         image,
 		ContainerName: containerName,
-		Port:          port,
+		ContainerPort: containerPort,
 		HostPort:      pgInt4FromInt32Ptr(hostPort),
 		ServerID:      serverID,
 	})
@@ -149,7 +149,7 @@ func UpdateService(ctx context.Context, id, name, image, containerName string, p
 	}
 	return Service{
 		ID: r.ID, Name: r.Name, Image: r.Image, ContainerName: r.ContainerName,
-		Port: r.Port, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
+		ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
@@ -172,7 +172,7 @@ func GetServiceWithServer(ctx context.Context, id string) (ServiceWithServer, er
 	return ServiceWithServer{
 		Service: Service{
 			ID: row.ID, Name: row.Name, Image: row.Image, ContainerName: row.ContainerName,
-			Port: row.Port, HostPort: int32PtrFromPgInt4(row.HostPort), ServerID: row.ServerID, WorkspaceID: row.WorkspaceID,
+			ContainerPort: row.ContainerPort, HostPort: int32PtrFromPgInt4(row.HostPort), ServerID: row.ServerID, WorkspaceID: row.WorkspaceID,
 			Kind: row.Kind, ProjectID: row.ProjectID, EnvironmentID: row.EnvironmentID,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 			HasPendingChanges: row.HasPendingChanges, HasDeployed: row.HasDeployed,

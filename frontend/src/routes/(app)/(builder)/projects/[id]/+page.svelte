@@ -174,7 +174,7 @@
 		addingService = true;
 	}
 
-	async function createService(image: string, port: number, hostPort: number | null) {
+	async function createService(image: string, containerPort: number, hostPort: number | null) {
 		if (!selectedEnvId || creatingService) return;
 		svcError = '';
 		creatingService = true;
@@ -186,7 +186,7 @@
 					name: '',
 					image,
 					container_name: '',
-					port,
+					container_port: containerPort,
 					host_port: hostPort ?? undefined,
 					server_id: svcServerId,
 					environment_id: selectedEnvId,
@@ -755,7 +755,7 @@
 										{/if}
 									</div>
 									<div class="flex items-center justify-between text-[11px] text-muted-foreground">
-										<span>Port {svc.port}</span>
+										<span>Port {svc.container_port}</span>
 										{#if srv}
 											<span class="max-w-32 truncate">{srv.name}</span>
 										{/if}

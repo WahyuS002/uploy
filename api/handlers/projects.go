@@ -68,7 +68,7 @@ func (s *Server) CreateProjectFromImage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if msg := validatePorts(req.Port, req.HostPort); msg != "" {
+	if msg := validatePorts(req.ContainerPort, req.HostPort); msg != "" {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: msg})
 		return
 	}
@@ -100,7 +100,7 @@ func (s *Server) CreateProjectFromImage(w http.ResponseWriter, r *http.Request) 
 		svcName,
 		image,
 		containerName,
-		int32(req.Port),
+		int32(req.ContainerPort),
 		int32PtrFromIntPtr(req.HostPort),
 		req.ServerId,
 		"application",

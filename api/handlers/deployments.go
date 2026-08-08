@@ -82,7 +82,7 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		ServiceID:     svcWithServer.ID,
 		Image:         svcWithServer.Image,
 		ContainerName: svcWithServer.ContainerName,
-		Port:          int(svcWithServer.Port),
+		ContainerPort: int(svcWithServer.ContainerPort),
 		HostPort:      hostPortOrZero(svcWithServer.HostPort),
 		EnvVars:       envPairs,
 		Domains:       domainNames,
