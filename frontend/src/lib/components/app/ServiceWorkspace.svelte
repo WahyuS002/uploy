@@ -856,6 +856,14 @@
 									     the record is demonstrably correct, and a link to instructions
 									     for something already done is just noise on the row. -->
 									{#if domain.status !== 'ready'}
+										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+										<button
+											type="button"
+											onclick={() => (dnsDomainId = domain.id)}
+											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+										>
+											Show DNS record
+										</button>
 										<!-- No countdown while the deploy is the missing piece: that
 										     check cannot succeed yet, and counting down to it is the
 										     exact reassurance that wasted somebody's afternoon. -->
@@ -866,23 +874,23 @@
 											     running out four times a minute while nothing happened
 											     would teach the reader to stop looking at it.
 
+											     Last on the row, and that is the whole of why it moved.
+											     "60s" narrowing to "9s" — and then to "checking now…" —
+											     changes the width of this text every time it crosses a
+											     digit, so anything downstream of it slid sideways once a
+											     second. With nothing to its right there is nothing to
+											     push. tabular-nums evens the digit shapes; only position
+											     fixes the digit count.
+
 											     Hidden from screen readers: a digit changing every second
 											     is unusable read aloud, and the state itself is announced
 											     by the text beside it the moment it arrives. -->
-											<span class="flex-none tabular-nums" aria-hidden="true">
+											<span class="flex-none whitespace-nowrap tabular-nums" aria-hidden="true">
 												{nextCheck.seconds > 0
 													? `next check in ${nextCheck.seconds}s`
 													: 'checking now…'}
 											</span>
 										{/if}
-										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
-										<button
-											type="button"
-											onclick={() => (dnsDomainId = domain.id)}
-											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
-										>
-											Show DNS record
-										</button>
 									{/if}
 								</div>
 							</div>

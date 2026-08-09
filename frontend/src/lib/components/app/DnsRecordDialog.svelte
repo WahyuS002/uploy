@@ -230,19 +230,29 @@
 						DNS record is active.
 					{:else if needsDeploy}
 						Deploy your app so Uploy can configure proxy routing and verify DNS.
+					{:else if nextCheck.seconds !== null}
+						<!-- The number counts to the reconciler's next pass, which is the only
+						     moment this can change — not to a refresh of our own, which would
+						     run out four times as often and mean nothing three of them.
+
+						     It ends the sentence rather than sitting inside it. "Checking again
+						     in 60s." narrowing to "9s." changes this text's width every time it
+						     crosses a digit, and the words that used to follow it slid along the
+						     line once a second — far enough, near the container edge, to re-wrap
+						     the paragraph. Nothing follows it now, so nothing moves.
+
+						     "Updates automatically" went with the move, and was not replaced:
+						     a countdown running down in front of the reader is the same promise,
+						     demonstrated instead of asserted. It still gets said to a screen
+						     reader, which cannot see the number tick.
+
+						     aria-hidden because a digit read aloud every second is unusable;
+						     the status text before it carries the state. -->
+						<span class="whitespace-nowrap tabular-nums" aria-hidden="true">
+							{nextCheck.seconds > 0 ? `Checking again in ${nextCheck.seconds}s.` : 'Checking now…'}
+						</span>
+						<span class="sr-only">Uploy re-checks this automatically.</span>
 					{:else}
-						{#if nextCheck.seconds !== null}
-							<!-- The number counts to the reconciler's next pass, which is the
-							     only moment this can change — not to a refresh of our own, which
-							     would run out four times as often and mean nothing three of them.
-							     aria-hidden because a digit read aloud every second is unusable;
-							     the status text either side of it carries the state. -->
-							<span class="tabular-nums" aria-hidden="true">
-								{nextCheck.seconds > 0
-									? `Checking again in ${nextCheck.seconds}s.`
-									: 'Checking now…'}
-							</span>
-						{/if}
 						Updates automatically.
 					{/if}
 				</span>
