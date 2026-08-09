@@ -133,6 +133,13 @@
 		return `${m}m ${s}s`;
 	}
 
+	function formatLogTimestamp(timestamp: string): string {
+		const date = new Date(timestamp);
+		if (Number.isNaN(date.getTime())) return '';
+		const pad = (value: number) => String(value).padStart(2, '0');
+		return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${String(date.getMilliseconds()).padStart(3, '0')}`;
+	}
+
 	let bannerStatus: 'active' | 'success' | 'error' = $derived.by(() => {
 		if (status === 'success') return 'success';
 		if (status === 'failed') return 'error';
@@ -278,7 +285,15 @@
 		aria-expanded={open}
 		class="flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-accent/60 focus-visible:bg-accent focus-visible:outline-none"
 	>
-		<span class="status-mark" data-status={bannerStatus} aria-hidden="true"></span>
+		<span
+			class={cn(
+				'h-2 w-2 flex-none rounded-full bg-muted-foreground',
+				bannerStatus === 'success' && 'bg-success',
+				bannerStatus === 'error' && 'bg-destructive',
+				bannerStatus === 'active' && 'motion-safe:animate-pulse'
+			)}
+			aria-hidden="true"
+		></span>
 		<span
 			class={cn(
 				'min-w-0 flex-1 truncate text-[15px] font-medium',
@@ -311,82 +326,38 @@
 	{/if}
 
 	{#if open}
-		<!-- Light, not a terminal. #171717 on a near-white achromatic panel read as
-		     a foreign object dropped into the page; --muted keeps it a surface of
-		     this design system and lets the one red carry real meaning. -->
-		<div bind:this={logScroller} class="log-output" class:fill>
+		<!-- Vercel-style rows: fixed timestamp column, preformatted output, and a
+		     restrained red surface for stderr rather than a terminal treatment. -->
+		<div
+			bind:this={logScroller}
+			class={cn(
+				'max-h-72 overflow-auto border-t border-border bg-card font-mono text-xs leading-5 text-foreground sm:text-sm',
+				fill && 'max-h-none min-h-0 flex-1'
+			)}
+			role="log"
+			aria-live="off"
+			aria-label="Deployment output"
+		>
 			{#each logs as log (log.order)}
-				<p class:err={log.type === 'stderr'}>{log.output}</p>
+				<div
+					class={cn(
+						'inline-flex w-full min-w-max cursor-default border-l-2 border-l-transparent align-top text-foreground select-text hover:bg-accent',
+						log.type === 'stderr' && 'bg-destructive/10 text-destructive hover:bg-destructive/15'
+					)}
+				>
+					<time
+						class="relative inline-flex w-28 flex-none items-center overflow-hidden py-0.5 pl-2 whitespace-nowrap text-muted-foreground tabular-nums select-none sm:w-32 sm:pl-4"
+						datetime={log.created_at}
+					>
+						{formatLogTimestamp(log.created_at)}
+					</time>
+					<div class="inline-flex min-w-0 flex-1 flex-col">
+						<p class="m-0 inline-block py-0.5 pr-3 pl-1 whitespace-pre sm:pr-6 sm:pl-3">
+							{log.output}
+						</p>
+					</div>
+				</div>
 			{/each}
 		</div>
 	{/if}
 </div>
-
-<style>
-	.status-mark {
-		flex: none;
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-		background: var(--muted-foreground);
-	}
-
-	.status-mark[data-status='success'] {
-		background: var(--success);
-	}
-
-	.status-mark[data-status='error'] {
-		background: var(--destructive);
-	}
-
-	/* Only the running state pulses: motion here means "still working", so a dot
-	   that keeps breathing after the deploy has landed would be lying. */
-	.status-mark[data-status='active'] {
-		animation: status-pulse 1.6s ease-in-out infinite;
-	}
-
-	@keyframes status-pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.35;
-		}
-	}
-
-	.log-output {
-		max-height: 18rem;
-		overflow-y: auto;
-		border-top: 1px solid var(--border);
-		background: var(--muted);
-		padding: 0.625rem 0.75rem;
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.75rem;
-		line-height: 1.55;
-		color: var(--foreground);
-		/* Wrap instead of scrolling sideways: image digests are one unbroken 71-char
-		   token, and in a 420px panel they were forcing a horizontal scrollbar under
-		   every log view. `anywhere` is what actually breaks them; `break-word`
-		   leaves an overflowing token alone. */
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-	}
-
-	/* Inside the stacked panel the output has the room, so it takes it: the cap
-	   comes off and the scroll happens over the full height instead of in a
-	   288px window with the panel empty underneath it. */
-	.log-output.fill {
-		max-height: none;
-		flex: 1 1 auto;
-		min-height: 0;
-	}
-
-	.log-output p {
-		margin: 0;
-	}
-
-	.log-output p.err {
-		color: var(--destructive);
-	}
-</style>
