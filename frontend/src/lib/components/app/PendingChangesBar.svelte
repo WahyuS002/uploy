@@ -338,7 +338,7 @@
 													cell.value === null && 'bg-muted/50',
 													cell.value !== null &&
 														cell.side === 'to' &&
-														'bg-success/10 text-foreground',
+														'bg-success-fill/10 text-foreground',
 													cell.value !== null &&
 														cell.side === 'from' &&
 														(change.type === 'removed'

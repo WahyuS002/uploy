@@ -96,7 +96,7 @@
 					<span
 						aria-hidden="true"
 						class="h-0.5 rounded-full transition-colors duration-150 {state === 'done'
-							? 'bg-success'
+							? 'bg-success-fill'
 							: state === 'current'
 								? 'bg-foreground'
 								: 'bg-border'}"

@@ -71,9 +71,10 @@
 	--canvas: #f6f6f6;
 	--canvas-dot: rgba(26, 27, 30, 0.125);
 	/* Functional state colours. Error/warning stay at the lowest saturation that
-	   still reads as a state. Success shares the brand hue on purpose: two
-	   unrelated greens read as a bug, so "primary" and "healthy" are told apart
-	   by shape — solid fill vs tint-and-text — not by hue. */
+	   still reads as a state. Success text and tint share the brand hue on
+	   purpose: two unrelated greens read as a bug, so "primary" and "healthy" are
+	   told apart by shape — solid fill vs tint-and-text — not by hue. The status
+	   *mark* is the one exception, see --success-fill below. */
 	--destructive: #c7342f;
 	--destructive-foreground: var(--pure-white);
 	--border: var(--hairline);
@@ -93,6 +94,11 @@
 	--info-muted: #f2f2f2;
 	--success: var(--mint-deep);
 	--success-muted: var(--mint-tint);
+	/* Healthy as a *mark*: the status dot, the completed step, the added-value
+	   tint. Split from --success because that one has to carry text at 5.1:1 and
+	   this one lands at 1.6:1 on white — bright enough to read as a signal across
+	   a panel, nowhere near enough to read as a word. Never put it on type. */
+	--success-fill: #50e2c2;
 	--warning: #8a6116;
 	--warning-muted: #f6efe1;
 }
@@ -144,6 +150,7 @@
 	--color-info-muted: var(--info-muted);
 	--color-success: var(--success);
 	--color-success-muted: var(--success-muted);
+	--color-success-fill: var(--success-fill);
 	--color-warning: var(--warning);
 	--color-warning-muted: var(--warning-muted);
 	/* The one gutter every shell edge sits on: the topbar's padding, the tab row's,
