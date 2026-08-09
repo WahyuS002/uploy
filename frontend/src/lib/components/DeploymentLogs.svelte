@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { Check, Copy, Search } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 	import { cn } from '$lib/components/ui/cn.js';
+	import IconButton from '$lib/components/ui/IconButton.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 	import { formatDuration } from '$lib/format-date';
 	import type { components } from '$lib/api/v1';
 
@@ -88,7 +91,11 @@
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
 
 	function updatePhaseFromLog(log: LogEntry) {
-		if (log.type === 'stderr' && log.phase !== 'failed' && !log.output.startsWith('command failed: ')) {
+		if (
+			log.type === 'stderr' &&
+			log.phase !== 'failed' &&
+			!log.output.startsWith('command failed: ')
+		) {
 			lastErrorReason = log.output;
 		}
 
@@ -146,13 +153,37 @@
 		if (status === 'failed') return 'error';
 		return 'active';
 	});
+	let query = $state('');
+	let visibleLogs = $derived.by(() => {
+		const normalizedQuery = query.trim().toLowerCase();
+		if (!normalizedQuery) return logs;
+		return logs.filter((log) => log.output.toLowerCase().includes(normalizedQuery));
+	});
+	let filtering = $derived(query.trim() !== '');
+	let searchInput = $state<HTMLInputElement | null>(null);
+	let copied = $state(false);
+
+	async function copyLogs() {
+		await navigator.clipboard.writeText(
+			logs.map((log) => `${formatLogTimestamp(log.created_at)} ${log.output}`).join('\n')
+		);
+		copied = true;
+		setTimeout(() => (copied = false), 2000);
+	}
+
+	function focusLogSearch(event: KeyboardEvent) {
+		if (event.key.toLowerCase() !== 'f' || !(event.metaKey || event.ctrlKey)) return;
+		event.preventDefault();
+		searchInput?.focus();
+		searchInput?.select();
+	}
 
 	// Follow the tail while streaming, but only if the reader is already at the
 	// bottom — yanking the view back down while someone is reading an earlier
 	// error is worse than not following at all.
 	let logScroller = $state<HTMLDivElement | null>(null);
 	$effect(() => {
-		const count = logs.length;
+		const count = visibleLogs.length;
 		const el = logScroller;
 		if (!el || count === 0) return;
 		const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
@@ -248,6 +279,8 @@
 	});
 </script>
 
+<svelte:window onkeydown={focusLogSearch} />
+
 <!-- One surface, not two. The status row and the output belong to the same
      deployment, so stacking a tinted banner on top of a separate black slab was
      saying it twice and spending two surfaces to do it. -->
@@ -281,6 +314,49 @@
 			{formatDuration(elapsedSeconds)}
 		</span>
 	</div>
+	<div class="flex items-center gap-2 border-t border-border px-3 py-2">
+		<IconButton
+			variant="ghost"
+			size="sm"
+			disabled={logs.length === 0}
+			aria-label={copied ? 'Deployment logs copied' : 'Copy deployment logs'}
+			title={copied ? 'Copied' : 'Copy deployment logs'}
+			onclick={copyLogs}
+		>
+			{#if copied}
+				<Check class="size-3.5" aria-hidden="true" />
+			{:else}
+				<Copy class="size-3.5" aria-hidden="true" />
+			{/if}
+		</IconButton>
+		<span class="flex-none text-[13px] text-muted-foreground tabular-nums">
+			{#if filtering}
+				{visibleLogs.length.toLocaleString()} of {logs.length.toLocaleString()} lines
+			{:else}
+				{logs.length.toLocaleString()} {logs.length === 1 ? 'line' : 'lines'}
+			{/if}
+		</span>
+		<div class="relative ml-auto min-w-0 flex-1 sm:max-w-72">
+			<Search
+				class="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+				aria-hidden="true"
+			/>
+			<Input
+				type="search"
+				size="sm"
+				bind:value={query}
+				bind:ref={searchInput}
+				placeholder="Find in logs"
+				aria-label="Find in deployment logs"
+				class="h-8 min-w-0 pr-10 pl-8"
+			/>
+			<kbd
+				class="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded border border-border bg-card px-1 py-0.5 font-sans text-[10px] text-muted-foreground"
+			>
+				⌘F
+			</kbd>
+		</div>
+	</div>
 
 	{#if currentSubtext && bannerStatus !== 'success'}
 		<p class="truncate border-t border-border px-3 py-2 text-[13px] text-muted-foreground">
@@ -308,30 +384,34 @@
 		aria-live="off"
 		aria-label="Deployment output"
 	>
-		{#each logs as log (log.order)}
-			<div
-				class={cn(
-					'flex w-full cursor-default border-l-2 border-l-transparent text-foreground select-text hover:bg-accent',
-					log.type === 'stderr' && 'bg-destructive/10 text-destructive hover:bg-destructive/15'
-				)}
-			>
-				<time
-					class="relative inline-flex w-28 flex-none items-start overflow-hidden py-0.5 pl-2 whitespace-nowrap text-muted-foreground tabular-nums select-none sm:w-32 sm:pl-4"
-					datetime={log.created_at}
+		{#if visibleLogs.length === 0 && filtering}
+			<p class="px-4 py-3 font-sans text-[13px] text-muted-foreground">No matching log lines.</p>
+		{:else}
+			{#each visibleLogs as log (log.order)}
+				<div
+					class={cn(
+						'flex w-full cursor-default border-l-2 border-l-transparent text-foreground select-text hover:bg-accent',
+						log.type === 'stderr' && 'bg-destructive/10 text-destructive hover:bg-destructive/15'
+					)}
 				>
-					{formatLogTimestamp(log.created_at)}
-				</time>
-				<div class="flex min-w-0 flex-1 flex-col">
-					<!-- pre-wrap, not pre: the log's own spacing and indentation is kept,
-					     but a line that outruns the panel breaks instead of widening it.
-					     wrap-anywhere on top of that, because the lines that overflow are
-					     usually one unbroken token — an image digest, a URL, a container
-					     id — with no space to break at. -->
-					<p class="m-0 py-0.5 pr-3 pl-1 wrap-anywhere whitespace-pre-wrap sm:pr-6 sm:pl-3">
-						{log.output}
-					</p>
+					<time
+						class="relative inline-flex w-28 flex-none items-start overflow-hidden py-0.5 pl-2 whitespace-nowrap text-muted-foreground tabular-nums select-none sm:w-32 sm:pl-4"
+						datetime={log.created_at}
+					>
+						{formatLogTimestamp(log.created_at)}
+					</time>
+					<div class="flex min-w-0 flex-1 flex-col">
+						<!-- pre-wrap, not pre: the log's own spacing and indentation is kept,
+						     but a line that outruns the panel breaks instead of widening it.
+						     wrap-anywhere on top of that, because the lines that overflow are
+						     usually one unbroken token — an image digest, a URL, a container
+						     id — with no space to break at. -->
+						<p class="m-0 py-0.5 pr-3 pl-1 wrap-anywhere whitespace-pre-wrap sm:pr-6 sm:pl-3">
+							{log.output}
+						</p>
+					</div>
 				</div>
-			</div>
-		{/each}
+			{/each}
+		{/if}
 	</div>
 </div>
