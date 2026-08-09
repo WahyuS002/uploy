@@ -8,15 +8,28 @@ import (
 	"github.com/WahyuS002/uploy/ssh"
 )
 
-// promoteDomainIfCertificateReady checks whether acme.json on the remote
-// server already contains a certificate for domain.  If it does, it marks
-// the application_domain row as ready.
+// promoteDomainIfCertificateReady marks a domain ready when it both resolves to
+// this server and has a certificate in acme.json.
+//
+// Both conditions, because neither is sufficient on its own. acme.json is never
+// pruned — a certificate outlives the DNS record that earned it, the router that
+// used it, and the domain row itself — so on its own it says only that the name
+// worked here once. That is how a hostname whose DNS record had been deleted
+// came to read as HTTPS active a minute after being added back.
+//
+// The check lives here rather than in each caller because both of them promote:
+// the deploy job waits for a certificate at the end of a deploy, and the
+// reconciler picks up whatever the deploy did not see. A gate in one of them is
+// a gate in neither.
 //
 // Return values:
-//   - certificatePresent=false, err=nil  → hostname not yet in acme.json
-//   - certificatePresent=true,  err=nil  → cert found and DB updated
-//   - certificatePresent=true,  err!=nil → cert found but DB update failed
-func promoteDomainIfCertificateReady(ctx context.Context, client *ssh.Client, domainID, domain string) (certificatePresent bool, err error) {
+//   - certificatePresent=false, err=nil  → not resolving here, or not in acme.json
+//   - certificatePresent=true,  err=nil  → both hold and the DB was updated
+//   - certificatePresent=true,  err!=nil → both hold but the DB update failed
+func promoteDomainIfCertificateReady(ctx context.Context, client *ssh.Client, serverHost, domainID, domain string) (certificatePresent bool, err error) {
+	if !domainPointsAtServer(ctx, domain, serverHost) {
+		return false, nil
+	}
 	if !proxy.HasCertificateForHostname(client, domain) {
 		return false, nil
 	}
