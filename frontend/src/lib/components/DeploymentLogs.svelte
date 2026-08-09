@@ -72,7 +72,7 @@
 		stop_container: 'Stopping Existing Container',
 		start_container: 'Starting Application',
 		tls_cert: 'Waiting for TLS Certificates',
-		complete: 'Deployment Complete',
+		complete: 'Deployment Logs',
 		failed: 'Deployment Failed'
 	};
 
@@ -88,11 +88,7 @@
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
 
 	function updatePhaseFromLog(log: LogEntry) {
-		if (
-			log.type === 'stderr' &&
-			log.phase !== 'failed' &&
-			!log.output.startsWith('command failed: ')
-		) {
+		if (log.type === 'stderr' && log.phase !== 'failed' && !log.output.startsWith('command failed: ')) {
 			lastErrorReason = log.output;
 		}
 
@@ -219,7 +215,7 @@
 		source.addEventListener('done', (e) => {
 			status = (e as MessageEvent).data;
 			if (status === 'success') {
-				currentPhase = 'Deployment Complete';
+				currentPhase = 'Deployment Logs';
 				currentSubtext = 'deployment success';
 			} else if (status === 'failed') {
 				currentPhase = 'Deployment Failed';
@@ -254,8 +250,7 @@
 
 <!-- One surface, not two. The status row and the output belong to the same
      deployment, so stacking a tinted banner on top of a separate black slab was
-     saying it twice and spending two surfaces to do it. The card stays neutral;
-     only the status mark and its label carry colour. -->
+     saying it twice and spending two surfaces to do it. -->
 <div
 	class={cn(
 		'overflow-hidden',
@@ -264,21 +259,20 @@
 	)}
 >
 	<div class="flex w-full items-center gap-2 px-3 py-2.5">
+		{#if bannerStatus !== 'success'}
+			<span
+				class={cn(
+					'h-2 w-2 flex-none rounded-full bg-muted-foreground',
+					bannerStatus === 'error' && 'bg-destructive',
+					bannerStatus === 'active' && 'motion-safe:animate-pulse'
+				)}
+				aria-hidden="true"
+			></span>
+		{/if}
 		<span
 			class={cn(
-				'h-2 w-2 flex-none rounded-full bg-muted-foreground',
-				bannerStatus === 'success' && 'bg-success-fill',
-				bannerStatus === 'error' && 'bg-destructive',
-				bannerStatus === 'active' && 'motion-safe:animate-pulse'
-			)}
-			aria-hidden="true"
-		></span>
-		<span
-			class={cn(
-				'min-w-0 flex-1 truncate text-[15px] font-medium',
-				bannerStatus === 'success' && 'text-success',
-				bannerStatus === 'error' && 'text-destructive',
-				bannerStatus === 'active' && 'text-foreground'
+				'min-w-0 flex-1 truncate text-[14px] font-medium text-foreground',
+				bannerStatus === 'error' && 'text-destructive'
 			)}
 		>
 			{currentPhase}

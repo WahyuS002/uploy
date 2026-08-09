@@ -53,8 +53,7 @@
 		easing: quintOut,
 		// Its own width plus the gap it floats off the edge, so it starts fully
 		// clear of the surface it covers; -24px is the height it falls from.
-		css: (_t: number, u: number) =>
-			`transform: translate3d(calc(${u} * (100% + 1rem)), ${u * -24}px, 0)`
+		css: (_t: number, u: number) => `transform: translate3d(calc(${u} * (100% + 1rem)), ${u * -24}px, 0)`
 	});
 </script>
 
@@ -103,14 +102,14 @@
 	<dl class="flex flex-none flex-wrap gap-x-10 gap-y-4 border-b border-border px-5 py-4">
 		<div class="min-w-0">
 			<dt class="text-[13px] text-muted-foreground">Created</dt>
-			<dd class="mt-1 truncate text-[15px] text-foreground">
+			<dd class="mt-1 truncate text-[14px] text-foreground">
 				<time datetime={deployment.created_at}>{formatDateTime(deployment.created_at)}</time>
 			</dd>
 		</div>
 
 		<div>
 			<dt class="text-[13px] text-muted-foreground">Status</dt>
-			<dd class="mt-1 flex items-center gap-2 text-[15px] text-foreground">
+			<dd class="mt-1 flex items-center gap-2 text-[14px] text-foreground">
 				<span
 					class={cn(
 						'h-2 w-2 flex-none rounded-full bg-muted-foreground',
@@ -126,7 +125,7 @@
 
 		<div>
 			<dt class="text-[13px] text-muted-foreground">Duration</dt>
-			<dd class="mt-1 flex items-center gap-2 text-[15px] text-foreground">
+			<dd class="mt-1 flex items-center gap-2 text-[14px] text-foreground">
 				<Clock class="h-4 w-4 flex-none text-muted-foreground" strokeWidth={1.75} />
 				<span class="tabular-nums">{formatDuration(elapsedSeconds)}</span>
 				<span class="text-muted-foreground">{formatRelativeTime(deployment.created_at)}</span>
@@ -136,7 +135,7 @@
 		{#if environmentName}
 			<div class="min-w-0">
 				<dt class="text-[13px] text-muted-foreground">Environment</dt>
-				<dd class="mt-1 flex items-center gap-2 text-[15px] text-foreground">
+				<dd class="mt-1 flex items-center gap-2 text-[14px] text-foreground">
 					<CircleArrowUp class="h-4 w-4 flex-none text-muted-foreground" strokeWidth={1.75} />
 					<span class="truncate">{environmentName}</span>
 				</dd>
