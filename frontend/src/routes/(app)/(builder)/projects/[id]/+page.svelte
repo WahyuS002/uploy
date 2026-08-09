@@ -216,6 +216,21 @@
 		services = services.map((s) => (s.id === updated.id ? updated : s));
 	}
 
+	/**
+	 * A deploy started from the inspector, joining the same set the bar's own
+	 * deploys go into. The bar asks for a deploy, so it has to stand down while
+	 * one is running whichever button started it — and until this, the panel's
+	 * Deploy left it up, asking for something already in progress next to it.
+	 *
+	 * No barDeploymentIds entry: that exists to hand a bar-started deployment's
+	 * logs to the panel, and this one came from the panel, which is already
+	 * streaming it.
+	 */
+	function noteDeployStarted(serviceId: string) {
+		deployingIds = new Set([...deployingIds, serviceId]);
+		watchDeployments();
+	}
+
 	function removeService(id: string) {
 		services = services.filter((s) => s.id !== id);
 		if (selectedServiceId === id) selectedServiceId = null;
@@ -861,6 +876,7 @@
 					externalDeploymentId={barDeploymentIds[selectedService.id] ?? null}
 					onDeleted={removeService}
 					onUpdated={updateService}
+					onDeployStarted={noteDeployStarted}
 				/>
 			</div>
 		</aside>

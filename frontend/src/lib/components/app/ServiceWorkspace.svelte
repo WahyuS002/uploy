@@ -50,6 +50,12 @@
 		onDeleted?: (id: string) => void;
 		/** The saved service, so the caller can refresh whatever it renders from. */
 		onUpdated?: (service: ServiceResponse) => void;
+		/**
+		 * A deployment this panel just started. The canvas needs to hear about it:
+		 * its pending-changes bar asks for a deploy, and one is now underway — so
+		 * it should recede, the same way it does for a deploy it started itself.
+		 */
+		onDeployStarted?: (serviceId: string, deploymentId: string) => void;
 		class?: string;
 		/**
 		 * The past deployment whose logs are open, or null. Bound rather than
@@ -67,6 +73,7 @@
 		externalDeploymentId = null,
 		onDeleted,
 		onUpdated,
+		onDeployStarted,
 		class: className,
 		openDeployment = $bindable<DeploymentResponse | null>(null)
 	}: Props = $props();
@@ -269,8 +276,14 @@
 	 *
 	 * Gated on has_deployed: a service that has never run is pending by
 	 * definition, and the empty state below already says to deploy it.
+	 *
+	 * And on nothing being underway: the deploy the banner asks for is running
+	 * two rows below it, with its log open. Asking for it anyway reads as the
+	 * request having been ignored.
 	 */
-	let awaitingDeploy = $derived(service.has_deployed && service.pending_change_count > 0);
+	let awaitingDeploy = $derived(
+		service.has_deployed && service.pending_change_count > 0 && !deployInFlight
+	);
 
 	/**
 	 * Deploy, then get out of the way and let the reader watch it happen.
@@ -361,7 +374,11 @@
 			}
 			if (data) {
 				localDeploymentId = data.deployment_id;
-				loadDeployments(svcId);
+				onDeployStarted?.(svcId, data.deployment_id);
+				// Awaited so `deploying` does not fall back to false before the
+				// in-progress deployment is in the list. Both feed deployInFlight, and
+				// the gap between them is long enough to flash the banner back on.
+				await loadDeployments(svcId);
 			}
 		} catch {
 			deployError = 'Network error';
