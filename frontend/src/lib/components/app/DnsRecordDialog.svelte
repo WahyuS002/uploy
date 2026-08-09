@@ -53,7 +53,7 @@
 		ready: {
 			icon: CheckCircle,
 			class: 'text-success',
-			label: 'Working — a certificate has been issued'
+			label: 'Verified'
 		},
 		error: {
 			icon: ExclamationTriangle,
@@ -153,7 +153,7 @@
 
 		<div class="px-5 pt-2 pb-5">
 			<p class="text-[13px] text-muted-foreground">
-				Add this record at whoever hosts DNS for
+				Add this DNS record at your domain provider for
 				<span class="font-mono text-foreground">{domain?.domain}</span>.
 			</p>
 
@@ -203,7 +203,7 @@
 								<!-- Same 12px inset as a copyable cell, reached without the nesting
 							     since there is no surface to hold off the edges here. -->
 								<td class="px-3 py-2.5 align-top text-muted-foreground">
-									your server's IP address{serverHost ? ` — Uploy reaches it at ${serverHost}` : ''}
+									your server's IP address{serverHost ? ` (Uploy reaches it at ${serverHost})` : ''}
 								</td>
 							{/if}
 						</tr>
@@ -227,11 +227,9 @@
 				<span class="min-w-0">
 					<span class={cn('font-medium', mark.class)}>{mark.label}.</span>
 					{#if domain?.status === 'ready'}
-						Nothing left to do here.
+						DNS record is active.
 					{:else if needsDeploy}
-						The record sends traffic to your server; deploying is what teaches the proxy to answer
-						for this name. Until then there is nothing for Uploy to detect, however correct the
-						record is.
+						Deploy your app so Uploy can configure proxy routing and verify DNS.
 					{:else}
 						{#if nextCheck.seconds !== null}
 							<!-- The number counts to the reconciler's next pass, which is the
@@ -245,7 +243,7 @@
 									: 'Checking now…'}
 							</span>
 						{/if}
-						Leave this open and it will update itself.
+						Updates automatically.
 					{/if}
 				</span>
 			</p>
