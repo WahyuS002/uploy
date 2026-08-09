@@ -67,8 +67,11 @@ type CreateServiceRow struct {
 // Note has_deployed = false implies has_pending_changes = true, so the pair only
 // ever expresses three real states.
 //
-// Known gap: editing only env vars or domains does not bump services.updated_at,
-// so those edits do not mark the service pending.
+// Domain changes bump services.updated_at through TouchService below, since the
+// routing they change lives in the container's labels and only a deploy can
+// rewrite those.
+//
+// Known gap: editing only env vars still does not mark the service pending.
 func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (CreateServiceRow, error) {
 	row := q.db.QueryRow(ctx, createService,
 		arg.Name,
@@ -408,6 +411,22 @@ func (q *Queries) ListServicesByWorkspace(ctx context.Context, workspaceID strin
 		return nil, err
 	}
 	return items, nil
+}
+
+const touchService = `-- name: TouchService :exec
+UPDATE services SET updated_at = NOW() WHERE id = $1
+`
+
+// Marks the service as changed without changing a column on it.
+//
+// Domains live in their own table, so adding or removing one used to leave
+// services.updated_at alone and the service went on looking deployed — while
+// the running container still carried the old set of Traefik rules, answering
+// for a hostname that had been removed. This is what closes the gap the header
+// of this file describes.
+func (q *Queries) TouchService(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, touchService, id)
+	return err
 }
 
 const updateService = `-- name: UpdateService :one

@@ -160,6 +160,13 @@ func DeleteService(ctx context.Context, id string) error {
 	return Queries.DeleteService(ctx, id)
 }
 
+// TouchService marks the service as changed since its last deploy. Call it
+// after changing something a deploy has to carry that does not live on the
+// services row itself.
+func TouchService(ctx context.Context, id string) error {
+	return Queries.TouchService(ctx, id)
+}
+
 func GetServiceWithServer(ctx context.Context, id string) (ServiceWithServer, error) {
 	row, err := Queries.GetServiceWithServer(ctx, id)
 	if err != nil {

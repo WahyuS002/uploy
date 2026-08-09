@@ -206,7 +206,6 @@
 	let domainInput = $state('');
 	let domainError = $state('');
 	let domainAdding = $state(false);
-	let needsRedeploy = $state(false);
 	// The domain whose DNS record is being explained, or null. Opened by adding
 	// one and reopenable from any row that is still waiting — a dialog you can
 	// only ever see once is a dead end for the person who dismissed it too fast.
@@ -258,12 +257,30 @@
 		!deployInFlight &&
 		(!lastDeployedAt || Date.parse(domain.created_at) > Date.parse(lastDeployedAt));
 
-	// Adding is visible in the list; removing is not, and it needs a deploy just
-	// the same — so the session flag stays on as the half this cannot derive.
-	let awaitingDeploy = $derived(needsRedeploy || domains.some(needsDeploy));
+	/**
+	 * Whether what is running still matches what is configured. The API derives
+	 * it from the service's own updated_at against its last successful deploy, and
+	 * domain changes now bump that — so this is true after adding a domain, after
+	 * removing one, and after editing the service, and it survives a reload.
+	 *
+	 * It replaced a session flag that a refresh erased. Removing a domain leaves
+	 * no row behind to notice, so the panel forgot that the container was still
+	 * answering for a hostname Uploy no longer knew about.
+	 *
+	 * Gated on has_deployed: a service that has never run is pending by
+	 * definition, and the empty state below already says to deploy it.
+	 */
+	let awaitingDeploy = $derived(service.has_deployed && service.has_pending_changes);
 
-	/** Deploy, then get out of the way and let the reader watch it happen. */
-	function deployFromDialog() {
+	/**
+	 * Deploy, then get out of the way and let the reader watch it happen.
+	 *
+	 * Every deploy started from somewhere other than the Deployments tab goes
+	 * through here. Pressing Deploy and staying on a list of domains means the
+	 * one thing you just asked for — the log — is on a tab you have to know to
+	 * go and find, and the row you are looking at will not change for a minute.
+	 */
+	function deployAndWatch() {
 		dnsDomainId = null;
 		activeTab = 'deployments';
 		deploy();
@@ -296,6 +313,18 @@
 		}
 	}
 
+	/**
+	 * Re-reads the service so has_pending_changes reflects a domain that was just
+	 * added or removed. The server bumps updated_at for both, but this panel holds
+	 * the service as a prop and would otherwise go on showing the copy it was
+	 * handed — correct only after a reload, which is the one moment nobody does.
+	 */
+	async function refreshService(id: string, token: number = loadToken) {
+		const { data } = await api.GET('/api/services/{id}', { params: { path: { id } } });
+		if (token !== loadToken || !data) return;
+		onUpdated?.(data);
+	}
+
 	async function loadDeployments(id: string, token: number = loadToken) {
 		const { data } = await api.GET('/api/services/{id}/deployments', {
 			params: { path: { id }, query: { limit: 10 } }
@@ -304,10 +333,24 @@
 		if (data) deployments = data;
 	}
 
+	/**
+	 * A finished deploy is the moment the service stops being out of date, and
+	 * nothing else notices it. The panel holds the service as a prop, so both the
+	 * banner here and the pending-changes bar on the canvas went on asking for a
+	 * deploy that had already landed — until a reload, which is the one thing
+	 * nobody does while watching a log they just started.
+	 *
+	 * Failures refresh too: they leave the service pending, and reading that back
+	 * is how the bar stays right either way.
+	 */
+	function onDeploymentDone() {
+		loadDeployments(svcId);
+		refreshService(svcId);
+	}
+
 	async function deploy() {
 		deployError = '';
 		deploying = true;
-		needsRedeploy = false;
 		try {
 			const { data, error } = await api.POST('/api/deployments', {
 				body: { service_id: svcId }
@@ -340,11 +383,9 @@
 				return;
 			}
 			if (data) {
-				// No needsRedeploy here: an added domain is in the list, so the
-				// derivation sees it. The flag is only for the half that leaves no
-				// trace to derive from.
 				domains = [...domains, data];
 				domainInput = '';
+				refreshService(svcId);
 				// The moment the name is accepted is the moment nobody knows what to
 				// do next, so the answer arrives unasked rather than waiting to be
 				// looked for.
@@ -362,7 +403,9 @@
 			params: { path: { id: svcId, domainId } }
 		});
 		domains = domains.filter((d) => d.id !== domainId);
-		needsRedeploy = true;
+		// The container on the server still answers for this hostname until the
+		// next deploy, so the service is out of date with its own config now.
+		refreshService(svcId);
 	}
 
 	async function addEnv() {
@@ -432,7 +475,6 @@
 		localDeploymentId = null;
 		deployError = '';
 		deploying = false;
-		needsRedeploy = false;
 
 		activeTab = 'deployments';
 		domainInput = '';
@@ -624,7 +666,7 @@
 						</div>
 					</div>
 					{#if deploymentId}
-						<DeploymentLogs {deploymentId} flush onDone={() => loadDeployments(svcId)} />
+						<DeploymentLogs {deploymentId} flush onDone={onDeploymentDone} />
 					{/if}
 				</div>
 			{:else}
@@ -736,7 +778,7 @@
 										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
 										<button
 											type="button"
-											onclick={deploy}
+											onclick={deployAndWatch}
 											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
 										>
 											Deploy
@@ -1040,7 +1082,7 @@
 	domain={dnsDomain}
 	serverHost={server?.host}
 	needsDeploy={!!dnsDomain && needsDeploy(dnsDomain)}
-	onDeploy={deployFromDialog}
+	onDeploy={deployAndWatch}
 	onClose={() => (dnsDomainId = null)}
 />
 
