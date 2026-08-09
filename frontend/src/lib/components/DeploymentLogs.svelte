@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { untrack } from 'svelte';
 	import { cn } from '$lib/components/ui/cn.js';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { ChevronDown } from '@steeze-ui/heroicons';
@@ -9,6 +9,20 @@
 
 	interface Props {
 		deploymentId: string;
+		/**
+		 * What the caller already knows about this deployment, when it knows
+		 * anything: "in_progress", "success" or "failed".
+		 *
+		 * Opening a deployment replays its whole log as a catch-up, so without this
+		 * a finished run arrived looking live — phases walking forward, an active
+		 * status dot, the panel springing open — and only corrected itself when the
+		 * replay reached the end. Every caller has the answer sitting next to the id
+		 * it passes; this is only a matter of handing it over.
+		 *
+		 * Omit it when genuinely unknown, and the component assumes a live run,
+		 * which is the safe guess for a deployment that was just started.
+		 */
+		deploymentStatus?: string;
 		onDone?: (status: string) => void;
 		/**
 		 * Drops the card's own border and radius so it can sit inside another card
@@ -25,12 +39,18 @@
 		fill?: boolean;
 	}
 
-	let { deploymentId, onDone, flush = false, fill = false }: Props = $props();
+	let { deploymentId, deploymentStatus, onDone, flush = false, fill = false }: Props = $props();
+
+	// Whether the run being streamed had already finished before this subscription
+	// opened. Set once per subscription, and read by the log handler to keep a
+	// replay from narrating itself as progress. A plain variable rather than
+	// state: it changes only when the stream is rebuilt, and the handlers that
+	// read it belong to that same stream.
+	let replaying = false;
 
 	let logs: LogEntry[] = $state([]);
 	let status: string = $state('in_progress');
 	let streamError: string = $state('');
-	let eventSource: EventSource | null = null;
 
 	const phaseLabels: Record<string, string> = {
 		connect: 'Connecting to Server',
@@ -67,6 +87,12 @@
 		const logTime = new Date(log.created_at).getTime();
 		startTime ??= logTime;
 		lastLogTime = logTime;
+
+		// The timestamps above are still wanted while replaying — they are what the
+		// final duration is measured from. The phase is not: walking the header
+		// through a run that ended days ago is the whole of what made a replay look
+		// like a deployment.
+		if (replaying) return;
 
 		if (!log.phase) return;
 
@@ -140,18 +166,66 @@
 		if (nearBottom) el.scrollTop = el.scrollHeight;
 	});
 
-	onMount(() => {
-		startTimer();
+	/**
+	 * One stream per deployment, torn down and reopened when the id changes.
+	 *
+	 * This used to be onMount, which runs once — but the service panel reuses this
+	 * component across deploys rather than remounting it, so a second deploy went
+	 * on listening to the first. That stream had already closed, so the output
+	 * stayed frozen on the previous run's last line, `done` never fired again, and
+	 * the header above it sat on "in progress" while the log underneath said
+	 * Complete.
+	 */
+	$effect(() => {
+		const id = deploymentId;
 
-		eventSource = new EventSource(`/api/deployments/${deploymentId}/logs`);
+		// untracked: only the id may rebuild the stream. The status changes from
+		// in_progress to success while a live deploy is being watched, and reading
+		// it normally would tear down and re-open the very stream that reported it.
+		const known = untrack(() => deploymentStatus);
+		replaying = known === 'success' || known === 'failed';
 
-		eventSource.onmessage = (e) => {
+		// None of this may survive into the next deployment: a phase left over from
+		// the last run, or its clock still counting, reads as progress on this one.
+		logs = [];
+		streamError = '';
+		currentSubtext = '';
+		lastErrorReason = '';
+		startTime = null;
+		lastLogTime = Date.now();
+		elapsedSeconds = 0;
+		userToggled = false;
+
+		// Seeded from what is already known rather than assumed live and corrected
+		// at the end of the replay. The correction is what was visible: a finished
+		// deploy opened with a pulsing dot on "Starting...", ran through every phase
+		// it had been through days ago, then snapped shut.
+		status = replaying ? known! : 'in_progress';
+		currentPhase = replaying
+			? (phaseLabels[known === 'failed' ? 'failed' : 'complete'] ?? 'Starting...')
+			: 'Starting...';
+		// A live run is worth watching even if the reader collapsed the last one; a
+		// finished successful one is the case nobody reads, which is what the
+		// auto-collapse below decides anyway — it just used to decide it a beat late,
+		// after the panel had already sprung open.
+		open = fill || !replaying || known !== 'success';
+
+		// No clock for a run that already stopped: it counts from the deployment's
+		// first log to *now*, which is how a two-day-old deploy once reported
+		// "1414m 44s". The real duration arrives with freezeElapsed on `done`.
+		if (!replaying) startTimer();
+
+		// Local to this run, so the handlers below close the stream they belong to
+		// rather than whichever one is current by the time they fire.
+		const source = new EventSource(`/api/deployments/${id}/logs`);
+
+		source.onmessage = (e) => {
 			const log: LogEntry = JSON.parse(e.data);
 			logs = [...logs, log];
 			updatePhaseFromLog(log);
 		};
 
-		eventSource.addEventListener('done', (e) => {
+		source.addEventListener('done', (e) => {
 			status = (e as MessageEvent).data;
 			if (status === 'success') {
 				currentPhase = 'Deployment Complete';
@@ -164,10 +238,10 @@
 			}
 			freezeElapsed();
 			onDone?.(status);
-			eventSource?.close();
+			source.close();
 		});
 
-		eventSource.addEventListener('stream-error', (e) => {
+		source.addEventListener('stream-error', (e) => {
 			const data = JSON.parse((e as MessageEvent).data);
 			streamError = data.message;
 			status = 'failed';
@@ -177,13 +251,13 @@
 			}
 			freezeElapsed();
 			onDone?.('failed');
-			eventSource?.close();
+			source.close();
 		});
-	});
 
-	onDestroy(() => {
-		stopTimer();
-		eventSource?.close();
+		return () => {
+			stopTimer();
+			source.close();
+		};
 	});
 </script>
 

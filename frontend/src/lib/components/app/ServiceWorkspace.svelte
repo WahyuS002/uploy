@@ -50,6 +50,12 @@
 		onDeleted?: (id: string) => void;
 		/** The saved service, so the caller can refresh whatever it renders from. */
 		onUpdated?: (service: ServiceResponse) => void;
+		/**
+		 * A deployment this panel just started. The canvas needs to hear about it:
+		 * its pending-changes bar asks for a deploy, and one is now underway — so
+		 * it should recede, the same way it does for a deploy it started itself.
+		 */
+		onDeployStarted?: (serviceId: string, deploymentId: string) => void;
 		class?: string;
 		/**
 		 * The past deployment whose logs are open, or null. Bound rather than
@@ -67,6 +73,7 @@
 		externalDeploymentId = null,
 		onDeleted,
 		onUpdated,
+		onDeployStarted,
 		class: className,
 		openDeployment = $bindable<DeploymentResponse | null>(null)
 	}: Props = $props();
@@ -79,18 +86,45 @@
 	let domains = $state<ServiceDomainResponse[]>([]);
 	let envs = $state<ServiceEnvResponse[]>([]);
 	let envsLoaded = $state(false);
-	// Derived rather than synced with an effect: the reset below and an incoming
-	// external id would otherwise race on service change, and which one won would
-	// come down to declaration order. A deploy started from this panel is the more
-	// specific fact, so it wins; otherwise the page's id shows through.
-	let localDeploymentId = $state<string | null>(null);
-	let deploymentId = $derived(localDeploymentId ?? externalDeploymentId);
+	/**
+	 * The deployment this panel is following — whichever was started most
+	 * recently, from here or from the canvas bar.
+	 *
+	 * It used to be `local ?? external`, which meant the panel's own id won by
+	 * being more specific. But it is only more specific while it is the newer of
+	 * the two: once the panel had deployed once, its id was never null again, so
+	 * every later deploy started from the bar — including ⌘+Enter, which the bar
+	 * listens for on the window — was masked behind a run that had already
+	 * finished. The panel then sat showing a stale log under a header describing
+	 * a deployment it was not streaming.
+	 */
+	let deploymentId = $state<string | null>(null);
+
+	// Adopting the bar's id rather than falling back to it is the whole fix. The
+	// two sources cannot race meaningfully any more: whichever writes last is by
+	// definition the most recent deploy, which is the one worth watching.
+	//
+	// And the tab follows it, for the same reason deployAndWatch switches after a
+	// deploy started in here: the log is the thing that was just asked for. The
+	// canvas already opens this panel for a bar deploy, so a *closed* one landed
+	// on Deployments anyway — but one left open on Domains or Variables stayed
+	// there, with the deploy it had just triggered running on a tab behind it.
+	$effect(() => {
+		if (!externalDeploymentId) return;
+		deploymentId = externalDeploymentId;
+		activeTab = 'deployments';
+	});
 	let deploying = $state(false);
 	let deployError = $state('');
 	let deployments = $state<DeploymentResponse[]>([]);
 	// The API returns them newest first, so the head is the current one and the
 	// tail is history — the same split the panel shows.
 	let latestDeployment = $derived(deployments[0] ?? null);
+	// Looked up by id rather than taken from the head of the list: the deployment
+	// being streamed is usually the newest, but it is the one being streamed that
+	// the log panel needs the status of. Undefined until the list has it, which
+	// reads as "still running" — the right guess for one just started.
+	let streamedStatus = $derived(deployments.find((d) => d.id === deploymentId)?.status);
 	let previousDeployments = $derived(deployments.slice(1));
 
 	// The service only carries a server_id and there is no GET /api/servers/{id},
@@ -269,8 +303,14 @@
 	 *
 	 * Gated on has_deployed: a service that has never run is pending by
 	 * definition, and the empty state below already says to deploy it.
+	 *
+	 * And on nothing being underway: the deploy the banner asks for is running
+	 * two rows below it, with its log open. Asking for it anyway reads as the
+	 * request having been ignored.
 	 */
-	let awaitingDeploy = $derived(service.has_deployed && service.has_pending_changes);
+	let awaitingDeploy = $derived(
+		service.has_deployed && service.pending_change_count > 0 && !deployInFlight
+	);
 
 	/**
 	 * Deploy, then get out of the way and let the reader watch it happen.
@@ -314,7 +354,7 @@
 	}
 
 	/**
-	 * Re-reads the service so has_pending_changes reflects a domain that was just
+	 * Re-reads the service so pending_change_count reflects a domain that was just
 	 * added or removed. The server bumps updated_at for both, but this panel holds
 	 * the service as a prop and would otherwise go on showing the copy it was
 	 * handed — correct only after a reload, which is the one moment nobody does.
@@ -360,8 +400,12 @@
 				return;
 			}
 			if (data) {
-				localDeploymentId = data.deployment_id;
-				loadDeployments(svcId);
+				deploymentId = data.deployment_id;
+				onDeployStarted?.(svcId, data.deployment_id);
+				// Awaited so `deploying` does not fall back to false before the
+				// in-progress deployment is in the list. Both feed deployInFlight, and
+				// the gap between them is long enough to flash the banner back on.
+				await loadDeployments(svcId);
 			}
 		} catch {
 			deployError = 'Network error';
@@ -472,7 +516,7 @@
 		envsLoaded = false;
 		deployments = [];
 		openDeployment = null;
-		localDeploymentId = null;
+		deploymentId = null;
 		deployError = '';
 		deploying = false;
 
@@ -624,8 +668,15 @@
 			     after a reload too, and a warning that vanished when you refreshed was
 			     how this went unnoticed for five minutes at a time. -->
 			{#if awaitingDeploy}
+				<!-- Counted, not named. This used to say "Domain routing is not live yet"
+				     for every kind of change, because nothing knew what had actually been
+				     edited — so a changed image or port was announced as a domain problem
+				     and sent the reader to the wrong tab. The count comes from the same
+				     comparison the review dialog itemises, so the two can never disagree. -->
 				<Alert tone="warning" class="mt-3 text-[13px]">
-					Domain routing is not live yet. Deploy to apply it.
+					{service.pending_change_count === 1
+						? '1 change is not on the server yet. Deploy to apply it.'
+						: `${service.pending_change_count} changes are not on the server yet. Deploy to apply them.`}
 				</Alert>
 			{/if}
 			{#if deployError}
@@ -666,7 +717,12 @@
 						</div>
 					</div>
 					{#if deploymentId}
-						<DeploymentLogs {deploymentId} flush onDone={onDeploymentDone} />
+						<DeploymentLogs
+							{deploymentId}
+							deploymentStatus={streamedStatus}
+							flush
+							onDone={onDeploymentDone}
+						/>
 					{/if}
 				</div>
 			{:else}
@@ -800,6 +856,14 @@
 									     the record is demonstrably correct, and a link to instructions
 									     for something already done is just noise on the row. -->
 									{#if domain.status !== 'ready'}
+										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+										<button
+											type="button"
+											onclick={() => (dnsDomainId = domain.id)}
+											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+										>
+											Show DNS record
+										</button>
 										<!-- No countdown while the deploy is the missing piece: that
 										     check cannot succeed yet, and counting down to it is the
 										     exact reassurance that wasted somebody's afternoon. -->
@@ -810,23 +874,23 @@
 											     running out four times a minute while nothing happened
 											     would teach the reader to stop looking at it.
 
+											     Last on the row, and that is the whole of why it moved.
+											     "60s" narrowing to "9s" — and then to "checking now…" —
+											     changes the width of this text every time it crosses a
+											     digit, so anything downstream of it slid sideways once a
+											     second. With nothing to its right there is nothing to
+											     push. tabular-nums evens the digit shapes; only position
+											     fixes the digit count.
+
 											     Hidden from screen readers: a digit changing every second
 											     is unusable read aloud, and the state itself is announced
 											     by the text beside it the moment it arrives. -->
-											<span class="flex-none tabular-nums" aria-hidden="true">
+											<span class="flex-none whitespace-nowrap tabular-nums" aria-hidden="true">
 												{nextCheck.seconds > 0
 													? `next check in ${nextCheck.seconds}s`
 													: 'checking now…'}
 											</span>
 										{/if}
-										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
-										<button
-											type="button"
-											onclick={() => (dnsDomainId = domain.id)}
-											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
-										>
-											Show DNS record
-										</button>
 									{/if}
 								</div>
 							</div>

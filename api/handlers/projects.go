@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -114,10 +115,17 @@ func (s *Server) CreateProjectFromImage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	svcResp, err := serviceResponse(r.Context(), svc)
+	if err != nil {
+		log.Printf("pending changes for new service %s: %v", svc.ID, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
+		return
+	}
+
 	respond.JSON(w, http.StatusCreated, gen.CreateProjectFromImageResponse{
 		Project:     projectToResponse(proj),
 		Environment: environmentToResponse(env),
-		Service:     serviceToResponse(svc),
+		Service:     svcResp,
 	})
 }
 

@@ -199,7 +199,7 @@ func RunDeploy(cfg DeployConfig) {
 					time.Sleep(tlsRetryInterval)
 				}
 				for domain, domainID := range unresolvedDomains {
-					certPresent, err := promoteDomainIfCertificateReady(ctx, client, domainID, domain)
+					certPresent, err := promoteDomainIfCertificateReady(ctx, client, cfg.Server.Host, domainID, domain)
 					if certPresent {
 						if err != nil {
 							log.Printf("SetDomainReady %s error: %v", domain, err)

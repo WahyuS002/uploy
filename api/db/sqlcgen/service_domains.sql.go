@@ -84,6 +84,41 @@ func (q *Queries) GetServiceDomainByID(ctx context.Context, id string) (ServiceD
 	return i, err
 }
 
+const listDomainNamesByServiceIDs = `-- name: ListDomainNamesByServiceIDs :many
+SELECT service_id, domain FROM service_domains
+WHERE service_id = ANY($1::text[])
+ORDER BY service_id, domain ASC
+`
+
+type ListDomainNamesByServiceIDsRow struct {
+	ServiceID string `json:"service_id"`
+	Domain    string `json:"domain"`
+}
+
+// Just the hostnames, for a whole set of services at once — what a deploy puts
+// in the container's Traefik rule, and so what a config snapshot holds. Sorted
+// within each service for the same reason the env vars are: the config is
+// compared as a document, and reordering must not read as a change.
+func (q *Queries) ListDomainNamesByServiceIDs(ctx context.Context, serviceIds []string) ([]ListDomainNamesByServiceIDsRow, error) {
+	rows, err := q.db.Query(ctx, listDomainNamesByServiceIDs, serviceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDomainNamesByServiceIDsRow{}
+	for rows.Next() {
+		var i ListDomainNamesByServiceIDsRow
+		if err := rows.Scan(&i.ServiceID, &i.Domain); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDomainsByService = `-- name: ListDomainsByService :many
 SELECT id, service_id, domain, is_primary, status, last_error, last_reconciled_at, ready_at, created_at, updated_at
 FROM service_domains WHERE service_id = $1
@@ -121,8 +156,8 @@ func (q *Queries) ListDomainsByService(ctx context.Context, serviceID string) ([
 	return items, nil
 }
 
-const listUnresolvedDomains = `-- name: ListUnresolvedDomains :many
-SELECT d.id, d.domain, d.service_id,
+const listDomainsToReconcile = `-- name: ListDomainsToReconcile :many
+SELECT d.id, d.domain, d.status, d.service_id,
        s.server_id,
        srv.host, srv.port AS server_port, srv.ssh_user,
        k.private_key
@@ -130,7 +165,7 @@ FROM service_domains d
 JOIN services s ON s.id = d.service_id
 JOIN servers srv ON srv.id = s.server_id
 JOIN ssh_keys k ON k.id = srv.ssh_key_id
-WHERE d.status IN ('pending', 'error')
+WHERE d.status IN ('pending', 'error', 'ready')
   AND EXISTS (
     SELECT 1 FROM deployments dep
     WHERE dep.service_id = d.service_id
@@ -139,9 +174,10 @@ WHERE d.status IN ('pending', 'error')
   )
 `
 
-type ListUnresolvedDomainsRow struct {
+type ListDomainsToReconcileRow struct {
 	ID         string `json:"id"`
 	Domain     string `json:"domain"`
+	Status     string `json:"status"`
 	ServiceID  string `json:"service_id"`
 	ServerID   string `json:"server_id"`
 	Host       string `json:"host"`
@@ -150,7 +186,7 @@ type ListUnresolvedDomainsRow struct {
 	PrivateKey string `json:"private_key"`
 }
 
-// The domains worth asking the server about.
+// The domains worth checking, ready ones included.
 //
 // Readiness is read off acme.json, which is Traefik's store for the whole
 // server and is never pruned: a hostname that got a certificate once stays
@@ -164,18 +200,26 @@ type ListUnresolvedDomainsRow struct {
 // during a deploy, so a certificate can only belong to this domain if a
 // successful deploy happened after the domain row existed. An older one issued
 // the stale entry and does not count.
-func (q *Queries) ListUnresolvedDomains(ctx context.Context) ([]ListUnresolvedDomainsRow, error) {
-	rows, err := q.db.Query(ctx, listUnresolvedDomains)
+//
+// Ready domains are here too, which is why this is no longer "unresolved". A
+// certificate proves the name worked once; nothing about it expires when the DNS
+// record is deleted, so a domain that stopped resolving would otherwise keep
+// claiming HTTPS forever. Re-checking is what lets one fall back to pending, and
+// the DNS half of the check costs no SSH, so a pass over settled domains is
+// nearly free.
+func (q *Queries) ListDomainsToReconcile(ctx context.Context) ([]ListDomainsToReconcileRow, error) {
+	rows, err := q.db.Query(ctx, listDomainsToReconcile)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListUnresolvedDomainsRow{}
+	items := []ListDomainsToReconcileRow{}
 	for rows.Next() {
-		var i ListUnresolvedDomainsRow
+		var i ListDomainsToReconcileRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Domain,
+			&i.Status,
 			&i.ServiceID,
 			&i.ServerID,
 			&i.Host,
@@ -209,6 +253,20 @@ func (q *Queries) SetDomainError(ctx context.Context, arg SetDomainErrorParams) 
 	return err
 }
 
+const setDomainPending = `-- name: SetDomainPending :exec
+UPDATE service_domains
+SET status = 'pending', last_error = NULL, last_reconciled_at = NOW(), updated_at = NOW()
+WHERE id = $1
+`
+
+// Puts a domain back to waiting, keeping ready_at as the record that it did work
+// once. Used when a domain that had a certificate stops resolving to this server
+// — the certificate is still on disk and still proves nothing about now.
+func (q *Queries) SetDomainPending(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, setDomainPending, id)
+	return err
+}
+
 const setDomainReady = `-- name: SetDomainReady :exec
 UPDATE service_domains
 SET status = 'ready', ready_at = NOW(), last_error = NULL, last_reconciled_at = NOW(), updated_at = NOW()
@@ -217,6 +275,19 @@ WHERE id = $1
 
 func (q *Queries) SetDomainReady(ctx context.Context, id string) error {
 	_, err := q.db.Exec(ctx, setDomainReady, id)
+	return err
+}
+
+const touchDomainChecked = `-- name: TouchDomainChecked :exec
+UPDATE service_domains
+SET last_reconciled_at = NOW(), updated_at = NOW()
+WHERE id = $1
+`
+
+// Records that a domain was looked at and nothing changed, so the panel can say
+// when the answer was last confirmed rather than only when it last moved.
+func (q *Queries) TouchDomainChecked(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, touchDomainChecked, id)
 	return err
 }
 

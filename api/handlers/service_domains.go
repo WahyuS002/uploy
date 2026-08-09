@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -66,14 +65,6 @@ func (s *Server) CreateServiceDomain(w http.ResponseWriter, r *http.Request, id 
 			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to add domain"})
 		}
 		return
-	}
-
-	// The routing this changes lives in the container's labels, which only a
-	// deploy rewrites — so the service is now out of date with its own config.
-	// Logged rather than returned: the domain was created, and failing the
-	// request over the bookkeeping would leave the caller thinking it was not.
-	if err := db.TouchService(r.Context(), id); err != nil {
-		log.Printf("TouchService after adding domain to service %s: %v", id, err)
 	}
 
 	respond.JSON(w, http.StatusCreated, domainToResponse(d))
@@ -204,15 +195,10 @@ func (s *Server) DeleteServiceDomain(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 
-	// The row is gone from Uploy, but the running container still carries the
-	// Traefik rule that names this hostname and will keep answering for it until
-	// a deploy rewrites its labels. Marking the service pending is what puts that
-	// in front of somebody — this direction leaves no domain row to notice it on.
-	if err := db.TouchService(r.Context(), id); err != nil {
-		log.Printf("TouchService after removing domain from service %s: %v", id, err)
-	}
-
-	w.Header().Set("X-Uploy-Action", "redeploy-recommended")
+	// Nothing to mark: the domain is part of the service's config, so its absence
+	// is already the difference between what is configured and what the last
+	// deployment shipped. The container still answers for this hostname until a
+	// deploy rewrites its labels, and the diff is what says so.
 	w.WriteHeader(http.StatusNoContent)
 }
 

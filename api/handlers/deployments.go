@@ -54,24 +54,19 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load env vars and domains
-	envPairs, err := db.GetServiceEnvPairs(r.Context(), svcWithServer.ID)
+	// The config is assembled once, here, and used for both things that follow:
+	// the job renders it into the `docker run`, and the deployment row stores it
+	// as the record of what this deploy put on the server. Two assemblies would
+	// be two answers to "what is deployed", and the diff would believe the wrong
+	// one the moment they drifted.
+	cfg, err := db.ServiceConfigOf(r.Context(), svcWithServer.Service)
 	if err != nil {
-		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load environment variables"})
+		log.Printf("ServiceConfigOf id=%s error: %v", svcWithServer.ID, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load service configuration"})
 		return
 	}
 
-	svcDomains, err := db.ListDomainsByService(r.Context(), svcWithServer.ID)
-	if err != nil {
-		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load domains"})
-		return
-	}
-	domainNames := make([]string, len(svcDomains))
-	for i, d := range svcDomains {
-		domainNames[i] = d.Domain
-	}
-
-	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID, svcWithServer.ID)
+	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID, svcWithServer.ID, cfg)
 	if err != nil {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create deployment"})
 		return
@@ -80,13 +75,13 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 	go jobs.RunDeploy(jobs.DeployConfig{
 		DeploymentID:  deployment.ID,
 		ServiceID:     svcWithServer.ID,
-		Image:         svcWithServer.Image,
-		ContainerName: svcWithServer.ContainerName,
-		ContainerPort: int(svcWithServer.ContainerPort),
-		HostPort:      hostPortOrZero(svcWithServer.HostPort),
-		EnvVars:       envPairs,
-		Domains:       domainNames,
-		ServerID:      svcWithServer.ServerID,
+		Image:         cfg.Image,
+		ContainerName: cfg.ContainerName,
+		ContainerPort: int(cfg.ContainerPort),
+		HostPort:      hostPortOrZero(cfg.HostPort),
+		EnvVars:       cfg.EnvVars,
+		Domains:       cfg.Domains,
+		ServerID:      cfg.ServerID,
 		Server: ssh.ServerConfig{
 			Host:       svcWithServer.Host,
 			Port:       int(svcWithServer.ServerPort),

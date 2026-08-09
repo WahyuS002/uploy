@@ -27,8 +27,9 @@ type Service struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	// Derived per query, never stored. See db/queries/services.sql for the rule.
-	HasPendingChanges bool `json:"has_pending_changes"`
-	HasDeployed       bool `json:"has_deployed"`
+	// Whether the service is *pending* is not here: it is a comparison against
+	// what the last deployment shipped, which lives in db/service_config.go.
+	HasDeployed bool `json:"has_deployed"`
 }
 
 // ServiceWithServer is used during deploy — one JOIN query gets everything.
@@ -62,7 +63,7 @@ func CreateService(ctx context.Context, name, image, containerName string, conta
 		ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-		HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
+		HasDeployed: r.HasDeployed,
 	}, nil
 }
 
@@ -76,7 +77,7 @@ func GetServiceByID(ctx context.Context, id string) (Service, error) {
 		ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-		HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
+		HasDeployed: r.HasDeployed,
 	}, nil
 }
 
@@ -92,7 +93,7 @@ func ListServicesByWorkspace(ctx context.Context, workspaceID string) ([]Service
 			ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-			HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
+			HasDeployed: r.HasDeployed,
 		}
 	}
 	return services, nil
@@ -110,7 +111,7 @@ func ListServicesByEnvironment(ctx context.Context, environmentID string) ([]Ser
 			ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-			HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
+			HasDeployed: r.HasDeployed,
 		}
 	}
 	return services, nil
@@ -128,7 +129,7 @@ func ListServicesByProject(ctx context.Context, projectID string) ([]Service, er
 			ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 			Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-			HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
+			HasDeployed: r.HasDeployed,
 		}
 	}
 	return services, nil
@@ -152,19 +153,12 @@ func UpdateService(ctx context.Context, id, name, image, containerName string, c
 		ContainerPort: r.ContainerPort, HostPort: int32PtrFromPgInt4(r.HostPort), ServerID: r.ServerID, WorkspaceID: r.WorkspaceID,
 		Kind: r.Kind, ProjectID: r.ProjectID, EnvironmentID: r.EnvironmentID,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-		HasPendingChanges: r.HasPendingChanges, HasDeployed: r.HasDeployed,
+		HasDeployed: r.HasDeployed,
 	}, nil
 }
 
 func DeleteService(ctx context.Context, id string) error {
 	return Queries.DeleteService(ctx, id)
-}
-
-// TouchService marks the service as changed since its last deploy. Call it
-// after changing something a deploy has to carry that does not live on the
-// services row itself.
-func TouchService(ctx context.Context, id string) error {
-	return Queries.TouchService(ctx, id)
 }
 
 func GetServiceWithServer(ctx context.Context, id string) (ServiceWithServer, error) {
@@ -182,7 +176,7 @@ func GetServiceWithServer(ctx context.Context, id string) (ServiceWithServer, er
 			ContainerPort: row.ContainerPort, HostPort: int32PtrFromPgInt4(row.HostPort), ServerID: row.ServerID, WorkspaceID: row.WorkspaceID,
 			Kind: row.Kind, ProjectID: row.ProjectID, EnvironmentID: row.EnvironmentID,
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
-			HasPendingChanges: row.HasPendingChanges, HasDeployed: row.HasDeployed,
+			HasDeployed: row.HasDeployed,
 		},
 		Host:        row.Host,
 		ServerPort:  row.ServerPort,

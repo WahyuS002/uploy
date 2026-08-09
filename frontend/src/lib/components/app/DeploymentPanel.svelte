@@ -84,11 +84,14 @@
 	     height and scrolls in place rather than sitting as a 288px slab with dead
 	     space under it. -->
 	<div class="min-h-0 flex-1 overflow-hidden p-5">
-		<!-- Keyed: picking another deployment while the panel is open has to reopen
-		     the stream, and the log component only connects on mount. -->
-		{#key deployment.id}
-			<DeploymentLogs deploymentId={deployment.id} fill />
-		{/key}
+		<!-- No {#key} any more: the log component reopens its own stream when the id
+		     changes, so forcing a remount here was working around something that is
+		     now handled where it belongs.
+
+		     This panel only ever shows deployments that already ran, so the status
+		     always arrives with the id — which is what stops a two-day-old run from
+		     replaying as though it were happening. -->
+		<DeploymentLogs deploymentId={deployment.id} deploymentStatus={deployment.status} fill />
 	</div>
 </aside>
 

@@ -17,8 +17,6 @@ const createService = `-- name: CreateService :one
 INSERT INTO services (name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    -- A service created one statement ago has no deployments, so it is always pending.
-    TRUE::boolean AS has_pending_changes,
     FALSE::boolean AS has_deployed
 `
 
@@ -36,42 +34,37 @@ type CreateServiceParams struct {
 }
 
 type CreateServiceRow struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Image             string      `json:"image"`
-	ContainerName     string      `json:"container_name"`
-	ContainerPort     int32       `json:"container_port"`
-	HostPort          pgtype.Int4 `json:"host_port"`
-	ServerID          string      `json:"server_id"`
-	WorkspaceID       string      `json:"workspace_id"`
-	Kind              string      `json:"kind"`
-	ProjectID         string      `json:"project_id"`
-	EnvironmentID     string      `json:"environment_id"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	HasPendingChanges bool        `json:"has_pending_changes"`
-	HasDeployed       bool        `json:"has_deployed"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
 }
 
-// has_pending_changes is derived, not stored: a service is pending when no
-// *successful* deployment has landed at or after its last row change. That
-// covers both cases the canvas cares about — never deployed at all, and edited
-// since the last deploy. Derived rather than denormalised onto services so it
-// cannot drift out of sync with the deployments table, and expressed here
-// rather than in the client so the API and the UI can never disagree on what
-// "pending" means. idx_deployments_service_id keeps the lookup cheap.
-//
-// has_deployed rides alongside it purely to tell the two pending cases apart:
+// has_deployed is derived, not stored: true once at least one deployment of the
+// service has succeeded. It is what tells the two undeployed states apart —
 // false means the service has never landed on a server (the review dialog says
-// "will be added"), true means it is live and edited since ("will be updated").
-// Note has_deployed = false implies has_pending_changes = true, so the pair only
-// ever expresses three real states.
+// "will be added"), true means it is live ("will be updated").
+// idx_deployments_service_id keeps the lookup cheap.
 //
-// Domain changes bump services.updated_at through TouchService below, since the
-// routing they change lives in the container's labels and only a deploy can
-// rewrite those.
-//
-// Known gap: editing only env vars still does not mark the service pending.
+// Whether a service is *pending* is deliberately not here. It used to be: a
+// subquery comparing services.updated_at against the last successful deploy.
+// That asked "was this row edited since", which is a different question from
+// "does the server still match", and the two came apart in both directions —
+// env vars and domains live in their own tables and never moved updated_at, so
+// edits went unmarked, while an edit made and undone left the row marked
+// forever. Pending is now a comparison between the service's current config and
+// the config its last successful deployment actually shipped, which is the only
+// form of the question that can also say what differs. See db/service_config.go.
 func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (CreateServiceRow, error) {
 	row := q.db.QueryRow(ctx, createService,
 		arg.Name,
@@ -100,7 +93,6 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (C
 		&i.EnvironmentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.HasPendingChanges,
 		&i.HasDeployed,
 	)
 	return i, err
@@ -117,27 +109,25 @@ func (q *Queries) DeleteService(ctx context.Context, id string) error {
 
 const getServiceByID = `-- name: GetServiceByID :one
 SELECT id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
     (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.id = $1
 `
 
 type GetServiceByIDRow struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Image             string      `json:"image"`
-	ContainerName     string      `json:"container_name"`
-	ContainerPort     int32       `json:"container_port"`
-	HostPort          pgtype.Int4 `json:"host_port"`
-	ServerID          string      `json:"server_id"`
-	WorkspaceID       string      `json:"workspace_id"`
-	Kind              string      `json:"kind"`
-	ProjectID         string      `json:"project_id"`
-	EnvironmentID     string      `json:"environment_id"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	HasPendingChanges bool        `json:"has_pending_changes"`
-	HasDeployed       bool        `json:"has_deployed"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
 }
 
 func (q *Queries) GetServiceByID(ctx context.Context, id string) (GetServiceByIDRow, error) {
@@ -157,7 +147,6 @@ func (q *Queries) GetServiceByID(ctx context.Context, id string) (GetServiceByID
 		&i.EnvironmentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.HasPendingChanges,
 		&i.HasDeployed,
 	)
 	return i, err
@@ -168,7 +157,6 @@ SELECT
     s.id, s.name, s.image, s.container_name, s.container_port, s.host_port,
     s.server_id, s.workspace_id, s.kind, s.project_id, s.environment_id,
     s.created_at, s.updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = s.id AND d.status = 'success' AND d.created_at >= s.updated_at))::boolean AS has_pending_changes,
     (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = s.id AND d.status = 'success'))::boolean AS has_deployed,
     srv.host, srv.port AS server_port, srv.ssh_user,
     srv.proxy_status,
@@ -180,26 +168,25 @@ WHERE s.id = $1
 `
 
 type GetServiceWithServerRow struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Image             string      `json:"image"`
-	ContainerName     string      `json:"container_name"`
-	ContainerPort     int32       `json:"container_port"`
-	HostPort          pgtype.Int4 `json:"host_port"`
-	ServerID          string      `json:"server_id"`
-	WorkspaceID       string      `json:"workspace_id"`
-	Kind              string      `json:"kind"`
-	ProjectID         string      `json:"project_id"`
-	EnvironmentID     string      `json:"environment_id"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	HasPendingChanges bool        `json:"has_pending_changes"`
-	HasDeployed       bool        `json:"has_deployed"`
-	Host              string      `json:"host"`
-	ServerPort        int32       `json:"server_port"`
-	SshUser           string      `json:"ssh_user"`
-	ProxyStatus       string      `json:"proxy_status"`
-	PrivateKey        string      `json:"private_key"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
+	Host          string      `json:"host"`
+	ServerPort    int32       `json:"server_port"`
+	SshUser       string      `json:"ssh_user"`
+	ProxyStatus   string      `json:"proxy_status"`
+	PrivateKey    string      `json:"private_key"`
 }
 
 func (q *Queries) GetServiceWithServer(ctx context.Context, id string) (GetServiceWithServerRow, error) {
@@ -219,7 +206,6 @@ func (q *Queries) GetServiceWithServer(ctx context.Context, id string) (GetServi
 		&i.EnvironmentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.HasPendingChanges,
 		&i.HasDeployed,
 		&i.Host,
 		&i.ServerPort,
@@ -232,27 +218,25 @@ func (q *Queries) GetServiceWithServer(ctx context.Context, id string) (GetServi
 
 const listServicesByEnvironment = `-- name: ListServicesByEnvironment :many
 SELECT id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
     (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.environment_id = $1 ORDER BY created_at DESC
 `
 
 type ListServicesByEnvironmentRow struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Image             string      `json:"image"`
-	ContainerName     string      `json:"container_name"`
-	ContainerPort     int32       `json:"container_port"`
-	HostPort          pgtype.Int4 `json:"host_port"`
-	ServerID          string      `json:"server_id"`
-	WorkspaceID       string      `json:"workspace_id"`
-	Kind              string      `json:"kind"`
-	ProjectID         string      `json:"project_id"`
-	EnvironmentID     string      `json:"environment_id"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	HasPendingChanges bool        `json:"has_pending_changes"`
-	HasDeployed       bool        `json:"has_deployed"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
 }
 
 func (q *Queries) ListServicesByEnvironment(ctx context.Context, environmentID string) ([]ListServicesByEnvironmentRow, error) {
@@ -278,7 +262,6 @@ func (q *Queries) ListServicesByEnvironment(ctx context.Context, environmentID s
 			&i.EnvironmentID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.HasPendingChanges,
 			&i.HasDeployed,
 		); err != nil {
 			return nil, err
@@ -293,27 +276,25 @@ func (q *Queries) ListServicesByEnvironment(ctx context.Context, environmentID s
 
 const listServicesByProject = `-- name: ListServicesByProject :many
 SELECT id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
     (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.project_id = $1 ORDER BY created_at DESC
 `
 
 type ListServicesByProjectRow struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Image             string      `json:"image"`
-	ContainerName     string      `json:"container_name"`
-	ContainerPort     int32       `json:"container_port"`
-	HostPort          pgtype.Int4 `json:"host_port"`
-	ServerID          string      `json:"server_id"`
-	WorkspaceID       string      `json:"workspace_id"`
-	Kind              string      `json:"kind"`
-	ProjectID         string      `json:"project_id"`
-	EnvironmentID     string      `json:"environment_id"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	HasPendingChanges bool        `json:"has_pending_changes"`
-	HasDeployed       bool        `json:"has_deployed"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
 }
 
 func (q *Queries) ListServicesByProject(ctx context.Context, projectID string) ([]ListServicesByProjectRow, error) {
@@ -339,7 +320,6 @@ func (q *Queries) ListServicesByProject(ctx context.Context, projectID string) (
 			&i.EnvironmentID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.HasPendingChanges,
 			&i.HasDeployed,
 		); err != nil {
 			return nil, err
@@ -354,27 +334,25 @@ func (q *Queries) ListServicesByProject(ctx context.Context, projectID string) (
 
 const listServicesByWorkspace = `-- name: ListServicesByWorkspace :many
 SELECT id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    (NOT EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success' AND d.created_at >= services.updated_at))::boolean AS has_pending_changes,
     (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 FROM services WHERE services.workspace_id = $1 ORDER BY created_at DESC
 `
 
 type ListServicesByWorkspaceRow struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Image             string      `json:"image"`
-	ContainerName     string      `json:"container_name"`
-	ContainerPort     int32       `json:"container_port"`
-	HostPort          pgtype.Int4 `json:"host_port"`
-	ServerID          string      `json:"server_id"`
-	WorkspaceID       string      `json:"workspace_id"`
-	Kind              string      `json:"kind"`
-	ProjectID         string      `json:"project_id"`
-	EnvironmentID     string      `json:"environment_id"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	HasPendingChanges bool        `json:"has_pending_changes"`
-	HasDeployed       bool        `json:"has_deployed"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
 }
 
 func (q *Queries) ListServicesByWorkspace(ctx context.Context, workspaceID string) ([]ListServicesByWorkspaceRow, error) {
@@ -400,7 +378,6 @@ func (q *Queries) ListServicesByWorkspace(ctx context.Context, workspaceID strin
 			&i.EnvironmentID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.HasPendingChanges,
 			&i.HasDeployed,
 		); err != nil {
 			return nil, err
@@ -413,31 +390,11 @@ func (q *Queries) ListServicesByWorkspace(ctx context.Context, workspaceID strin
 	return items, nil
 }
 
-const touchService = `-- name: TouchService :exec
-UPDATE services SET updated_at = NOW() WHERE id = $1
-`
-
-// Marks the service as changed without changing a column on it.
-//
-// Domains live in their own table, so adding or removing one used to leave
-// services.updated_at alone and the service went on looking deployed — while
-// the running container still carried the old set of Traefik rules, answering
-// for a hostname that had been removed. This is what closes the gap the header
-// of this file describes.
-func (q *Queries) TouchService(ctx context.Context, id string) error {
-	_, err := q.db.Exec(ctx, touchService, id)
-	return err
-}
-
 const updateService = `-- name: UpdateService :one
 UPDATE services
 SET name = $2, image = $3, container_name = $4, container_port = $5, host_port = $6, server_id = $7, updated_at = NOW()
 WHERE services.id = $1
 RETURNING id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
-    -- updated_at was just set to NOW(), so nothing can have deployed after it.
-    TRUE::boolean AS has_pending_changes,
-    -- has_deployed still needs the real lookup: an edited service may well have
-    -- deployed before, which is exactly what tells "update" apart from "create".
     (EXISTS (SELECT 1 FROM deployments d WHERE d.service_id = services.id AND d.status = 'success'))::boolean AS has_deployed
 `
 
@@ -452,21 +409,20 @@ type UpdateServiceParams struct {
 }
 
 type UpdateServiceRow struct {
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Image             string      `json:"image"`
-	ContainerName     string      `json:"container_name"`
-	ContainerPort     int32       `json:"container_port"`
-	HostPort          pgtype.Int4 `json:"host_port"`
-	ServerID          string      `json:"server_id"`
-	WorkspaceID       string      `json:"workspace_id"`
-	Kind              string      `json:"kind"`
-	ProjectID         string      `json:"project_id"`
-	EnvironmentID     string      `json:"environment_id"`
-	CreatedAt         time.Time   `json:"created_at"`
-	UpdatedAt         time.Time   `json:"updated_at"`
-	HasPendingChanges bool        `json:"has_pending_changes"`
-	HasDeployed       bool        `json:"has_deployed"`
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
 }
 
 func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (UpdateServiceRow, error) {
@@ -494,7 +450,6 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (U
 		&i.EnvironmentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.HasPendingChanges,
 		&i.HasDeployed,
 	)
 	return i, err

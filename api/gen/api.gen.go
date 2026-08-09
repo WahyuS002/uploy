@@ -19,6 +19,27 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
+// Defines values for ConfigChangeType.
+const (
+	Added   ConfigChangeType = "added"
+	Changed ConfigChangeType = "changed"
+	Removed ConfigChangeType = "removed"
+)
+
+// Valid indicates whether the value is a known member of the ConfigChangeType enum.
+func (e ConfigChangeType) Valid() bool {
+	switch e {
+	case Added:
+		return true
+	case Changed:
+		return true
+	case Removed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateServiceRequestKind.
 const (
 	CreateServiceRequestKindApplication CreateServiceRequestKind = "application"
@@ -233,6 +254,25 @@ type CheckConnectionResponse struct {
 	Ok bool `json:"ok"`
 }
 
+// ConfigChange defines model for ConfigChange.
+type ConfigChange struct {
+	// Key Stable identifier for this change, unique within the list — "image", "domain:app.example.com", "env:DATABASE_URL".
+	Key string `json:"key"`
+
+	// Label What the change is called in the interface.
+	Label string `json:"label"`
+
+	// NewValue Absent when the thing no longer exists.
+	NewValue *string `json:"new_value,omitempty"`
+
+	// OldValue Absent when the thing did not exist before.
+	OldValue *string          `json:"old_value,omitempty"`
+	Type     ConfigChangeType `json:"type"`
+}
+
+// ConfigChangeType defines model for ConfigChange.Type.
+type ConfigChangeType string
+
 // CreateDomainRequest defines model for CreateDomainRequest.
 type CreateDomainRequest struct {
 	Domain string `json:"domain"`
@@ -375,6 +415,14 @@ type LogoutResponse struct {
 	Ok bool `json:"ok"`
 }
 
+// PendingChangesResponse defines model for PendingChangesResponse.
+type PendingChangesResponse struct {
+	Changes []ConfigChange `json:"changes"`
+
+	// HasBaseline False when there is no deployed configuration to compare against: the service has never deployed, or last deployed before Uploy recorded configurations. The service is pending either way, but changes is empty because no itemised answer exists — say so rather than showing an empty list under a badge that says otherwise.
+	HasBaseline bool `json:"has_baseline"`
+}
+
 // ProjectResponse defines model for ProjectResponse.
 type ProjectResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
@@ -451,18 +499,20 @@ type ServiceResponse struct {
 	// HasDeployed True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored.
 	HasDeployed bool `json:"has_deployed"`
 
-	// HasPendingChanges True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored.
-	HasPendingChanges bool `json:"has_pending_changes"`
-
 	// HostPort Host port the service is published on. Omit to keep the service internal — reachable by other services on the uploy network and by nothing outside the machine, which is what a database wants. 80 and 443 are rejected: they belong to the Uploy proxy. Ignored while the service has a domain, since that traffic goes through the proxy.
-	HostPort  *int                `json:"host_port,omitempty"`
-	Id        string              `json:"id"`
-	Image     string              `json:"image"`
-	Kind      ServiceResponseKind `json:"kind"`
-	Name      string              `json:"name"`
-	ProjectId string              `json:"project_id"`
-	ServerId  string              `json:"server_id"`
-	UpdatedAt time.Time           `json:"updated_at"`
+	HostPort *int                `json:"host_port,omitempty"`
+	Id       string              `json:"id"`
+	Image    string              `json:"image"`
+	Kind     ServiceResponseKind `json:"kind"`
+	Name     string              `json:"name"`
+
+	// PendingChangeCount How many changes are waiting to be deployed: the difference between the service's current configuration and the configuration its last successful deployment actually shipped, counted per field, per domain and per variable. Zero means the running container matches what the service says it is.
+	// A service with nothing to compare against — never deployed, or last deployed before Uploy recorded configurations — reports 1. It is pending, but there is no itemised answer to give.
+	// Derived per request, never stored.
+	PendingChangeCount int       `json:"pending_change_count"`
+	ProjectId          string    `json:"project_id"`
+	ServerId           string    `json:"server_id"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // ServiceResponseKind defines model for ServiceResponse.Kind.
@@ -701,6 +751,9 @@ type ServerInterface interface {
 	// Stream a running container's logs via SSE
 	// (GET /api/services/{id}/logs)
 	GetServiceLogs(w http.ResponseWriter, r *http.Request, id string, params GetServiceLogsParams)
+	// List the changes waiting to be deployed for a service
+	// (GET /api/services/{id}/pending-changes)
+	GetServicePendingChanges(w http.ResponseWriter, r *http.Request, id string)
 	// List stored SSH keys
 	// (GET /api/ssh-keys)
 	ListSSHKeys(w http.ResponseWriter, r *http.Request)
@@ -1769,6 +1822,37 @@ func (siw *ServerInterfaceWrapper) GetServiceLogs(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetServicePendingChanges operation middleware
+func (siw *ServerInterfaceWrapper) GetServicePendingChanges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServicePendingChanges(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSSHKeys operation middleware
 func (siw *ServerInterfaceWrapper) ListSSHKeys(w http.ResponseWriter, r *http.Request) {
 
@@ -1985,6 +2069,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/services/{id}/envs", wrapper.UpsertServiceEnv)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}/envs/{key}", wrapper.DeleteServiceEnv)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/logs", wrapper.GetServiceLogs)
+	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/pending-changes", wrapper.GetServicePendingChanges)
 	m.HandleFunc("GET "+options.BaseURL+"/api/ssh-keys", wrapper.ListSSHKeys)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys", wrapper.CreateSSHKey)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys/generate", wrapper.GenerateSSHKey)

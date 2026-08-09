@@ -58,9 +58,53 @@ func reconcilePendingDomains(parent context.Context) {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 
-	domains, err := db.ListUnresolvedDomains(ctx)
+	domains, err := db.ListDomainsToReconcile(ctx)
 	if err != nil {
-		log.Printf("Domain reconciler: list unresolved domains: %v", err)
+		log.Printf("Domain reconciler: list domains: %v", err)
+		return
+	}
+
+	// DNS first, and for most passes it is the only thing that happens.
+	//
+	// A certificate in acme.json survives the record that earned it, so it can
+	// only ever say the name worked once — which is how a hostname with no DNS
+	// record at all came to read as HTTPS active. Whether it resolves here is the
+	// part that changes when someone edits their DNS, so it decides first, and a
+	// domain that fails it never reaches the server at all.
+	var needsCertificate []db.PendingDomain
+	for _, d := range domains {
+		if domainPointsAtServer(ctx, d.Domain, d.Host) {
+			// Only the ones with something left to prove are worth an SSH session.
+			if d.Status == "ready" {
+				if err := db.TouchDomainChecked(ctx, d.ID); err != nil {
+					log.Printf("Domain reconciler: touch domain %s: %v", d.ID, err)
+				}
+				continue
+			}
+			needsCertificate = append(needsCertificate, d)
+			continue
+		}
+
+		// Ready and no longer resolving here: the certificate is still on disk and
+		// still proves nothing, so the domain goes back to waiting rather than
+		// going on claiming HTTPS for a name that answers nowhere.
+		if d.Status == "ready" {
+			log.Printf("Domain reconciler: domain %s (%s) no longer resolves to %s", d.ID, d.Domain, d.Host)
+			if err := db.SetDomainPending(ctx, d.ID); err != nil {
+				log.Printf("Domain reconciler: demote domain %s: %v", d.ID, err)
+			}
+			continue
+		}
+
+		// Still waiting for the record to appear, which is the ordinary state of a
+		// domain someone added a minute ago. Nothing to say about it beyond that it
+		// was looked at.
+		if err := db.TouchDomainChecked(ctx, d.ID); err != nil {
+			log.Printf("Domain reconciler: touch domain %s: %v", d.ID, err)
+		}
+	}
+	domains = needsCertificate
+	if len(domains) == 0 {
 		return
 	}
 
@@ -113,7 +157,7 @@ func reconcilePendingDomains(parent context.Context) {
 		}
 
 		for _, d := range serverDomains {
-			certPresent, err := promoteDomainIfCertificateReady(ctx, client, d.ID, d.Domain)
+			certPresent, err := promoteDomainIfCertificateReady(ctx, client, sk.Host, d.ID, d.Domain)
 			if certPresent {
 				if err != nil {
 					log.Printf("Domain reconciler: promote domain %s (%s) failed: %v", d.ID, d.Domain, err)

@@ -22,8 +22,11 @@ type ServiceDomain struct {
 }
 
 type PendingDomain struct {
-	ID           string
-	Domain       string
+	ID     string
+	Domain string
+	// Status as it stands now. Ready domains are reconciled too, so the pass has
+	// to know which way a domain is allowed to move.
+	Status       string
 	ServiceID    string
 	ServerID     string
 	Host         string
@@ -119,6 +122,14 @@ func SetDomainReady(ctx context.Context, id string) error {
 	return Queries.SetDomainReady(ctx, id)
 }
 
+func SetDomainPending(ctx context.Context, id string) error {
+	return Queries.SetDomainPending(ctx, id)
+}
+
+func TouchDomainChecked(ctx context.Context, id string) error {
+	return Queries.TouchDomainChecked(ctx, id)
+}
+
 func SetDomainError(ctx context.Context, id, lastError string) error {
 	return Queries.SetDomainError(ctx, sqlcgen.SetDomainErrorParams{
 		ID:        id,
@@ -126,8 +137,8 @@ func SetDomainError(ctx context.Context, id, lastError string) error {
 	})
 }
 
-func ListUnresolvedDomains(ctx context.Context) ([]PendingDomain, error) {
-	rows, err := Queries.ListUnresolvedDomains(ctx)
+func ListDomainsToReconcile(ctx context.Context) ([]PendingDomain, error) {
+	rows, err := Queries.ListDomainsToReconcile(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +147,7 @@ func ListUnresolvedDomains(ctx context.Context) ([]PendingDomain, error) {
 		domains[i] = PendingDomain{
 			ID:           r.ID,
 			Domain:       r.Domain,
+			Status:       r.Status,
 			ServiceID:    r.ServiceID,
 			ServerID:     r.ServerID,
 			Host:         r.Host,
