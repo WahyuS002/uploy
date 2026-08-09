@@ -298,11 +298,16 @@
 	{/if}
 
 	<!-- Vercel-style rows: fixed timestamp column, preformatted output, and a
-	     restrained red surface for stderr rather than a terminal treatment. -->
+	     restrained red surface for stderr rather than a terminal treatment.
+
+	     Lines wrap rather than run off the side. The panel is one inspector wide,
+	     so a docker pull line or a stack trace put the whole log behind a
+	     horizontal scrollbar — and the timestamp column scrolled away with it,
+	     which is exactly the thing you want to keep in view while reading. -->
 	<div
 		bind:this={logScroller}
 		class={cn(
-			'max-h-72 overflow-auto border-t border-border bg-card font-mono text-xs leading-5 text-foreground sm:text-sm',
+			'max-h-72 overflow-y-auto border-t border-border bg-card font-mono text-xs leading-5 text-foreground sm:text-sm',
 			fill && 'max-h-none min-h-0 flex-1'
 		)}
 		role="log"
@@ -312,18 +317,23 @@
 		{#each logs as log (log.order)}
 			<div
 				class={cn(
-					'inline-flex w-full min-w-max cursor-default border-l-2 border-l-transparent align-top text-foreground select-text hover:bg-accent',
+					'flex w-full cursor-default border-l-2 border-l-transparent text-foreground select-text hover:bg-accent',
 					log.type === 'stderr' && 'bg-destructive/10 text-destructive hover:bg-destructive/15'
 				)}
 			>
 				<time
-					class="relative inline-flex w-28 flex-none items-center overflow-hidden py-0.5 pl-2 whitespace-nowrap text-muted-foreground tabular-nums select-none sm:w-32 sm:pl-4"
+					class="relative inline-flex w-28 flex-none items-start overflow-hidden py-0.5 pl-2 whitespace-nowrap text-muted-foreground tabular-nums select-none sm:w-32 sm:pl-4"
 					datetime={log.created_at}
 				>
 					{formatLogTimestamp(log.created_at)}
 				</time>
-				<div class="inline-flex min-w-0 flex-1 flex-col">
-					<p class="m-0 inline-block py-0.5 pr-3 pl-1 whitespace-pre sm:pr-6 sm:pl-3">
+				<div class="flex min-w-0 flex-1 flex-col">
+					<!-- pre-wrap, not pre: the log's own spacing and indentation is kept,
+					     but a line that outruns the panel breaks instead of widening it.
+					     wrap-anywhere on top of that, because the lines that overflow are
+					     usually one unbroken token — an image digest, a URL, a container
+					     id — with no space to break at. -->
+					<p class="m-0 py-0.5 pr-3 pl-1 wrap-anywhere whitespace-pre-wrap sm:pr-6 sm:pl-3">
 						{log.output}
 					</p>
 				</div>
