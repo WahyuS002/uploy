@@ -7,24 +7,39 @@ package sqlcgen
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createDeployment = `-- name: CreateDeployment :one
-INSERT INTO deployments (status, workspace_id, service_id)
-VALUES ('in_progress', $1, $2)
+INSERT INTO deployments (status, workspace_id, service_id, configuration_snapshot)
+VALUES ('in_progress', $1, $2, $3)
 RETURNING id, status, workspace_id, service_id, created_at
 `
 
 type CreateDeploymentParams struct {
-	WorkspaceID pgtype.Text `json:"workspace_id"`
-	ServiceID   string      `json:"service_id"`
+	WorkspaceID           pgtype.Text `json:"workspace_id"`
+	ServiceID             string      `json:"service_id"`
+	ConfigurationSnapshot pgtype.Text `json:"configuration_snapshot"`
 }
 
-func (q *Queries) CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (Deployment, error) {
-	row := q.db.QueryRow(ctx, createDeployment, arg.WorkspaceID, arg.ServiceID)
-	var i Deployment
+type CreateDeploymentRow struct {
+	ID          string      `json:"id"`
+	Status      string      `json:"status"`
+	WorkspaceID pgtype.Text `json:"workspace_id"`
+	ServiceID   string      `json:"service_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+}
+
+// The snapshot is written here, at creation, from the same config object the
+// job is about to render into a `docker run` — not read back from the database
+// when the deploy finishes. A deploy takes tens of seconds, and an edit landing
+// during one would otherwise be recorded as deployed without ever reaching the
+// server, which is exactly the lie this column exists to prevent.
+func (q *Queries) CreateDeployment(ctx context.Context, arg CreateDeploymentParams) (CreateDeploymentRow, error) {
+	row := q.db.QueryRow(ctx, createDeployment, arg.WorkspaceID, arg.ServiceID, arg.ConfigurationSnapshot)
+	var i CreateDeploymentRow
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
@@ -40,9 +55,17 @@ SELECT id, status, workspace_id, service_id, created_at
 FROM deployments WHERE id = $1
 `
 
-func (q *Queries) GetDeployment(ctx context.Context, id string) (Deployment, error) {
+type GetDeploymentRow struct {
+	ID          string      `json:"id"`
+	Status      string      `json:"status"`
+	WorkspaceID pgtype.Text `json:"workspace_id"`
+	ServiceID   string      `json:"service_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+}
+
+func (q *Queries) GetDeployment(ctx context.Context, id string) (GetDeploymentRow, error) {
 	row := q.db.QueryRow(ctx, getDeployment, id)
-	var i Deployment
+	var i GetDeploymentRow
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
@@ -66,15 +89,23 @@ type ListDeploymentsByServiceParams struct {
 	Limit     int32  `json:"limit"`
 }
 
-func (q *Queries) ListDeploymentsByService(ctx context.Context, arg ListDeploymentsByServiceParams) ([]Deployment, error) {
+type ListDeploymentsByServiceRow struct {
+	ID          string      `json:"id"`
+	Status      string      `json:"status"`
+	WorkspaceID pgtype.Text `json:"workspace_id"`
+	ServiceID   string      `json:"service_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+}
+
+func (q *Queries) ListDeploymentsByService(ctx context.Context, arg ListDeploymentsByServiceParams) ([]ListDeploymentsByServiceRow, error) {
 	rows, err := q.db.Query(ctx, listDeploymentsByService, arg.ServiceID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Deployment{}
+	items := []ListDeploymentsByServiceRow{}
 	for rows.Next() {
-		var i Deployment
+		var i ListDeploymentsByServiceRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Status,
@@ -82,6 +113,46 @@ func (q *Queries) ListDeploymentsByService(ctx context.Context, arg ListDeployme
 			&i.ServiceID,
 			&i.CreatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestSuccessfulConfigs = `-- name: ListLatestSuccessfulConfigs :many
+SELECT DISTINCT ON (service_id) service_id, configuration_snapshot
+FROM deployments
+WHERE service_id = ANY($1::text[])
+  AND status = 'success'
+  AND configuration_snapshot IS NOT NULL
+ORDER BY service_id, created_at DESC
+`
+
+type ListLatestSuccessfulConfigsRow struct {
+	ServiceID             string      `json:"service_id"`
+	ConfigurationSnapshot pgtype.Text `json:"configuration_snapshot"`
+}
+
+// The config each service is actually running: its most recent successful
+// deployment's snapshot. One row per service, so a canvas full of them costs one
+// query rather than one each.
+//
+// Failed deployments are excluded because they changed nothing on the server,
+// and null snapshots because they predate the column and describe nothing.
+func (q *Queries) ListLatestSuccessfulConfigs(ctx context.Context, serviceIds []string) ([]ListLatestSuccessfulConfigsRow, error) {
+	rows, err := q.db.Query(ctx, listLatestSuccessfulConfigs, serviceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLatestSuccessfulConfigsRow{}
+	for rows.Next() {
+		var i ListLatestSuccessfulConfigsRow
+		if err := rows.Scan(&i.ServiceID, &i.ConfigurationSnapshot); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

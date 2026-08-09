@@ -392,6 +392,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/services/{id}/pending-changes': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List the changes waiting to be deployed for a service
+		 * @description Itemises what the running container would have to change to match the service as it is configured now. Owner and developer only: the list carries environment variable values, which is the same reason listServiceEnvs is gated.
+		 */
+		get: operations['getServicePendingChanges'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/services/{id}/domains': {
 		parameters: {
 			query?: never;
@@ -682,10 +702,31 @@ export interface components {
 			created_at: string;
 			/** Format: date-time */
 			updated_at: string;
-			/** @description True when no successful deployment has landed at or after this service's last change — it has either never been deployed, or was edited since the last deploy. Derived per request, never stored. */
-			has_pending_changes: boolean;
+			/**
+			 * @description How many changes are waiting to be deployed: the difference between the service's current configuration and the configuration its last successful deployment actually shipped, counted per field, per domain and per variable. Zero means the running container matches what the service says it is.
+			 *     A service with nothing to compare against — never deployed, or last deployed before Uploy recorded configurations — reports 1. It is pending, but there is no itemised answer to give.
+			 *     Derived per request, never stored.
+			 */
+			pending_change_count: number;
 			/** @description True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored. */
 			has_deployed: boolean;
+		};
+		ConfigChange: {
+			/** @description Stable identifier for this change, unique within the list — "image", "domain:app.example.com", "env:DATABASE_URL". */
+			key: string;
+			/** @description What the change is called in the interface. */
+			label: string;
+			/** @enum {string} */
+			type: 'added' | 'removed' | 'changed';
+			/** @description Absent when the thing did not exist before. */
+			old_value?: string;
+			/** @description Absent when the thing no longer exists. */
+			new_value?: string;
+		};
+		PendingChangesResponse: {
+			/** @description False when there is no deployed configuration to compare against: the service has never deployed, or last deployed before Uploy recorded configurations. The service is pending either way, but changes is empty because no itemised answer exists — say so rather than showing an empty list under a badge that says otherwise. */
+			has_baseline: boolean;
+			changes: components['schemas']['ConfigChange'][];
 		};
 		CreateDomainRequest: {
 			domain: string;
@@ -2356,6 +2397,64 @@ export interface operations {
 			};
 			/** @description Not authenticated */
 			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Service not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Internal server error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	getServicePendingChanges: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description The pending changes */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['PendingChangesResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
 				headers: {
 					[name: string]: unknown;
 				};

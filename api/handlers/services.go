@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -171,7 +172,13 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respond.JSON(w, http.StatusCreated, serviceToResponse(svc))
+	resp, err := serviceResponse(r.Context(), svc)
+	if err != nil {
+		log.Printf("pending changes for new service %s: %v", svc.ID, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
+		return
+	}
+	respond.JSON(w, http.StatusCreated, resp)
 }
 
 func (s *Server) ListServices(w http.ResponseWriter, r *http.Request) {
@@ -183,9 +190,11 @@ func (s *Server) ListServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := make([]gen.ServiceResponse, len(services))
-	for i, svc := range services {
-		resp[i] = serviceToResponse(svc)
+	resp, err := serviceResponses(r.Context(), services)
+	if err != nil {
+		log.Printf("pending changes for service list: %v", err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
+		return
 	}
 
 	respond.JSON(w, http.StatusOK, resp)
@@ -203,9 +212,11 @@ func (s *Server) ListProjectServices(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 
-	resp := make([]gen.ServiceResponse, len(services))
-	for i, svc := range services {
-		resp[i] = serviceToResponse(svc)
+	resp, err := serviceResponses(r.Context(), services)
+	if err != nil {
+		log.Printf("pending changes for service list: %v", err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
+		return
 	}
 
 	respond.JSON(w, http.StatusOK, resp)
@@ -229,7 +240,13 @@ func (s *Server) GetService(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
-	respond.JSON(w, http.StatusOK, serviceToResponse(svc))
+	resp, err := serviceResponse(r.Context(), svc)
+	if err != nil {
+		log.Printf("pending changes for service %s: %v", svc.ID, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
+		return
+	}
+	respond.JSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id string) {
@@ -308,7 +325,13 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id string
 		return
 	}
 
-	respond.JSON(w, http.StatusOK, serviceToResponse(svc))
+	resp, err := serviceResponse(r.Context(), svc)
+	if err != nil {
+		log.Printf("pending changes for updated service %s: %v", svc.ID, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
+		return
+	}
+	respond.JSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string) {
@@ -377,7 +400,31 @@ func intPtrFromInt32Ptr(v *int32) *int {
 	return &i
 }
 
-func serviceToResponse(svc db.Service) gen.ServiceResponse {
+// serviceResponses maps a whole list and decorates each entry with its pending
+// change count in one batched pass — three queries for the list, not three per
+// service. The canvas asks for every service in an environment at once, so the
+// per-service form in a loop is exactly what this exists to avoid.
+func serviceResponses(ctx context.Context, svcs []db.Service) ([]gen.ServiceResponse, error) {
+	counts, err := db.PendingChangeCounts(ctx, svcs)
+	if err != nil {
+		return nil, err
+	}
+	resp := make([]gen.ServiceResponse, len(svcs))
+	for i, svc := range svcs {
+		resp[i] = serviceToResponse(svc, counts[svc.ID])
+	}
+	return resp, nil
+}
+
+func serviceResponse(ctx context.Context, svc db.Service) (gen.ServiceResponse, error) {
+	resp, err := serviceResponses(ctx, []db.Service{svc})
+	if err != nil {
+		return gen.ServiceResponse{}, err
+	}
+	return resp[0], nil
+}
+
+func serviceToResponse(svc db.Service, pendingChanges int) gen.ServiceResponse {
 	return gen.ServiceResponse{
 		Id:            svc.ID,
 		Name:          svc.Name,
@@ -392,7 +439,7 @@ func serviceToResponse(svc db.Service) gen.ServiceResponse {
 		CreatedAt:     svc.CreatedAt,
 		UpdatedAt:     svc.UpdatedAt,
 
-		HasPendingChanges: svc.HasPendingChanges,
-		HasDeployed:       svc.HasDeployed,
+		PendingChangeCount: pendingChanges,
+		HasDeployed:        svc.HasDeployed,
 	}
 }

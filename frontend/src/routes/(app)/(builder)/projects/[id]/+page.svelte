@@ -124,7 +124,7 @@
 	let barDeploymentIds = $state<Record<string, string>>({});
 
 	let unfiredPending = $derived(
-		envServices.filter((s) => s.has_pending_changes && !deployingIds.has(s.id))
+		envServices.filter((s) => s.pending_change_count > 0 && !deployingIds.has(s.id))
 	);
 	// One primary action at a time: while the canvas is asking for an image, or a
 	// dialog is up, the bar stays out of the way rather than competing with it.
@@ -210,7 +210,7 @@
 		}
 	}
 
-	// The saved row carries a fresh has_pending_changes, which is what makes the
+	// The saved row carries a fresh pending_change_count, which is what makes the
 	// canvas show the service as needing a deploy right after an edit.
 	function updateService(updated: ServiceResponse) {
 		services = services.map((s) => (s.id === updated.id ? updated : s));
@@ -250,7 +250,7 @@
 			const svcs = await loadServices(projectId);
 			services = svcs;
 			const expired = Date.now() > pollDeadline;
-			const stillPending = new Set(svcs.filter((s) => s.has_pending_changes).map((s) => s.id));
+			const stillPending = new Set(svcs.filter((s) => s.pending_change_count > 0).map((s) => s.id));
 			deployingIds = expired
 				? new Set()
 				: new Set([...deployingIds].filter((id) => stillPending.has(id)));
@@ -717,7 +717,7 @@
 								     still wins the border outright: that is the state the user is
 								     actively driving, and two dashed-vs-solid signals on one edge
 								     would just cancel each other out. -->
-								{@const isPending = svc.has_pending_changes && !isDeploying}
+								{@const isPending = svc.pending_change_count > 0 && !isDeploying}
 								<!-- items-stretch is load-bearing, not decoration: the UA stylesheet sets
 								     align-items: flex-start on <button>, so as a flex column its rows
 								     shrink to their own content and the justify-between further down has

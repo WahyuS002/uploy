@@ -55,6 +55,42 @@ func (q *Queries) GetServiceEnvVarsByServiceID(ctx context.Context, serviceID st
 	return items, nil
 }
 
+const getServiceEnvVarsByServiceIDs = `-- name: GetServiceEnvVarsByServiceIDs :many
+SELECT service_id, key, value FROM service_env_vars
+WHERE service_id = ANY($1::text[])
+ORDER BY service_id, key ASC
+`
+
+type GetServiceEnvVarsByServiceIDsRow struct {
+	ServiceID string `json:"service_id"`
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+}
+
+// The same rows for a whole set of services at once, for building configs for a
+// list without a query per service. Ordered by key within each service because
+// the config compares as a document: a different order is a different snapshot,
+// and would show up as a change nobody made.
+func (q *Queries) GetServiceEnvVarsByServiceIDs(ctx context.Context, serviceIds []string) ([]GetServiceEnvVarsByServiceIDsRow, error) {
+	rows, err := q.db.Query(ctx, getServiceEnvVarsByServiceIDs, serviceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetServiceEnvVarsByServiceIDsRow{}
+	for rows.Next() {
+		var i GetServiceEnvVarsByServiceIDsRow
+		if err := rows.Scan(&i.ServiceID, &i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServiceEnvVars = `-- name: ListServiceEnvVars :many
 SELECT id, service_id, key, value, created_at, updated_at FROM service_env_vars
 WHERE service_id = $1

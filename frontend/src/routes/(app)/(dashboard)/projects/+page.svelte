@@ -167,7 +167,7 @@
 			{@const svcCount = envServices.length}
 			{@const env = getProjectEnv(project.id)}
 			{@const domains = projectDomains[project.id] ?? []}
-			{@const pending = envServices.some((s) => s.has_pending_changes)}
+			{@const pending = envServices.some((s) => s.pending_change_count > 0)}
 			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 			<a
 				href="/projects/{project.id}"

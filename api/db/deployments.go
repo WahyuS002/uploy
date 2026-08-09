@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/WahyuS002/uploy/broker"
@@ -17,28 +18,41 @@ type Deployment struct {
 	CreatedAt   time.Time
 }
 
-func deploymentFromGen(d sqlcgen.Deployment) Deployment {
+// newDeployment takes the columns rather than a row struct: the queries select
+// the same five fields but no longer the whole table, so sqlc gives each one its
+// own row type with nothing in common but these.
+func newDeployment(id, status string, workspaceID pgtype.Text, serviceID string, createdAt time.Time) Deployment {
 	dep := Deployment{
-		ID:        d.ID,
-		Status:    d.Status,
-		ServiceID: d.ServiceID,
-		CreatedAt: d.CreatedAt,
+		ID:        id,
+		Status:    status,
+		ServiceID: serviceID,
+		CreatedAt: createdAt,
 	}
-	if d.WorkspaceID.Valid {
-		dep.WorkspaceID = d.WorkspaceID.String
+	if workspaceID.Valid {
+		dep.WorkspaceID = workspaceID.String
 	}
 	return dep
 }
 
-func CreateDeployment(ctx context.Context, workspaceID, serviceID string) (Deployment, error) {
+// CreateDeployment records a deployment together with the config it is about to
+// ship. The caller passes the very config it will render into the `docker run`,
+// so what is stored and what is executed cannot come apart — reading the config
+// back from the database when the deploy finishes would record any edit that
+// landed while it was running as though the server had received it.
+func CreateDeployment(ctx context.Context, workspaceID, serviceID string, cfg ServiceConfig) (Deployment, error) {
+	snapshot, err := encodeSnapshot(cfg)
+	if err != nil {
+		return Deployment{}, fmt.Errorf("encode configuration snapshot: %w", err)
+	}
 	row, err := Queries.CreateDeployment(ctx, sqlcgen.CreateDeploymentParams{
-		WorkspaceID: pgtype.Text{String: workspaceID, Valid: true},
-		ServiceID:   serviceID,
+		WorkspaceID:           pgtype.Text{String: workspaceID, Valid: true},
+		ServiceID:             serviceID,
+		ConfigurationSnapshot: pgtype.Text{String: snapshot, Valid: true},
 	})
 	if err != nil {
 		return Deployment{}, err
 	}
-	return deploymentFromGen(row), nil
+	return newDeployment(row.ID, row.Status, row.WorkspaceID, row.ServiceID, row.CreatedAt), nil
 }
 
 func ListDeploymentsByService(ctx context.Context, serviceID string, limit int32) ([]Deployment, error) {
@@ -51,7 +65,7 @@ func ListDeploymentsByService(ctx context.Context, serviceID string, limit int32
 	}
 	deps := make([]Deployment, len(rows))
 	for i, r := range rows {
-		deps[i] = deploymentFromGen(r)
+		deps[i] = newDeployment(r.ID, r.Status, r.WorkspaceID, r.ServiceID, r.CreatedAt)
 	}
 	return deps, nil
 }
@@ -68,7 +82,7 @@ func GetDeployment(ctx context.Context, deploymentID string) (Deployment, error)
 	if err != nil {
 		return Deployment{}, err
 	}
-	return deploymentFromGen(row), err
+	return newDeployment(row.ID, row.Status, row.WorkspaceID, row.ServiceID, row.CreatedAt), err
 }
 
 func AppendLog(ctx context.Context, deploymentID, output, logType, phase string) error {

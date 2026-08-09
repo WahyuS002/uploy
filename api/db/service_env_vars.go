@@ -84,20 +84,11 @@ func DeleteServiceEnvVar(ctx context.Context, serviceID, key string) error {
 	})
 }
 
-// EnvPair — for deploy job, only needs key=value
+// EnvPair is a variable as a deploy sees it: a name and a plaintext value, with
+// none of the row's bookkeeping. It is also what a config snapshot stores, which
+// is why it carries explicit JSON field names in db/service_config.go — those
+// names are a storage format, not a detail of this struct.
 type EnvPair struct {
 	Key   string
 	Value string
-}
-
-func GetServiceEnvPairs(ctx context.Context, serviceID string) ([]EnvPair, error) {
-	rows, err := Queries.GetServiceEnvVarsByServiceID(ctx, serviceID)
-	if err != nil {
-		return nil, err
-	}
-	pairs := make([]EnvPair, len(rows))
-	for i, r := range rows {
-		pairs[i] = EnvPair{Key: r.Key, Value: decryptEnvValue(serviceID, r.Key, r.Value)}
-	}
-	return pairs, nil
 }

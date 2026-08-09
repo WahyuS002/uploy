@@ -5,11 +5,20 @@
 		image: string;
 		/** False means it has never landed on a server, so deploying creates it. */
 		has_deployed: boolean;
+		/**
+		 * How many things about this service differ from what its last deployment
+		 * shipped. Counted per field, per domain and per variable — so the bar can
+		 * say how much is waiting rather than how many services are involved.
+		 */
+		pending_change_count: number;
 	};
 </script>
 
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { browser } from '$app/environment';
+	import { api } from '$lib/api/client';
+	import type { components } from '$lib/api/v1';
 	import Button from '$lib/components/ui/Button.svelte';
 	import {
 		Dialog,
@@ -20,6 +29,7 @@
 		DialogDescription
 	} from '$lib/components/ui/dialog';
 	import { Container } from 'lucide-svelte';
+	import { cn } from '$lib/components/ui/cn.js';
 
 	type Props = {
 		/** Services with undeployed changes. Empty means nothing to show. */
@@ -59,8 +69,65 @@
 		if (services.length > 0) shownServices = services;
 	});
 
-	let count = $derived(shownServices.length);
+	// The changes themselves, not the services carrying them. Editing an image and
+	// adding two domains on one service is three things waiting to happen, and a
+	// bar that called that "1 pending change" was answering a question nobody
+	// asked — then opening a dialog that listed three.
+	let count = $derived(shownServices.reduce((n, svc) => n + svc.pending_change_count, 0));
 	let countLabel = $derived(count === 1 ? '1 pending change' : `${count} pending changes`);
+
+	type PendingChanges = components['schemas']['PendingChangesResponse'];
+	type ConfigChange = components['schemas']['ConfigChange'];
+
+	// Per service id. Absent means not fetched yet, which is what the loading row
+	// reads from — the dialog opens immediately and fills in, rather than holding
+	// the whole surface back for a request that is usually instant.
+	let diffs = $state<Record<string, PendingChanges>>({});
+	let diffsFailed = $state<Record<string, boolean>>({});
+
+	/**
+	 * Fetched when the dialog opens rather than alongside the list, because the
+	 * list is loaded on every canvas render and this is only ever read by someone
+	 * who asked to review. One request per pending service, which is one to three
+	 * in practice — the count on the bar already came from the same comparison, so
+	 * this is only fetching the itemisation of a number that is already on screen.
+	 */
+	$effect(() => {
+		if (!detailsOpen) return;
+		// untrack: this fires once per opening, keyed on that alone. Reading the
+		// service list or the results normally would re-enter on every response and
+		// re-fetch what it had just stored.
+		untrack(() => {
+			// Discarded rather than reused: something edited since the last look must
+			// not be reviewed against the list from before it.
+			diffs = {};
+			diffsFailed = {};
+			for (const svc of shownServices) loadDiff(svc.id);
+		});
+	});
+
+	async function loadDiff(id: string) {
+		const { data } = await api.GET('/api/services/{id}/pending-changes', {
+			params: { path: { id } }
+		});
+		if (data) {
+			diffs[id] = data;
+		} else {
+			diffsFailed[id] = true;
+		}
+	}
+
+	/**
+	 * How a change reads on its row. A removed thing shows what is going away, an
+	 * added one shows what arrives, and only a change that kept its identity has
+	 * two sides worth putting an arrow between.
+	 */
+	function changeValues(change: ConfigChange): { from: string | null; to: string | null } {
+		return {
+			from: change.type === 'added' ? null : (change.old_value ?? null),
+			to: change.type === 'removed' ? null : (change.new_value ?? null)
+		};
+	}
 
 	function deployAndClose() {
 		detailsOpen = false;
@@ -138,22 +205,23 @@
 </div>
 
 <Dialog bind:open={detailsOpen}>
-	<DialogContent class="max-w-lg">
+	<DialogContent class="max-w-xl">
 		<DialogHeader>
 			<DialogTitle>{countLabel}</DialogTitle>
 			<DialogDescription>
-				These services are on the canvas but not on your servers yet.
+				What your servers would have to change to match what is on the canvas.
 			</DialogDescription>
 		</DialogHeader>
 
-		<!-- Rows are buttons, not links: each one opens that service's panel so you
-		     can check the change before committing to it, which is the only reason
-		     to open a review surface rather than just pressing Deploy. -->
 		<!-- divide-y rather than a border on each row: the footer already draws its own
 		     top edge, and a border-bottom on the last row would double it. -->
-		<ul class="max-h-80 divide-y divide-border overflow-y-auto border-t border-border">
+		<ul class="max-h-96 divide-y divide-border overflow-y-auto border-t border-border">
 			{#each shownServices as svc (svc.id)}
+				{@const diff = diffs[svc.id]}
 				<li>
+					<!-- The service name stays a button: it opens that service's panel so
+					     you can check a change before committing to it, which is the only
+					     reason to open a review surface rather than just pressing Deploy. -->
 					<button
 						type="button"
 						onclick={() => selectAndClose(svc.id)}
@@ -176,6 +244,59 @@
 							</span>
 						</span>
 					</button>
+
+					<!-- Indented under the service rather than in a table of its own: these
+					     rows belong to the name above them, and at this width a Change /
+					     Current / New table would give each column about nine characters. -->
+					{#if !diff}
+						<p class="px-5 pb-3 pl-16 text-[13px] text-muted-foreground">
+							{diffsFailed[svc.id] ? 'Could not read what changed.' : 'Reading changes…'}
+						</p>
+					{:else if !diff.has_baseline}
+						<!-- The honest answer, not an empty list. A service Uploy has no record
+						     of is genuinely pending, and showing nothing under a badge that
+						     says otherwise is how a reader learns to distrust the badge. -->
+						<p class="px-5 pb-3 pl-16 text-[13px] text-muted-foreground">
+							{svc.has_deployed
+								? 'Uploy has no record of what this service is running. Deploy to bring it in line.'
+								: 'This service has never been deployed.'}
+						</p>
+					{:else}
+						<ul class="px-5 pb-3 pl-16">
+							{#each diff.changes as change (change.key)}
+								{@const values = changeValues(change)}
+								<li class="flex min-w-0 items-baseline gap-2 py-1 text-[13px]">
+									<!-- The mark carries added / removed / changed, so the row does
+									     not spend a word on it. Aria-hidden with the word restored
+									     to a screen reader: +/− is a shape, not a sentence. -->
+									<span
+										class={cn(
+											'w-3 flex-none text-center font-mono',
+											change.type === 'added' && 'text-success',
+											change.type === 'removed' && 'text-destructive',
+											change.type === 'changed' && 'text-muted-foreground'
+										)}
+										aria-hidden="true"
+									>
+										{change.type === 'added' ? '+' : change.type === 'removed' ? '−' : '~'}
+									</span>
+									<span class="sr-only">{change.type}:</span>
+									<span class="flex-none text-foreground">{change.label}</span>
+									<span class="min-w-0 flex-1 truncate text-right font-mono text-muted-foreground">
+										{#if values.from !== null && values.to !== null}
+											<span class="line-through opacity-60">{values.from}</span>
+											<span class="px-1" aria-hidden="true">→</span>
+											<span class="text-foreground">{values.to}</span>
+										{:else if values.to !== null}
+											<span class="text-foreground">{values.to}</span>
+										{:else}
+											<span class="line-through opacity-60">{values.from}</span>
+										{/if}
+									</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				</li>
 			{/each}
 		</ul>

@@ -270,7 +270,7 @@
 	 * Gated on has_deployed: a service that has never run is pending by
 	 * definition, and the empty state below already says to deploy it.
 	 */
-	let awaitingDeploy = $derived(service.has_deployed && service.has_pending_changes);
+	let awaitingDeploy = $derived(service.has_deployed && service.pending_change_count > 0);
 
 	/**
 	 * Deploy, then get out of the way and let the reader watch it happen.
@@ -314,7 +314,7 @@
 	}
 
 	/**
-	 * Re-reads the service so has_pending_changes reflects a domain that was just
+	 * Re-reads the service so pending_change_count reflects a domain that was just
 	 * added or removed. The server bumps updated_at for both, but this panel holds
 	 * the service as a prop and would otherwise go on showing the copy it was
 	 * handed — correct only after a reload, which is the one moment nobody does.
@@ -624,8 +624,15 @@
 			     after a reload too, and a warning that vanished when you refreshed was
 			     how this went unnoticed for five minutes at a time. -->
 			{#if awaitingDeploy}
+				<!-- Counted, not named. This used to say "Domain routing is not live yet"
+				     for every kind of change, because nothing knew what had actually been
+				     edited — so a changed image or port was announced as a domain problem
+				     and sent the reader to the wrong tab. The count comes from the same
+				     comparison the review dialog itemises, so the two can never disagree. -->
 				<Alert tone="warning" class="mt-3 text-[13px]">
-					Domain routing is not live yet. Deploy to apply it.
+					{service.pending_change_count === 1
+						? '1 change is not on the server yet. Deploy to apply it.'
+						: `${service.pending_change_count} changes are not on the server yet. Deploy to apply them.`}
 				</Alert>
 			{/if}
 			{#if deployError}

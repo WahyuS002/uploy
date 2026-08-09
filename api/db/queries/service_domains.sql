@@ -12,6 +12,15 @@ SELECT id, service_id, domain, is_primary, status, last_error, last_reconciled_a
 FROM service_domains WHERE service_id = $1
 ORDER BY is_primary DESC, created_at ASC;
 
+-- name: ListDomainNamesByServiceIDs :many
+-- Just the hostnames, for a whole set of services at once — what a deploy puts
+-- in the container's Traefik rule, and so what a config snapshot holds. Sorted
+-- within each service for the same reason the env vars are: the config is
+-- compared as a document, and reordering must not read as a change.
+SELECT service_id, domain FROM service_domains
+WHERE service_id = ANY(@service_ids::text[])
+ORDER BY service_id, domain ASC;
+
 -- name: ClearPrimaryByService :exec
 UPDATE service_domains
 SET is_primary = FALSE, updated_at = NOW()

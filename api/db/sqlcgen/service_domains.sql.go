@@ -84,6 +84,41 @@ func (q *Queries) GetServiceDomainByID(ctx context.Context, id string) (ServiceD
 	return i, err
 }
 
+const listDomainNamesByServiceIDs = `-- name: ListDomainNamesByServiceIDs :many
+SELECT service_id, domain FROM service_domains
+WHERE service_id = ANY($1::text[])
+ORDER BY service_id, domain ASC
+`
+
+type ListDomainNamesByServiceIDsRow struct {
+	ServiceID string `json:"service_id"`
+	Domain    string `json:"domain"`
+}
+
+// Just the hostnames, for a whole set of services at once — what a deploy puts
+// in the container's Traefik rule, and so what a config snapshot holds. Sorted
+// within each service for the same reason the env vars are: the config is
+// compared as a document, and reordering must not read as a change.
+func (q *Queries) ListDomainNamesByServiceIDs(ctx context.Context, serviceIds []string) ([]ListDomainNamesByServiceIDsRow, error) {
+	rows, err := q.db.Query(ctx, listDomainNamesByServiceIDs, serviceIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDomainNamesByServiceIDsRow{}
+	for rows.Next() {
+		var i ListDomainNamesByServiceIDsRow
+		if err := rows.Scan(&i.ServiceID, &i.Domain); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDomainsByService = `-- name: ListDomainsByService :many
 SELECT id, service_id, domain, is_primary, status, last_error, last_reconciled_at, ready_at, created_at, updated_at
 FROM service_domains WHERE service_id = $1

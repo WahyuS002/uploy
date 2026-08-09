@@ -1301,6 +1301,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/services/{id}/pending-changes:
+    get:
+      operationId: getServicePendingChanges
+      summary: List the changes waiting to be deployed for a service
+      description: >
+        Itemises what the running container would have to change to match the
+        service as it is configured now. Owner and developer only: the list
+        carries environment variable values, which is the same reason
+        listServiceEnvs is gated.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The pending changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingChangesResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Service not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/services/{id}/domains:
     post:
       operationId: createServiceDomain
@@ -2119,7 +2168,7 @@ components:
         - environment_id
         - created_at
         - updated_at
-        - has_pending_changes
+        - pending_change_count
         - has_deployed
       properties:
         id:
@@ -2157,12 +2206,20 @@ components:
         updated_at:
           type: string
           format: date-time
-        has_pending_changes:
-          type: boolean
+        pending_change_count:
+          type: integer
           description: >
-            True when no successful deployment has landed at or after this
-            service's last change — it has either never been deployed, or was
-            edited since the last deploy. Derived per request, never stored.
+            How many changes are waiting to be deployed: the difference between
+            the service's current configuration and the configuration its last
+            successful deployment actually shipped, counted per field, per
+            domain and per variable. Zero means the running container matches
+            what the service says it is.
+
+            A service with nothing to compare against — never deployed, or last
+            deployed before Uploy recorded configurations — reports 1. It is
+            pending, but there is no itemised answer to give.
+
+            Derived per request, never stored.
         has_deployed:
           type: boolean
           description: >
@@ -2170,6 +2227,53 @@ components:
             Combined with has_pending_changes it distinguishes a service that
             will be created on its server from one that will be updated.
             Derived per request, never stored.
+
+    ConfigChange:
+      type: object
+      required:
+        - key
+        - label
+        - type
+      properties:
+        key:
+          type: string
+          description: >
+            Stable identifier for this change, unique within the list —
+            "image", "domain:app.example.com", "env:DATABASE_URL".
+        label:
+          type: string
+          description: What the change is called in the interface.
+        type:
+          type: string
+          enum:
+            - added
+            - removed
+            - changed
+        old_value:
+          type: string
+          description: Absent when the thing did not exist before.
+        new_value:
+          type: string
+          description: Absent when the thing no longer exists.
+
+    PendingChangesResponse:
+      type: object
+      required:
+        - has_baseline
+        - changes
+      properties:
+        has_baseline:
+          type: boolean
+          description: >
+            False when there is no deployed configuration to compare against:
+            the service has never deployed, or last deployed before Uploy
+            recorded configurations. The service is pending either way, but
+            changes is empty because no itemised answer exists — say so rather
+            than showing an empty list under a badge that says otherwise.
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfigChange"
 
     CreateDomainRequest:
       type: object
