@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { cn } from '$lib/components/ui/cn.js';
+	import { formatDuration } from '$lib/format-date';
 	import type { components } from '$lib/api/v1';
 
 	type LogEntry = components['schemas']['LogEntry'];
@@ -34,9 +35,24 @@
 		 * section of a card.
 		 */
 		fill?: boolean;
+		/**
+		 * The run's duration in seconds — live while it streams, frozen on its own
+		 * last log once it ends. Bindable because the clock can only live here: the
+		 * first and last log lines are what it is measured between, and nothing
+		 * outside this component sees them. The panel around it is where the
+		 * duration is read.
+		 */
+		elapsedSeconds?: number;
 	}
 
-	let { deploymentId, deploymentStatus, onDone, flush = false, fill = false }: Props = $props();
+	let {
+		deploymentId,
+		deploymentStatus,
+		onDone,
+		flush = false,
+		fill = false,
+		elapsedSeconds = $bindable(0)
+	}: Props = $props();
 
 	// Whether the run being streamed had already finished before this subscription
 	// opened. Set once per subscription, and read by the log handler to keep a
@@ -69,7 +85,6 @@
 	// deployment, not how long it took.
 	let startTime: number | null = $state(null);
 	let lastLogTime: number = $state(Date.now());
-	let elapsedSeconds: number = $state(0);
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
 
 	function updatePhaseFromLog(log: LogEntry) {
@@ -121,13 +136,6 @@
 			clearInterval(timerInterval);
 			timerInterval = null;
 		}
-	}
-
-	function formatElapsed(seconds: number): string {
-		if (seconds < 60) return `${seconds}s`;
-		const m = Math.floor(seconds / 60);
-		const s = seconds % 60;
-		return `${m}m ${s}s`;
 	}
 
 	function formatLogTimestamp(timestamp: string): string {
@@ -259,7 +267,7 @@
 		<span
 			class={cn(
 				'h-2 w-2 flex-none rounded-full bg-muted-foreground',
-				bannerStatus === 'success' && 'bg-success',
+				bannerStatus === 'success' && 'bg-success-fill',
 				bannerStatus === 'error' && 'bg-destructive',
 				bannerStatus === 'active' && 'motion-safe:animate-pulse'
 			)}
@@ -276,7 +284,7 @@
 			{currentPhase}
 		</span>
 		<span class="flex-none text-[13px] text-muted-foreground tabular-nums">
-			{formatElapsed(elapsedSeconds)}
+			{formatDuration(elapsedSeconds)}
 		</span>
 	</div>
 
