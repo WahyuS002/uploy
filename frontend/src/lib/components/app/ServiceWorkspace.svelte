@@ -86,18 +86,45 @@
 	let domains = $state<ServiceDomainResponse[]>([]);
 	let envs = $state<ServiceEnvResponse[]>([]);
 	let envsLoaded = $state(false);
-	// Derived rather than synced with an effect: the reset below and an incoming
-	// external id would otherwise race on service change, and which one won would
-	// come down to declaration order. A deploy started from this panel is the more
-	// specific fact, so it wins; otherwise the page's id shows through.
-	let localDeploymentId = $state<string | null>(null);
-	let deploymentId = $derived(localDeploymentId ?? externalDeploymentId);
+	/**
+	 * The deployment this panel is following — whichever was started most
+	 * recently, from here or from the canvas bar.
+	 *
+	 * It used to be `local ?? external`, which meant the panel's own id won by
+	 * being more specific. But it is only more specific while it is the newer of
+	 * the two: once the panel had deployed once, its id was never null again, so
+	 * every later deploy started from the bar — including ⌘+Enter, which the bar
+	 * listens for on the window — was masked behind a run that had already
+	 * finished. The panel then sat showing a stale log under a header describing
+	 * a deployment it was not streaming.
+	 */
+	let deploymentId = $state<string | null>(null);
+
+	// Adopting the bar's id rather than falling back to it is the whole fix. The
+	// two sources cannot race meaningfully any more: whichever writes last is by
+	// definition the most recent deploy, which is the one worth watching.
+	//
+	// And the tab follows it, for the same reason deployAndWatch switches after a
+	// deploy started in here: the log is the thing that was just asked for. The
+	// canvas already opens this panel for a bar deploy, so a *closed* one landed
+	// on Deployments anyway — but one left open on Domains or Variables stayed
+	// there, with the deploy it had just triggered running on a tab behind it.
+	$effect(() => {
+		if (!externalDeploymentId) return;
+		deploymentId = externalDeploymentId;
+		activeTab = 'deployments';
+	});
 	let deploying = $state(false);
 	let deployError = $state('');
 	let deployments = $state<DeploymentResponse[]>([]);
 	// The API returns them newest first, so the head is the current one and the
 	// tail is history — the same split the panel shows.
 	let latestDeployment = $derived(deployments[0] ?? null);
+	// Looked up by id rather than taken from the head of the list: the deployment
+	// being streamed is usually the newest, but it is the one being streamed that
+	// the log panel needs the status of. Undefined until the list has it, which
+	// reads as "still running" — the right guess for one just started.
+	let streamedStatus = $derived(deployments.find((d) => d.id === deploymentId)?.status);
 	let previousDeployments = $derived(deployments.slice(1));
 
 	// The service only carries a server_id and there is no GET /api/servers/{id},
@@ -373,7 +400,7 @@
 				return;
 			}
 			if (data) {
-				localDeploymentId = data.deployment_id;
+				deploymentId = data.deployment_id;
 				onDeployStarted?.(svcId, data.deployment_id);
 				// Awaited so `deploying` does not fall back to false before the
 				// in-progress deployment is in the list. Both feed deployInFlight, and
@@ -489,7 +516,7 @@
 		envsLoaded = false;
 		deployments = [];
 		openDeployment = null;
-		localDeploymentId = null;
+		deploymentId = null;
 		deployError = '';
 		deploying = false;
 
@@ -690,7 +717,12 @@
 						</div>
 					</div>
 					{#if deploymentId}
-						<DeploymentLogs {deploymentId} flush onDone={onDeploymentDone} />
+						<DeploymentLogs
+							{deploymentId}
+							deploymentStatus={streamedStatus}
+							flush
+							onDone={onDeploymentDone}
+						/>
 					{/if}
 				</div>
 			{:else}
