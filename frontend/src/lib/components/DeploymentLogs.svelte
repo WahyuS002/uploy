@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { cn } from '$lib/components/ui/cn.js';
-	import { Icon } from '@steeze-ui/svelte-icon';
-	import { ChevronDown } from '@steeze-ui/heroicons';
 	import type { components } from '$lib/api/v1';
 
 	type LogEntry = components['schemas']['LogEntry'];
@@ -14,10 +12,10 @@
 		 * anything: "in_progress", "success" or "failed".
 		 *
 		 * Opening a deployment replays its whole log as a catch-up, so without this
-		 * a finished run arrived looking live — phases walking forward, an active
-		 * status dot, the panel springing open — and only corrected itself when the
-		 * replay reached the end. Every caller has the answer sitting next to the id
-		 * it passes; this is only a matter of handing it over.
+		 * a finished run arrived looking live — phases walking forward and an active
+		 * status dot — and only corrected itself when the replay reached the end.
+		 * Every caller has the answer sitting next to the id it passes; this is only
+		 * a matter of handing it over.
 		 *
 		 * Omit it when genuinely unknown, and the component assumes a live run,
 		 * which is the safe guess for a deployment that was just started.
@@ -33,8 +31,7 @@
 		/**
 		 * The output *is* the surface it sits on (the stacked deployment panel), so
 		 * it takes the full height instead of the 288px slab it uses when it is one
-		 * section of a card, and it never auto-collapses — reading it is the only
-		 * reason that panel is open.
+		 * section of a card.
 		 */
 		fill?: boolean;
 	}
@@ -146,21 +143,6 @@
 		return 'active';
 	});
 
-	// Open while it matters, closed once it doesn't. A finished successful deploy
-	// is the one case where nobody reads the output, and leaving 300px of log on
-	// screen for it is most of what made this panel feel loud. Failures and
-	// in-flight runs stay open — those you do need to read.
-	let open = $state(true);
-	let userToggled = $state(false);
-	$effect(() => {
-		if (status === 'success' && !userToggled && !fill) open = false;
-	});
-
-	function toggle() {
-		userToggled = true;
-		open = !open;
-	}
-
 	// Follow the tail while streaming, but only if the reader is already at the
 	// bottom — yanking the view back down while someone is reading an earlier
 	// error is worse than not following at all.
@@ -201,21 +183,15 @@
 		startTime = null;
 		lastLogTime = Date.now();
 		elapsedSeconds = 0;
-		userToggled = false;
 
 		// Seeded from what is already known rather than assumed live and corrected
 		// at the end of the replay. The correction is what was visible: a finished
-		// deploy opened with a pulsing dot on "Starting...", ran through every phase
-		// it had been through days ago, then snapped shut.
+		// deploy opened with a pulsing dot on "Starting..." and ran through every
+		// phase it had been through days ago.
 		status = replaying ? known! : 'in_progress';
 		currentPhase = replaying
 			? (phaseLabels[known === 'failed' ? 'failed' : 'complete'] ?? 'Starting...')
 			: 'Starting...';
-		// A live run is worth watching even if the reader collapsed the last one; a
-		// finished successful one is the case nobody reads, which is what the
-		// auto-collapse below decides anyway — it just used to decide it a beat late,
-		// after the panel had already sprung open.
-		open = fill || !replaying || known !== 'success';
 
 		// No clock for a run that already stopped: it counts from the deployment's
 		// first log to *now*, which is how a two-day-old deploy once reported
@@ -279,12 +255,7 @@
 		fill && 'flex h-full min-h-0 flex-col'
 	)}
 >
-	<button
-		type="button"
-		onclick={toggle}
-		aria-expanded={open}
-		class="flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-accent/60 focus-visible:bg-accent focus-visible:outline-none"
-	>
+	<div class="flex w-full items-center gap-2 px-3 py-2.5">
 		<span
 			class={cn(
 				'h-2 w-2 flex-none rounded-full bg-muted-foreground',
@@ -307,14 +278,7 @@
 		<span class="flex-none text-[13px] text-muted-foreground tabular-nums">
 			{formatElapsed(elapsedSeconds)}
 		</span>
-		<Icon
-			src={ChevronDown}
-			theme="outline"
-			class="h-3.5 w-3.5 flex-none text-muted-foreground transition-transform duration-150 {open
-				? 'rotate-180'
-				: ''}"
-		/>
-	</button>
+	</div>
 
 	{#if currentSubtext && bannerStatus !== 'success'}
 		<p class="truncate border-t border-border px-3 py-2 text-[13px] text-muted-foreground">
@@ -325,39 +289,37 @@
 		<p class="border-t border-border px-3 py-2 text-[13px] text-destructive">{streamError}</p>
 	{/if}
 
-	{#if open}
-		<!-- Vercel-style rows: fixed timestamp column, preformatted output, and a
-		     restrained red surface for stderr rather than a terminal treatment. -->
-		<div
-			bind:this={logScroller}
-			class={cn(
-				'max-h-72 overflow-auto border-t border-border bg-card font-mono text-xs leading-5 text-foreground sm:text-sm',
-				fill && 'max-h-none min-h-0 flex-1'
-			)}
-			role="log"
-			aria-live="off"
-			aria-label="Deployment output"
-		>
-			{#each logs as log (log.order)}
-				<div
-					class={cn(
-						'inline-flex w-full min-w-max cursor-default border-l-2 border-l-transparent align-top text-foreground select-text hover:bg-accent',
-						log.type === 'stderr' && 'bg-destructive/10 text-destructive hover:bg-destructive/15'
-					)}
+	<!-- Vercel-style rows: fixed timestamp column, preformatted output, and a
+	     restrained red surface for stderr rather than a terminal treatment. -->
+	<div
+		bind:this={logScroller}
+		class={cn(
+			'max-h-72 overflow-auto border-t border-border bg-card font-mono text-xs leading-5 text-foreground sm:text-sm',
+			fill && 'max-h-none min-h-0 flex-1'
+		)}
+		role="log"
+		aria-live="off"
+		aria-label="Deployment output"
+	>
+		{#each logs as log (log.order)}
+			<div
+				class={cn(
+					'inline-flex w-full min-w-max cursor-default border-l-2 border-l-transparent align-top text-foreground select-text hover:bg-accent',
+					log.type === 'stderr' && 'bg-destructive/10 text-destructive hover:bg-destructive/15'
+				)}
+			>
+				<time
+					class="relative inline-flex w-28 flex-none items-center overflow-hidden py-0.5 pl-2 whitespace-nowrap text-muted-foreground tabular-nums select-none sm:w-32 sm:pl-4"
+					datetime={log.created_at}
 				>
-					<time
-						class="relative inline-flex w-28 flex-none items-center overflow-hidden py-0.5 pl-2 whitespace-nowrap text-muted-foreground tabular-nums select-none sm:w-32 sm:pl-4"
-						datetime={log.created_at}
-					>
-						{formatLogTimestamp(log.created_at)}
-					</time>
-					<div class="inline-flex min-w-0 flex-1 flex-col">
-						<p class="m-0 inline-block py-0.5 pr-3 pl-1 whitespace-pre sm:pr-6 sm:pl-3">
-							{log.output}
-						</p>
-					</div>
+					{formatLogTimestamp(log.created_at)}
+				</time>
+				<div class="inline-flex min-w-0 flex-1 flex-col">
+					<p class="m-0 inline-block py-0.5 pr-3 pl-1 whitespace-pre sm:pr-6 sm:pl-3">
+						{log.output}
+					</p>
 				</div>
-			{/each}
-		</div>
-	{/if}
+			</div>
+		{/each}
+	</div>
 </div>
