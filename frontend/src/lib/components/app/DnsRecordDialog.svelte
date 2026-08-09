@@ -22,10 +22,17 @@
 		domain: ServiceDomainResponse | null;
 		/** Whatever the server was registered as — an IP, or a hostname. */
 		serverHost?: string | null;
+		/**
+		 * The proxy does not know this hostname yet, because the running container
+		 * predates it. Until that is fixed the record cannot be validated, so this
+		 * is the step the dialog leads with.
+		 */
+		needsDeploy?: boolean;
+		onDeploy?: () => void;
 		onClose: () => void;
 	};
 
-	let { domain, serverHost, onClose }: Props = $props();
+	let { domain, serverHost, needsDeploy = false, onDeploy, onClose }: Props = $props();
 
 	/**
 	 * The mark next to the record. It reads the domain's real status rather than
@@ -54,7 +61,14 @@
 			label: 'Last check failed'
 		}
 	};
-	const mark = $derived(marks[domain?.status ?? 'pending'] ?? marks.pending);
+	// The undeployed case outranks the status, because it explains it: with no
+	// router for this hostname no certificate is ever requested, so `pending` is
+	// the symptom and this is the cause.
+	const mark = $derived(
+		needsDeploy && domain?.status !== 'ready'
+			? { icon: ExclamationTriangle, class: 'text-warning', label: 'Not deployed yet' }
+			: (marks[domain?.status ?? 'pending'] ?? marks.pending)
+	);
 
 	// An A record wants an address, and `host` is free text: somebody typed
 	// either. A hostname is not wrong to have registered — SSH resolves it fine —
@@ -201,16 +215,23 @@
 			     not a message — and the person who most needs this sentence is the one
 			     who cannot tell amber from green. -->
 			<p class="mt-3 flex items-start gap-2 text-[13px] text-muted-foreground">
-				{#if domain && domain.status !== 'ready'}
+				<!-- Nothing is happening yet while the deploy is outstanding, so nothing
+				     breathes. A dot that pulsed here would be claiming progress on a check
+				     that cannot run. -->
+				{#if domain && domain.status !== 'ready' && !needsDeploy}
 					<!-- Breathing, because it is genuinely doing something: this panel
-					     re-reads the domain every 15 seconds and will change under you.
-					     A still dot would be a label; this is a state. -->
+					     re-reads the domain on the reconciler's schedule and will change
+					     under you. A still dot would be a label; this is a state. -->
 					<span class={cn('watch-dot', mark.class)} aria-hidden="true"></span>
 				{/if}
 				<span class="min-w-0">
 					<span class={cn('font-medium', mark.class)}>{mark.label}.</span>
 					{#if domain?.status === 'ready'}
 						Nothing left to do here.
+					{:else if needsDeploy}
+						The record sends traffic to your server; deploying is what teaches the proxy to answer
+						for this name. Until then there is nothing for Uploy to detect, however correct the
+						record is.
 					{:else}
 						{#if nextCheck.seconds !== null}
 							<!-- The number counts to the reconciler's next pass, which is the
@@ -224,8 +245,7 @@
 									: 'Checking now…'}
 							</span>
 						{/if}
-						Leave this open and it will update itself. Deploy the service too — the record points traffic
-						at your server, and deploying is what teaches the proxy to answer for this name.
+						Leave this open and it will update itself.
 					{/if}
 				</span>
 			</p>
@@ -236,7 +256,15 @@
 		</div>
 
 		<DialogFooter>
-			<Button type="button" size="sm" onclick={onClose}>Done</Button>
+			<!-- The action sits with the instruction that asks for it. Sending the
+			     reader to another tab to find a Deploy button — or stacking a second
+			     modal on top of this one — would be two steps for one decision. -->
+			{#if needsDeploy && onDeploy}
+				<Button type="button" variant="secondary" size="sm" onclick={onClose}>Later</Button>
+				<Button type="button" size="sm" onclick={onDeploy}>Deploy now</Button>
+			{:else}
+				<Button type="button" size="sm" onclick={onClose}>Done</Button>
+			{/if}
 		</DialogFooter>
 	</DialogContent>
 </Dialog>

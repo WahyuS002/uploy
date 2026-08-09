@@ -231,6 +231,44 @@
 		error: { icon: ExclamationTriangle, class: 'text-destructive', label: 'Last check failed' }
 	};
 
+	/**
+	 * A domain has two prerequisites and `status` only reports on one of them.
+	 *
+	 * The Traefik rule for a hostname lives in the container's labels, written at
+	 * deploy time from the domains that existed then. A domain added since is
+	 * invisible to the proxy however correct its DNS is: no router, so no
+	 * certificate is ever requested, so the reconciler finds nothing and the row
+	 * waits on DNS forever while pointing at the wrong prerequisite.
+	 *
+	 * Both facts are already here, so the panel can just say which step is
+	 * outstanding.
+	 */
+	let lastDeployedAt = $derived(
+		deployments.find((d) => d.status === 'success')?.created_at ?? null
+	);
+
+	// A deploy already on its way carries every domain added before it started, so
+	// there is nothing to ask for — a prompt mid-flight would be wrong by the time
+	// anyone finished reading it.
+	let deployInFlight = $derived(deploying || deployments.some((d) => d.status === 'in_progress'));
+
+	// Compared against when the deploy *started*, which is when the job snapshots
+	// the domain list — a domain added a second later did not make that deploy.
+	const needsDeploy = (domain: ServiceDomainResponse) =>
+		!deployInFlight &&
+		(!lastDeployedAt || Date.parse(domain.created_at) > Date.parse(lastDeployedAt));
+
+	// Adding is visible in the list; removing is not, and it needs a deploy just
+	// the same — so the session flag stays on as the half this cannot derive.
+	let awaitingDeploy = $derived(needsRedeploy || domains.some(needsDeploy));
+
+	/** Deploy, then get out of the way and let the reader watch it happen. */
+	function deployFromDialog() {
+		dnsDomainId = null;
+		activeTab = 'deployments';
+		deploy();
+	}
+
 	let envKey = $state('');
 	let envValue = $state('');
 	let envError = $state('');
@@ -302,9 +340,11 @@
 				return;
 			}
 			if (data) {
+				// No needsRedeploy here: an added domain is in the list, so the
+				// derivation sees it. The flag is only for the half that leaves no
+				// trace to derive from.
 				domains = [...domains, data];
 				domainInput = '';
-				needsRedeploy = true;
 				// The moment the name is accepted is the moment nobody knows what to
 				// do next, so the answer arrives unasked rather than waiting to be
 				// looked for.
@@ -538,9 +578,12 @@
 				{/if}
 			</div>
 
-			{#if needsRedeploy}
+			<!-- Derived, not a session flag: the routing that is missing is missing
+			     after a reload too, and a warning that vanished when you refreshed was
+			     how this went unnoticed for five minutes at a time. -->
+			{#if awaitingDeploy}
 				<Alert tone="warning" class="mt-3 text-[13px]">
-					Domain configuration changed. Deploy to apply the new routing.
+					Domain routing is not live yet. Deploy to apply it.
 				</Alert>
 			{/if}
 			{#if deployError}
@@ -653,6 +696,7 @@
 				     panel read as three unrelated objects. -->
 				<div class="overflow-hidden rounded-lg border border-border">
 					{#each domains as domain (domain.id)}
+						{@const waiting = domain.status !== 'ready' && needsDeploy(domain)}
 						{@const mark = domainMarks[domain.status] ?? domainMarks.pending}
 						<DataRow density="dense" class="items-start gap-2.5">
 							<!-- The state leads the row instead of trailing it as a badge. It is
@@ -683,22 +727,41 @@
 								     to press about it belong next to each other, not stacked as two
 								     separate remarks. -->
 								<div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px]">
-									<span
-										class={cn(
-											'min-w-0 truncate',
-											domain.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
-										)}
-										title={domain.status === 'error' ? (domain.last_error ?? '') : undefined}
-									>
-										{domain.status === 'error' && domain.last_error
-											? domain.last_error
-											: mark.label}
-									</span>
+									{#if waiting}
+										<!-- The prerequisite that is actually outstanding. Saying
+										     "Waiting for DNS" to someone whose DNS is already correct is
+										     what sent this panel's reader off to check a record that was
+										     never the problem. -->
+										<span class="min-w-0 truncate text-muted-foreground">Not deployed yet</span>
+										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+										<button
+											type="button"
+											onclick={deploy}
+											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+										>
+											Deploy
+										</button>
+									{:else}
+										<span
+											class={cn(
+												'min-w-0 truncate',
+												domain.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
+											)}
+											title={domain.status === 'error' ? (domain.last_error ?? '') : undefined}
+										>
+											{domain.status === 'error' && domain.last_error
+												? domain.last_error
+												: mark.label}
+										</span>
+									{/if}
 									<!-- Only while it is still waiting: once the certificate is issued
 									     the record is demonstrably correct, and a link to instructions
 									     for something already done is just noise on the row. -->
 									{#if domain.status !== 'ready'}
-										{#if nextCheck.seconds !== null}
+										<!-- No countdown while the deploy is the missing piece: that
+										     check cannot succeed yet, and counting down to it is the
+										     exact reassurance that wasted somebody's afternoon. -->
+										{#if !waiting && nextCheck.seconds !== null}
 											<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
 											<!-- Counting to the reconciler's own pass, not to a refresh of
 											     ours: that is the moment the answer can change. A number
@@ -976,6 +1039,8 @@
 <DnsRecordDialog
 	domain={dnsDomain}
 	serverHost={server?.host}
+	needsDeploy={!!dnsDomain && needsDeploy(dnsDomain)}
+	onDeploy={deployFromDialog}
 	onClose={() => (dnsDomainId = null)}
 />
 
