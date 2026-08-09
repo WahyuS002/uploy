@@ -120,7 +120,7 @@
 	/**
 	 * How a change reads on its row. A removed thing shows what is going away, an
 	 * added one shows what arrives, and only a change that kept its identity has
-	 * two sides worth putting an arrow between.
+	 * something in both columns.
 	 */
 	function changeValues(change: ConfigChange): { from: string | null; to: string | null } {
 		return {
@@ -128,6 +128,38 @@
 			to: change.type === 'removed' ? null : (change.new_value ?? null)
 		};
 	}
+
+	/**
+	 * Splits a change into the thing and the kind of thing — "DATABASE_URL" and
+	 * "Variable" — so the name can lead the row and the kind can sit behind it in
+	 * the margin, which is the order you read a list of changes in.
+	 *
+	 * The name comes off the key, whose shape is part of the API ("image",
+	 * "domain:app.example.com", "env:DATABASE_URL"), and the kind is whatever the
+	 * label has left over once the name is taken off it. Derived that way rather
+	 * than from a prefix-to-word table here, which would be the server's
+	 * vocabulary written down a second time in a place that could drift from it.
+	 */
+	function changeParts(change: ConfigChange): { name: string; kind: string } {
+		const sep = change.key.indexOf(':');
+		if (sep === -1) return { name: change.label, kind: '' };
+		const name = change.key.slice(sep + 1);
+		return { name, kind: change.label.slice(0, change.label.length - name.length).trim() };
+	}
+
+	const changeMarks: Record<string, { sign: string; class: string }> = {
+		added: { sign: '+', class: 'text-success' },
+		removed: { sign: '−', class: 'text-destructive' },
+		changed: { sign: '~', class: 'text-muted-foreground' }
+	};
+
+	// What the deploy will actually do, in the footer where the button is. Named
+	// while there is one, counted once naming them all would be a paragraph.
+	let redeploySummary = $derived(
+		shownServices.length === 1
+			? `${shownServices[0].name} will redeploy`
+			: `${shownServices.length} services will redeploy`
+	);
 
 	function deployAndClose() {
 		detailsOpen = false;
@@ -205,7 +237,7 @@
 </div>
 
 <Dialog bind:open={detailsOpen}>
-	<DialogContent class="max-w-xl">
+	<DialogContent class="max-w-2xl">
 		<DialogHeader>
 			<DialogTitle>{countLabel}</DialogTitle>
 			<DialogDescription>
@@ -213,106 +245,142 @@
 			</DialogDescription>
 		</DialogHeader>
 
-		<!-- divide-y rather than a border on each row: the footer already draws its own
-		     top edge, and a border-bottom on the last row would double it. -->
-		<ul class="max-h-96 divide-y divide-border overflow-y-auto border-t border-border">
+		<!-- One card per service rather than one long divided list: each service is a
+		     separate thing that will redeploy, and its changes are a table with
+		     headings of its own. Stacked flat, the column headings of the second
+		     service read as more rows of the first. -->
+		<div class="max-h-[60vh] space-y-3 overflow-y-auto border-t border-border px-5 py-4">
 			{#each shownServices as svc (svc.id)}
 				{@const diff = diffs[svc.id]}
-				<li>
-					<!-- The service name stays a button: it opens that service's panel so
-					     you can check a change before committing to it, which is the only
-					     reason to open a review surface rather than just pressing Deploy. -->
-					<button
-						type="button"
-						onclick={() => selectAndClose(svc.id)}
-						class="flex w-full cursor-pointer items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
-					>
+				<section class="overflow-hidden rounded-lg border border-border">
+					<header class="flex items-center gap-2.5 px-3 py-2.5">
 						<span
-							class="grid h-8 w-8 flex-none place-content-center rounded-md bg-muted text-foreground"
+							class="grid h-7 w-7 flex-none place-content-center rounded-md bg-muted text-foreground"
 						>
-							<Container class="h-4 w-4" strokeWidth={1.75} />
+							<Container class="h-3.5 w-3.5" strokeWidth={1.75} />
 						</span>
-						<span class="min-w-0 flex-1">
-							<span class="block truncate text-sm text-foreground">
-								<span class="font-medium">{svc.name}</span>
-								<span class="text-muted-foreground">
-									{svc.has_deployed ? 'will be updated' : 'will be added'}
-								</span>
+						<!-- The name stays a button: it opens that service's panel so you can
+						     check a change before committing to it, which is the only reason
+						     to open a review surface rather than just pressing Deploy. -->
+						<p class="min-w-0 flex-1 truncate text-sm">
+							<button
+								type="button"
+								onclick={() => selectAndClose(svc.id)}
+								class="cursor-pointer rounded font-medium text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+							>
+								{svc.name}
+							</button>
+							<span class="text-muted-foreground">
+								{svc.has_deployed ? 'will be updated' : 'will be added'}
 							</span>
-							<span class="block truncate font-mono text-[11px] text-muted-foreground">
-								{svc.image}
+						</p>
+						{#if diff?.has_baseline}
+							<span class="flex-none text-[13px] text-muted-foreground tabular-nums">
+								{diff.changes.length === 1 ? '1 change' : `${diff.changes.length} changes`}
 							</span>
-						</span>
-					</button>
+						{/if}
+					</header>
 
-					<!-- Indented under the service rather than in a table of its own: these
-					     rows belong to the name above them, and at this width a Change /
-					     Current / New table would give each column about nine characters. -->
 					{#if !diff}
-						<p class="px-5 pb-3 pl-16 text-[13px] text-muted-foreground">
+						<p class="border-t border-border px-3 py-2.5 text-[13px] text-muted-foreground">
 							{diffsFailed[svc.id] ? 'Could not read what changed.' : 'Reading changes…'}
 						</p>
 					{:else if !diff.has_baseline}
-						<!-- The honest answer, not an empty list. A service Uploy has no record
-						     of is genuinely pending, and showing nothing under a badge that
-						     says otherwise is how a reader learns to distrust the badge. -->
-						<p class="px-5 pb-3 pl-16 text-[13px] text-muted-foreground">
+						<!-- The honest answer, not an empty table. A service Uploy has no
+						     record of is genuinely pending, and showing nothing under a badge
+						     that says otherwise is how a reader learns to distrust the badge. -->
+						<p class="border-t border-border px-3 py-2.5 text-[13px] text-muted-foreground">
 							{svc.has_deployed
 								? 'Uploy has no record of what this service is running. Deploy to bring it in line.'
-								: 'This service has never been deployed.'}
+								: `Deploying creates it from ${svc.image}.`}
 						</p>
 					{:else}
-						<ul class="px-5 pb-3 pl-16">
-							{#each diff.changes as change (change.key)}
-								{@const values = changeValues(change)}
-								<li class="flex min-w-0 items-baseline gap-2 py-1 text-[13px]">
-									<!-- The mark carries added / removed / changed, so the row does
-									     not spend a word on it. Aria-hidden with the word restored
-									     to a screen reader: +/− is a shape, not a sentence. -->
-									<span
-										class={cn(
-											'w-3 flex-none text-center font-mono',
-											change.type === 'added' && 'text-success',
-											change.type === 'removed' && 'text-destructive',
-											change.type === 'changed' && 'text-muted-foreground'
-										)}
-										aria-hidden="true"
-									>
-										{change.type === 'added' ? '+' : change.type === 'removed' ? '−' : '~'}
-									</span>
-									<span class="sr-only">{change.type}:</span>
-									<span class="flex-none text-foreground">{change.label}</span>
-									<span class="min-w-0 flex-1 truncate text-right font-mono text-muted-foreground">
-										{#if values.from !== null && values.to !== null}
-											<span class="line-through opacity-60">{values.from}</span>
-											<span class="px-1" aria-hidden="true">→</span>
-											<span class="text-foreground">{values.to}</span>
-										{:else if values.to !== null}
-											<span class="text-foreground">{values.to}</span>
-										{:else}
-											<span class="line-through opacity-60">{values.from}</span>
-										{/if}
-									</span>
-								</li>
-							{/each}
-						</ul>
-					{/if}
-				</li>
-			{/each}
-		</ul>
+						<div class="border-t border-border">
+							<!-- Column headings, so the two value cells are not two anonymous
+							     boxes the reader has to work out the direction of. -->
+							<div
+								class="grid grid-cols-[1.1fr_1fr_1fr] gap-3 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground"
+							>
+								<span>Change</span>
+								<span>Current value</span>
+								<span>New value</span>
+							</div>
+							<ul class="divide-y divide-border">
+								{#each diff.changes as change (change.key)}
+									{@const values = changeValues(change)}
+									{@const parts = changeParts(change)}
+									{@const mark = changeMarks[change.type] ?? changeMarks.changed}
+									<li class="grid grid-cols-[1.1fr_1fr_1fr] items-center gap-3 px-3 py-2">
+										<span class="flex min-w-0 items-baseline gap-2 text-[13px]">
+											<!-- The mark carries added / removed / changed, so the row
+											     does not spend a word on it. Hidden from screen readers
+											     with the word restored beside it: +/− is a shape, not a
+											     sentence. -->
+											<span class={cn('flex-none font-mono', mark.class)} aria-hidden="true">
+												{mark.sign}
+											</span>
+											<span class="sr-only">{change.type}:</span>
+											<span class="min-w-0 truncate font-mono text-foreground" title={parts.name}>
+												{parts.name}
+											</span>
+											{#if parts.kind}
+												<span class="flex-none text-muted-foreground">{parts.kind}</span>
+											{/if}
+										</span>
 
-		<DialogFooter>
-			<Button variant="secondary" size="sm" onclick={() => (detailsOpen = false)}>Cancel</Button>
-			<Button
-				size="sm"
-				loading={deploying}
-				disabled={deploying}
-				onclick={deployAndClose}
-				aria-keyshortcuts="Meta+Enter Control+Enter"
-			>
-				Deploy changes
-				<span class="shortcut" aria-hidden="true">{shortcutHint}</span>
-			</Button>
+										<!-- Both cells are always drawn, empty one included: the gap is
+										     what says "this did not exist before", and a row with one
+										     box floating in it loses which column it landed in. -->
+										{#each [{ value: values.from, side: 'from' }, { value: values.to, side: 'to' }] as cell (cell.side)}
+											<span
+												class={cn(
+													'min-w-0 truncate rounded-md px-2 py-1 font-mono text-[13px]',
+													cell.value === null && 'bg-muted/50',
+													cell.value !== null &&
+														cell.side === 'to' &&
+														'bg-success/10 text-foreground',
+													cell.value !== null &&
+														cell.side === 'from' &&
+														(change.type === 'removed'
+															? 'bg-destructive/10 text-foreground'
+															: 'bg-muted text-muted-foreground')
+												)}
+												title={cell.value ?? undefined}
+											>
+												{#if cell.value === null}
+													<span class="sr-only">none</span>&nbsp;
+												{:else}
+													{cell.value}
+												{/if}
+											</span>
+										{/each}
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+				</section>
+			{/each}
+		</div>
+
+		<!-- The consequence sits next to the button that causes it. Pressing Deploy
+		     restarts containers, which is worth saying once at the moment of
+		     pressing rather than leaving to be inferred from the word. -->
+		<DialogFooter class="justify-between">
+			<p class="min-w-0 truncate text-[13px] text-muted-foreground">{redeploySummary}</p>
+			<div class="flex flex-none items-center gap-2">
+				<Button variant="secondary" size="sm" onclick={() => (detailsOpen = false)}>Cancel</Button>
+				<Button
+					size="sm"
+					loading={deploying}
+					disabled={deploying}
+					onclick={deployAndClose}
+					aria-keyshortcuts="Meta+Enter Control+Enter"
+				>
+					Deploy changes
+					<span class="shortcut" aria-hidden="true">{shortcutHint}</span>
+				</Button>
+			</div>
 		</DialogFooter>
 	</DialogContent>
 </Dialog>
