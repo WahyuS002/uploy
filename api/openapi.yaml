@@ -2217,6 +2217,14 @@ components:
         ready_at:
           type: string
           format: date-time
+        next_check_at:
+          type: string
+          format: date-time
+          description: >-
+            When the reconciler next examines pending domains. A domain cannot
+            change status between two of those passes, so this is the moment a
+            client should wait for. Absent once the domain is ready, or if the
+            reconciler is not running.
         created_at:
           type: string
           format: date-time

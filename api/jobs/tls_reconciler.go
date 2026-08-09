@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"log"
+	"sync/atomic"
 	"time"
 
 	"github.com/WahyuS002/uploy/crypto"
@@ -10,18 +11,45 @@ import (
 	"github.com/WahyuS002/uploy/ssh"
 )
 
+const domainCheckInterval = 60 * time.Second
+
+// When the loop below will next look, as unix milliseconds. A pending domain
+// cannot change status between two ticks, so this is the only moment worth
+// waiting for — and a client that knows it can say so instead of guessing.
+//
+// Atomic because the reconciler writes it while request handlers read it.
+var nextDomainCheck atomic.Int64
+
+// NextDomainCheck reports when pending domains are next examined. The zero time
+// means the reconciler is not running, and callers should say nothing rather
+// than invent a schedule.
+func NextDomainCheck() time.Time {
+	ms := nextDomainCheck.Load()
+	if ms == 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(ms)
+}
+
 // StartDomainReconciler runs a background loop that checks pending
 // application_domains for TLS certificate readiness per exact hostname.
 func StartDomainReconciler(ctx context.Context) {
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(domainCheckInterval)
 	defer ticker.Stop()
+	nextDomainCheck.Store(time.Now().Add(domainCheckInterval).UnixMilli())
 
 	for {
 		select {
 		case <-ctx.Done():
+			// Nothing is coming, so stop promising that something is.
+			nextDomainCheck.Store(0)
 			return
 		case <-ticker.C:
 			reconcilePendingDomains(ctx)
+			// Published after the pass, not before it: a run can take up to 30s
+			// of SSH, and counting down to a moment that has already gone by is
+			// worse than counting down to one slightly late.
+			nextDomainCheck.Store(time.Now().Add(domainCheckInterval).UnixMilli())
 		}
 	}
 }

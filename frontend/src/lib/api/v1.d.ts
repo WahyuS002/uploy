@@ -704,6 +704,11 @@ export interface components {
 			last_reconciled_at?: string;
 			/** Format: date-time */
 			ready_at?: string;
+			/**
+			 * Format: date-time
+			 * @description When the reconciler next examines pending domains. A domain cannot change status between two of those passes, so this is the moment a client should wait for. Absent once the domain is ready, or if the reconciler is not running.
+			 */
+			next_check_at?: string;
 			/** Format: date-time */
 			created_at: string;
 			/** Format: date-time */

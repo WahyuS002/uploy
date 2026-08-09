@@ -5,10 +5,12 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
+	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/jackc/pgx/v5"
 )
@@ -206,7 +208,23 @@ func domainToResponse(d db.ServiceDomain) gen.ServiceDomainResponse {
 		LastError:        d.LastError,
 		LastReconciledAt: d.LastReconciledAt,
 		ReadyAt:          d.ReadyAt,
+		NextCheckAt:      nextCheckFor(d.Status),
 		CreatedAt:        d.CreatedAt,
 		UpdatedAt:        d.UpdatedAt,
 	}
+}
+
+// nextCheckFor answers only for a domain the reconciler will actually look at.
+// A settled domain is not on its list, so promising it a next check would be a
+// countdown to nothing — and a reconciler that is not running promises nothing
+// at all.
+func nextCheckFor(status string) *time.Time {
+	if status == "ready" {
+		return nil
+	}
+	next := jobs.NextDomainCheck()
+	if next.IsZero() {
+		return nil
+	}
+	return &next
 }

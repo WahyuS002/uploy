@@ -4,6 +4,7 @@
 	import type { components } from '$lib/api/v1';
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
 	import LogStream from '$lib/components/app/LogStream.svelte';
+	import DnsRecordDialog from '$lib/components/app/DnsRecordDialog.svelte';
 	import FormField from '$lib/components/app/FormField.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -21,8 +22,9 @@
 		DialogTitle
 	} from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { GlobeAlt, Server, XMark } from '@steeze-ui/heroicons';
+	import { ExclamationTriangle, GlobeAlt, Server, XMark } from '@steeze-ui/heroicons';
 	import { cn } from '$lib/components/ui/cn.js';
+	import { countdownTo } from '$lib/countdown.svelte';
 	import { formatDateTime, formatRelativeTime } from '$lib/format-date';
 
 	type ServiceResponse = components['schemas']['ServiceResponse'];
@@ -205,6 +207,29 @@
 	let domainError = $state('');
 	let domainAdding = $state(false);
 	let needsRedeploy = $state(false);
+	// The domain whose DNS record is being explained, or null. Opened by adding
+	// one and reopenable from any row that is still waiting — a dialog you can
+	// only ever see once is a dead end for the person who dismissed it too fast.
+	//
+	// Held by id and looked back up, so the dialog's status mark tracks the list
+	// rather than freezing on whatever the row said when it was clicked.
+	let dnsDomainId = $state<string | null>(null);
+	let dnsDomain = $derived(domains.find((d) => d.id === dnsDomainId) ?? null);
+
+	/**
+	 * How each domain state shows up in the list. A globe for one that answers, a
+	 * triangle for one that does not yet — the mark carries the state so the row
+	 * does not need a badge spelling it out on the far side as well.
+	 *
+	 * `ready` means the TLS reconciler found a certificate for this hostname, and
+	 * there is no certificate without DNS that resolves here — so it is the
+	 * strongest thing the panel can honestly say.
+	 */
+	const domainMarks = {
+		pending: { icon: ExclamationTriangle, class: 'text-warning', label: 'Waiting for DNS' },
+		ready: { icon: GlobeAlt, class: 'text-success', label: 'HTTPS active' },
+		error: { icon: ExclamationTriangle, class: 'text-destructive', label: 'Last check failed' }
+	};
 
 	let envKey = $state('');
 	let envValue = $state('');
@@ -280,6 +305,10 @@
 				domains = [...domains, data];
 				domainInput = '';
 				needsRedeploy = true;
+				// The moment the name is accepted is the moment nobody knows what to
+				// do next, so the answer arrives unasked rather than waiting to be
+				// looked for.
+				dnsDomainId = data.id;
 			}
 		} catch {
 			domainError = 'Network error';
@@ -369,6 +398,7 @@
 		domainInput = '';
 		domainError = '';
 		domainAdding = false;
+		dnsDomainId = null;
 		envKey = '';
 		envValue = '';
 		envError = '';
@@ -385,6 +415,53 @@
 		loadEnvs(id, token);
 		loadDeployments(id, token);
 	});
+
+	/**
+	 * A domain settles without anyone touching it: the reconciler promotes it once
+	 * its certificate shows up. A panel left open should say so on its own —
+	 * watching a row stay amber while the thing has been working for ten minutes
+	 * is how people learn not to trust the row.
+	 *
+	 * The API sends the moment of the next pass, so this waits for that moment
+	 * instead of sampling blindly. One request per pass, landing just after the
+	 * answer can change, rather than four that mostly find the same thing. The
+	 * fetched response carries the following pass, which schedules the next wait —
+	 * and a settled list carries none, which is how the loop stops.
+	 */
+	const checkGraceMs = 3_000;
+
+	// Every unresolved domain gets the same moment: it is one reconciler pass, not
+	// a schedule per domain. Whichever is first will do.
+	let nextCheckAt = $derived(domains.find((d) => d.next_check_at)?.next_check_at ?? null);
+
+	$effect(() => {
+		const iso = nextCheckAt;
+		if (!iso) return;
+		const id = svcId;
+
+		// A floor rather than a raw difference: a clock skewed behind the server's
+		// would otherwise schedule at zero and spin.
+		const wait = Math.max(1_000, Date.parse(iso) + checkGraceMs - Date.now());
+		const timer = setTimeout(() => loadDomains(id, loadToken), wait);
+
+		// Coming back to a tab shows current data rather than whatever was true
+		// when it went to the background — a throttled background timer can be a
+		// while late, and sitting out the rest of it is what makes someone reach
+		// for reload.
+		const onVisibilityChange = () => {
+			if (!document.hidden) loadDomains(id, loadToken);
+		};
+		document.addEventListener('visibilitychange', onVisibilityChange);
+
+		return () => {
+			clearTimeout(timer);
+			document.removeEventListener('visibilitychange', onVisibilityChange);
+		};
+	});
+
+	// One clock for the whole list: the countdown is to a single reconciler pass,
+	// so every waiting row shows the same number.
+	const nextCheck = countdownTo(() => nextCheckAt);
 
 	const tabs: { id: Tab; label: string }[] = [
 		{ id: 'deployments', label: 'Deployments' },
@@ -576,7 +653,18 @@
 				     panel read as three unrelated objects. -->
 				<div class="overflow-hidden rounded-lg border border-border">
 					{#each domains as domain (domain.id)}
+						{@const mark = domainMarks[domain.status] ?? domainMarks.pending}
 						<DataRow density="dense" class="items-start gap-2.5">
+							<!-- The state leads the row instead of trailing it as a badge. It is
+							     the first thing you want to know about an address, and reading it
+							     in the margin beats hunting for a word on the far side — which is
+							     also what frees the second line to say what to do about it. -->
+							<Icon
+								src={mark.icon}
+								theme="outline"
+								class={cn('mt-0.5 h-4 w-4 flex-none', mark.class)}
+								aria-hidden="true"
+							/>
 							<div class="min-w-0 flex-1">
 								<div class="flex min-w-0 items-center gap-2">
 									<a
@@ -591,13 +679,52 @@
 										<Badge tone="info" class="flex-none">primary</Badge>
 									{/if}
 								</div>
-								{#if domain.last_error}
-									<p class="mt-1 truncate text-[13px] text-destructive" title={domain.last_error}>
-										{domain.last_error}
-									</p>
-								{/if}
+								<!-- State and the way out of it on one line: what is wrong and what
+								     to press about it belong next to each other, not stacked as two
+								     separate remarks. -->
+								<div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px]">
+									<span
+										class={cn(
+											'min-w-0 truncate',
+											domain.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
+										)}
+										title={domain.status === 'error' ? (domain.last_error ?? '') : undefined}
+									>
+										{domain.status === 'error' && domain.last_error
+											? domain.last_error
+											: mark.label}
+									</span>
+									<!-- Only while it is still waiting: once the certificate is issued
+									     the record is demonstrably correct, and a link to instructions
+									     for something already done is just noise on the row. -->
+									{#if domain.status !== 'ready'}
+										{#if nextCheck.seconds !== null}
+											<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+											<!-- Counting to the reconciler's own pass, not to a refresh of
+											     ours: that is the moment the answer can change. A number
+											     running out four times a minute while nothing happened
+											     would teach the reader to stop looking at it.
+
+											     Hidden from screen readers: a digit changing every second
+											     is unusable read aloud, and the state itself is announced
+											     by the text beside it the moment it arrives. -->
+											<span class="flex-none tabular-nums" aria-hidden="true">
+												{nextCheck.seconds > 0
+													? `next check in ${nextCheck.seconds}s`
+													: 'checking now…'}
+											</span>
+										{/if}
+										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+										<button
+											type="button"
+											onclick={() => (dnsDomainId = domain.id)}
+											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+										>
+											Show DNS record
+										</button>
+									{/if}
+								</div>
 							</div>
-							<StatusBadge status={domain.status} class="mt-px flex-none" />
 							{#if canEdit}
 								<IconButton
 									variant="ghost"
@@ -631,23 +758,14 @@
 				{#if domainError}
 					<p class="mt-1 text-[15px] text-destructive">{domainError}</p>
 				{/if}
-				<Alert tone="neutral" class="mt-3 text-[13px]">
-					<p class="font-medium text-foreground">DNS setup required before deploying:</p>
-					<!-- Prose, so it takes a measure. Uncapped it ran ~105ch in a 960px
-					     panel, well past the 65–75ch a reader tracks without losing the line. -->
-					<ul class="mt-1 max-w-[68ch] list-inside list-disc space-y-0.5">
-						<li>
-							For a subdomain (e.g. <code>app.example.com</code>): create an
-							<strong>A record</strong>
-							with name <code>app</code> pointing to your server IP
-						</li>
-						<li>
-							For a root domain (e.g. <code>example.com</code>): create an
-							<strong>A record</strong>
-							with name <code>@</code> pointing to your server IP
-						</li>
-					</ul>
-				</Alert>
+				<!-- One line where a two-case list used to be. The list was the generic
+				     version of what the dialog now says exactly — with the actual record
+				     name and the actual server address — so keeping both meant saying it
+				     twice and saying it vaguely first. This only has to stop someone from
+				     expecting the domain to work the moment they press Add. -->
+				<p class="mt-2 text-[13px] text-muted-foreground">
+					A domain needs a DNS record before it resolves. You'll get the exact one to add next.
+				</p>
 			{/if}
 		{:else if activeTab === 'env'}
 			{#if canEdit && envsLoaded}
@@ -854,6 +972,12 @@
 		{/if}
 	</div>
 </div>
+
+<DnsRecordDialog
+	domain={dnsDomain}
+	serverHost={server?.host}
+	onClose={() => (dnsDomainId = null)}
+/>
 
 <Dialog bind:open={deleteOpen}>
 	<DialogContent>

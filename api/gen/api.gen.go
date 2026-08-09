@@ -413,15 +413,18 @@ type ServerResponseProxyStatus string
 
 // ServiceDomainResponse defines model for ServiceDomainResponse.
 type ServiceDomainResponse struct {
-	CreatedAt        time.Time                   `json:"created_at"`
-	Domain           string                      `json:"domain"`
-	Id               string                      `json:"id"`
-	IsPrimary        bool                        `json:"is_primary"`
-	LastError        *string                     `json:"last_error,omitempty"`
-	LastReconciledAt *time.Time                  `json:"last_reconciled_at,omitempty"`
-	ReadyAt          *time.Time                  `json:"ready_at,omitempty"`
-	Status           ServiceDomainResponseStatus `json:"status"`
-	UpdatedAt        time.Time                   `json:"updated_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	Domain           string     `json:"domain"`
+	Id               string     `json:"id"`
+	IsPrimary        bool       `json:"is_primary"`
+	LastError        *string    `json:"last_error,omitempty"`
+	LastReconciledAt *time.Time `json:"last_reconciled_at,omitempty"`
+
+	// NextCheckAt When the reconciler next examines pending domains. A domain cannot change status between two of those passes, so this is the moment a client should wait for. Absent once the domain is ready, or if the reconciler is not running.
+	NextCheckAt *time.Time                  `json:"next_check_at,omitempty"`
+	ReadyAt     *time.Time                  `json:"ready_at,omitempty"`
+	Status      ServiceDomainResponseStatus `json:"status"`
+	UpdatedAt   time.Time                   `json:"updated_at"`
 }
 
 // ServiceDomainResponseStatus defines model for ServiceDomainResponse.Status.
