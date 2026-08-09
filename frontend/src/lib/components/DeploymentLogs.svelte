@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import { cn } from '$lib/components/ui/cn.js';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { ChevronDown } from '@steeze-ui/heroicons';
@@ -30,7 +29,6 @@
 	let logs: LogEntry[] = $state([]);
 	let status: string = $state('in_progress');
 	let streamError: string = $state('');
-	let eventSource: EventSource | null = null;
 
 	const phaseLabels: Record<string, string> = {
 		connect: 'Connecting to Server',
@@ -140,18 +138,47 @@
 		if (nearBottom) el.scrollTop = el.scrollHeight;
 	});
 
-	onMount(() => {
+	/**
+	 * One stream per deployment, torn down and reopened when the id changes.
+	 *
+	 * This used to be onMount, which runs once — but the service panel reuses this
+	 * component across deploys rather than remounting it, so a second deploy went
+	 * on listening to the first. That stream had already closed, so the output
+	 * stayed frozen on the previous run's last line, `done` never fired again, and
+	 * the header above it sat on "in progress" while the log underneath said
+	 * Complete.
+	 */
+	$effect(() => {
+		const id = deploymentId;
+
+		// None of this may survive into the next deployment: a phase left over from
+		// the last run, or its clock still counting, reads as progress on this one.
+		logs = [];
+		status = 'in_progress';
+		streamError = '';
+		currentPhase = 'Starting...';
+		currentSubtext = '';
+		lastErrorReason = '';
+		startTime = null;
+		lastLogTime = Date.now();
+		elapsedSeconds = 0;
+		// A new run is worth watching even if the reader had collapsed the last one.
+		open = true;
+		userToggled = false;
+
 		startTimer();
 
-		eventSource = new EventSource(`/api/deployments/${deploymentId}/logs`);
+		// Local to this run, so the handlers below close the stream they belong to
+		// rather than whichever one is current by the time they fire.
+		const source = new EventSource(`/api/deployments/${id}/logs`);
 
-		eventSource.onmessage = (e) => {
+		source.onmessage = (e) => {
 			const log: LogEntry = JSON.parse(e.data);
 			logs = [...logs, log];
 			updatePhaseFromLog(log);
 		};
 
-		eventSource.addEventListener('done', (e) => {
+		source.addEventListener('done', (e) => {
 			status = (e as MessageEvent).data;
 			if (status === 'success') {
 				currentPhase = 'Deployment Complete';
@@ -164,10 +191,10 @@
 			}
 			freezeElapsed();
 			onDone?.(status);
-			eventSource?.close();
+			source.close();
 		});
 
-		eventSource.addEventListener('stream-error', (e) => {
+		source.addEventListener('stream-error', (e) => {
 			const data = JSON.parse((e as MessageEvent).data);
 			streamError = data.message;
 			status = 'failed';
@@ -177,13 +204,13 @@
 			}
 			freezeElapsed();
 			onDone?.('failed');
-			eventSource?.close();
+			source.close();
 		});
-	});
 
-	onDestroy(() => {
-		stopTimer();
-		eventSource?.close();
+		return () => {
+			stopTimer();
+			source.close();
+		};
 	});
 </script>
 
