@@ -12,6 +12,7 @@
 		ready: 'success',
 		success: 'success',
 		active: 'success',
+		draining: 'warning',
 		pending: 'warning',
 		in_progress: 'warning',
 		not_configured: 'warning',

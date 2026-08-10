@@ -52,3 +52,9 @@ export function formatRelativeTime(iso: string) {
 	if (Math.abs(delta) < 1) return relativeFormatter.format(Math.round(delta), 'year');
 	return formatDate(iso);
 }
+
+/** "51s" / "2m 8s" — how long something took, as opposed to when it happened. */
+export function formatDuration(seconds: number) {
+	if (seconds < 60) return `${seconds}s`;
+	return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}

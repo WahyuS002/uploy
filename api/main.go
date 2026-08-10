@@ -61,6 +61,7 @@ func main() {
 	mux.HandleFunc("GET /api/auth/google/callback", handlers.GoogleCallbackHandler)
 
 	go jobs.StartDomainReconciler(ctx)
+	go jobs.StartDeploymentReconciler(ctx)
 
 	srv := &http.Server{Addr: ":8080", Handler: mux}
 

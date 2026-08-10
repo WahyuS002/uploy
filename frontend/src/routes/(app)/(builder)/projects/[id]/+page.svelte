@@ -889,6 +889,7 @@
 			<DeploymentPanel
 				deployment={openDeployment}
 				serviceName={selectedService.name}
+				environmentName={selectedEnv?.name}
 				onClose={() => (openDeployment = null)}
 				class="absolute inset-0 z-40 md:top-7 md:right-0 md:bottom-0 md:left-auto md:w-[var(--inspector-width)] md:rounded-none md:rounded-tl-xl"
 			/>

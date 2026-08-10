@@ -42,11 +42,55 @@ func TestBuildDockerRunCmdMapsHostPortToContainerPort(t *testing.T) {
 		HostPort:      3000,
 		Domains:       []string{"example.com"},
 	})
-	if !strings.Contains(proxied, "loadbalancer.server.port=3000") {
-		t.Errorf("proxy mode did not forward to the container port: %s", proxied)
+	if strings.Contains(proxied, "traefik.http") {
+		t.Errorf("proxy mode should be routed by the file provider, not container labels: %s", proxied)
 	}
 	if strings.Contains(proxied, "-p ") {
 		t.Errorf("proxy mode should not publish a host port: %s", proxied)
+	}
+}
+
+func TestBuildDockerRunCmdAddsDeploymentOwnershipLabels(t *testing.T) {
+	cmd := buildDockerRunCmd("docker", DeployConfig{
+		DeploymentID:  "deployment-1",
+		ServiceID:     "service-1",
+		ContainerName: "web-app-deadbeef",
+		Image:         "nginx",
+		ContainerPort: 80,
+		Domains:       []string{"example.com"},
+	})
+	for _, label := range []string{"--label uploy.service_id=service-1", "--label uploy.deployment_id=deployment-1"} {
+		if !strings.Contains(cmd, label) {
+			t.Errorf("missing ownership label %q: %s", label, cmd)
+		}
+	}
+}
+
+func TestBuildDockerRunCmdAddsFallbackHealthcheck(t *testing.T) {
+	cmd := buildDockerRunCmd("docker", DeployConfig{
+		ContainerName:      "nginx-app-candidate",
+		Image:              "nginx:latest",
+		ContainerPort:      80,
+		Domains:            []string{"example.com"},
+		HealthcheckCommand: fallbackHealthcheckCommand(80),
+	})
+
+	for _, option := range []string{
+		"--health-cmd 'curl -fsS http://127.0.0.1:80/ >/dev/null || wget -q -O /dev/null http://127.0.0.1:80/ || exit 1'",
+		"--health-interval 5s",
+		"--health-timeout 5s",
+		"--health-retries 10",
+		"--health-start-period 5s",
+	} {
+		if !strings.Contains(cmd, option) {
+			t.Errorf("missing fallback healthcheck option %q: %s", option, cmd)
+		}
+	}
+}
+
+func TestDeploymentContainerNameUsesShortDeploymentID(t *testing.T) {
+	if got := DeploymentContainerName("web-app", "12345678-aaaa-bbbb"); got != "web-app-12345678" {
+		t.Fatalf("DeploymentContainerName = %q", got)
 	}
 }
 

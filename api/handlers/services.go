@@ -355,19 +355,33 @@ func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string
 		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
 		return
 	}
+	latest, err := db.ListDeploymentsByService(r.Context(), svc.ID, 1)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read deployment state"})
+		return
+	}
+	if len(latest) > 0 && latest[0].Status == "in_progress" {
+		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "cannot delete a service while deployment is in progress"})
+		return
+	}
 
 	// Tear the container down before dropping the record. Fail closed: if the
 	// server is unreachable we would otherwise leave a container serving traffic
 	// with nothing in Uploy pointing at it, and no way to reach it from the UI.
 	// A failed delete is recoverable, an orphan is not.
 	if svc.HasDeployed {
-		if err := jobs.RemoveContainer(ssh.ServerConfig{
+		activeDeployment, activeConfig, activeErr := db.GetActiveDeploymentConfig(r.Context(), svc.ID)
+		if activeErr != nil {
+			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "service has no active deployment"})
+			return
+		}
+		if err := jobs.RemoveService(ssh.ServerConfig{
 			Host:       svc.Host,
 			Port:       int(svc.ServerPort),
 			User:       svc.SSHUser,
 			PrivateKey: svc.PrivateKey,
-		}, svc.ContainerName); err != nil {
-			log.Printf("RemoveContainer service=%s container=%s error: %v", id, svc.ContainerName, err)
+		}, svc.ID, jobs.ContainerNameForDeployment(activeConfig, activeDeployment.ID)); err != nil {
+			log.Printf("RemoveContainer service=%s error: %v", id, err)
 			respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{
 				Error: "could not remove the container from the server, so the service was kept: " + err.Error(),
 			})

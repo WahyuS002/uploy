@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { dev } from '$app/environment';
+	import { page } from '$app/state';
+	import Docker from '~icons/logos/docker-icon';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
 	import DeploymentLogs from '$lib/components/DeploymentLogs.svelte';
@@ -32,6 +35,12 @@
 	type ServiceDomainResponse = components['schemas']['ServiceDomainResponse'];
 	type ServiceEnvResponse = components['schemas']['ServiceEnvResponse'];
 	type DeploymentResponse = components['schemas']['DeploymentResponse'];
+	type DeploymentStatePreview = {
+		id: string;
+		status: 'in_progress' | 'failed' | 'success';
+		banner: 'active' | 'error' | 'success';
+		age: string;
+	};
 
 	type Tab = 'deployments' | 'logs' | 'domains' | 'env' | 'settings';
 
@@ -82,6 +91,14 @@
 
 	// Deployments lands first, so it is what a freshly selected service opens on.
 	let activeTab = $state<Tab>('deployments');
+	let showDeploymentStatePreview = $derived(
+		dev && page.url.searchParams.get('deploymentLogsPreview') === 'all'
+	);
+	const deploymentStatePreviews: DeploymentStatePreview[] = [
+		{ id: 'dpl_1a2b3c4d', status: 'in_progress', banner: 'active', age: 'Deploying now' },
+		{ id: 'dpl_5e6f7a8b', status: 'failed', banner: 'error', age: '1 minute ago' },
+		{ id: 'dpl_9c0d1e2f', status: 'success', banner: 'success', age: '2 minutes ago' }
+	];
 
 	let domains = $state<ServiceDomainResponse[]>([]);
 	let envs = $state<ServiceEnvResponse[]>([]);
@@ -125,7 +142,30 @@
 	// the log panel needs the status of. Undefined until the list has it, which
 	// reads as "still running" — the right guess for one just started.
 	let streamedStatus = $derived(deployments.find((d) => d.id === deploymentId)?.status);
-	let previousDeployments = $derived(deployments.slice(1));
+	let currentDeploymentStatus = $derived(
+		deploymentId ? (streamedStatus ?? 'in_progress') : (latestDeployment?.status ?? null)
+	);
+	let latestDeploymentSucceeded = $derived(currentDeploymentStatus === 'success');
+	let latestDeploymentFailed = $derived(currentDeploymentStatus === 'failed');
+	let supportingDeployment = $derived(
+		latestDeployment?.is_rolling && latestDeployment.status !== 'success'
+			? latestDeployment.is_active
+				? (deployments.find((deployment) => deployment.is_draining) ?? null)
+				: (deployments.find((deployment) => deployment.is_active) ?? null)
+			: null
+	);
+	let latestDeploymentLabel = $derived(
+		latestDeployment?.is_active ? 'active' : (currentDeploymentStatus ?? 'in_progress')
+	);
+	let supportingDeploymentLabel = $derived(
+		supportingDeployment?.is_draining ? 'draining' : 'active'
+	);
+	let previousDeployments = $derived(
+		deployments.filter(
+			(deployment) =>
+				deployment.id !== latestDeployment?.id && deployment.id !== supportingDeployment?.id
+		)
+	);
 
 	// The service only carries a server_id and there is no GET /api/servers/{id},
 	// so the list is the only way to put a name on it. Fetched once per mount, not
@@ -683,60 +723,190 @@
 				<p class="mt-2 text-[15px] text-destructive">{deployError}</p>
 			{/if}
 
-			{#if latestDeployment || deploymentId}
-				<!-- The current deployment and its output are one object, so they share
-				     one card: the log panel drops its own edge and joins on below. Two
-				     stacked outlines read as two unrelated things stacked by accident. -->
-				<div class="mt-4 overflow-hidden rounded-lg border border-border">
+			{#if showDeploymentStatePreview}
+				<div class="mt-4 space-y-3">
+					{#each deploymentStatePreviews as preview (preview.id)}
+						<div
+							class={cn(
+								'overflow-hidden rounded-lg border',
+								preview.status === 'in_progress' && 'border-[#5b709c]/25 bg-[#f5f7fb]',
+								preview.status === 'failed' && 'border-[#a65353]/20 bg-[#fdf7f7]',
+								preview.status === 'success' && 'border-[#43946e]/30 bg-[#f4faf8]'
+							)}
+						>
+							<div class="flex items-center gap-2.5 p-3">
+								<StatusBadge
+									status={preview.status}
+									class={cn(
+										'flex-none',
+										preview.status === 'in_progress' && 'bg-[#e9edf6] text-[#5b709c]',
+										preview.status === 'failed' && 'bg-[#f8e7e7] text-[#a65353]',
+										preview.status === 'success' && 'bg-[#def2e8] text-[#43946e]'
+									)}
+								/>
+								<Docker class="h-7 w-7 flex-none" aria-hidden="true" />
+								<div class="min-w-0 flex-1">
+									<p class="truncate font-mono text-[15px] text-foreground">{service.image}</p>
+									<p class="mt-0.5 truncate text-[13px] text-muted-foreground">
+										{preview.age} <span class="px-1">·</span> via Docker
+										<span class="px-1">·</span><span class="font-mono"
+											>{preview.id.slice(0, 8)}</span
+										>
+									</p>
+								</div>
+								<span
+									class={cn(
+										'flex-none rounded-md border px-2.5 py-1.5 text-[13px] font-medium',
+										preview.status === 'in_progress' && 'border-[#5b709c]/25 text-[#5b709c]',
+										preview.status === 'failed' && 'border-[#a65353]/20 text-[#a65353]',
+										preview.status === 'success' && 'border-[#43946e]/30 text-[#43946e]'
+									)}
+								>
+									View logs
+								</span>
+							</div>
+							<DeploymentLogs
+								deploymentId={preview.id}
+								deploymentStatus={preview.status}
+								previewState={preview.banner}
+								compact
+								flush
+							/>
+						</div>
+					{/each}
+				</div>
+			{:else if latestDeployment || deploymentId}
+				{#if supportingDeployment && !latestDeployment?.is_active}
+					<div class="mt-4 overflow-hidden rounded-lg border border-border bg-card">
+						<div class="flex items-center gap-2.5 p-3">
+							<StatusBadge status={supportingDeploymentLabel} class="flex-none" />
+							<div class="min-w-0 flex-1">
+								<p class="truncate font-mono text-[15px] text-foreground">
+									{supportingDeployment.id.slice(0, 8)}
+								</p>
+								<p class="mt-0.5 text-[13px] text-muted-foreground">
+									{formatRelativeTime(supportingDeployment.created_at)}
+								</p>
+							</div>
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								class="flex-none"
+								onclick={() => (openDeployment = supportingDeployment)}
+							>
+								View logs
+							</Button>
+						</div>
+					</div>
+				{/if}
+				<div
+					class={cn(
+						`${supportingDeployment ? 'mt-3' : 'mt-4'} overflow-hidden rounded-lg border`,
+						latestDeploymentLabel === 'in_progress'
+							? 'border-[#5b709c]/25 bg-[#f5f7fb]'
+							: latestDeploymentSucceeded
+								? 'border-[#43946e]/30 bg-[#f4faf8]'
+								: latestDeploymentFailed
+									? 'border-[#a65353]/20 bg-[#fdf7f7]'
+									: 'border-border'
+					)}
+				>
 					<!-- Narrow, the meta stacks under the image because there is no room for it
 					     anywhere else. Once the panel is wide the same two facts sit on one
 					     line, image left and meta right — which is what stops a 960px card
 					     from being two short lines against half a metre of nothing. -->
 					<div class="flex items-start gap-2.5 p-3 @2xl:items-center">
 						<StatusBadge
-							status={latestDeployment?.status ?? 'in_progress'}
-							class="mt-px flex-none @2xl:mt-0"
+							status={latestDeploymentLabel}
+							class={cn(
+								'mt-px flex-none @2xl:mt-0',
+								latestDeploymentLabel === 'in_progress' && 'bg-[#e9edf6] text-[#5b709c]',
+								latestDeploymentSucceeded && 'bg-[#def2e8] text-[#43946e]',
+								latestDeploymentFailed && 'bg-[#f8e7e7] text-[#a65353]'
+							)}
 						/>
-						<div
-							class="min-w-0 flex-1 @2xl:flex @2xl:items-baseline @2xl:justify-between @2xl:gap-6"
-						>
+						<Docker class="mt-px h-7 w-7 flex-none @2xl:mt-0" aria-hidden="true" />
+						<div class="min-w-0 flex-1">
 							<p class="truncate font-mono text-[15px] text-foreground">{service.image}</p>
-							<p class="mt-0.5 truncate text-[13px] text-muted-foreground @2xl:mt-0 @2xl:flex-none">
+							<p class="mt-0.5 truncate text-[13px] text-muted-foreground">
 								{#if latestDeployment}
 									<!-- Relative first: "2 hours ago" is what you actually want to know
 									     about a deployment. The exact timestamp stays one hover away. -->
 									<span title={formatDateTime(latestDeployment.created_at)}>
 										{formatRelativeTime(latestDeployment.created_at)}
 									</span>
-									<span class="px-1">·</span>
+									<span class="px-1">·</span>via Docker<span class="px-1">·</span>
 									<span class="font-mono">{latestDeployment.id.slice(0, 8)}</span>
 								{:else}
 									Starting...
 								{/if}
 							</p>
 						</div>
+						{#if latestDeployment}
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								class={cn(
+									'flex-none',
+									latestDeploymentSucceeded &&
+										'border-[#43946e]/30 bg-transparent text-[#43946e] hover:bg-[#def2e8] hover:text-[#43946e]',
+									latestDeploymentFailed &&
+										'border-[#a65353]/20 bg-transparent text-[#a65353] hover:bg-[#f8e7e7] hover:text-[#a65353]'
+								)}
+								onclick={() => (openDeployment = latestDeployment)}
+							>
+								View logs
+							</Button>
+						{/if}
 					</div>
 					{#if deploymentId}
 						<DeploymentLogs
 							{deploymentId}
 							deploymentStatus={streamedStatus}
+							compact
 							flush
 							onDone={onDeploymentDone}
 						/>
 					{/if}
 				</div>
+				{#if supportingDeployment && latestDeployment?.is_active}
+					<div class="mt-3 overflow-hidden rounded-lg border border-border bg-card">
+						<div class="flex items-center gap-2.5 p-3">
+							<StatusBadge status={supportingDeploymentLabel} class="flex-none" />
+							<div class="min-w-0 flex-1">
+								<p class="truncate font-mono text-[15px] text-foreground">
+									{supportingDeployment.id.slice(0, 8)}
+								</p>
+								<p class="mt-0.5 text-[13px] text-muted-foreground">
+									{formatRelativeTime(supportingDeployment.created_at)}
+								</p>
+							</div>
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								class="flex-none"
+								onclick={() => (openDeployment = supportingDeployment)}
+							>
+								View logs
+							</Button>
+						</div>
+					</div>
+				{/if}
 			{:else}
 				<div class="mt-4 rounded-lg border border-dashed border-border">
 					<EmptyState
 						icon={Server}
 						title="No deployments yet"
-						description="Deploy this service to see its status, live logs and history here."
+						description="Deploy this service to see its status and history here."
 						class="px-5 py-8"
 					/>
 				</div>
 			{/if}
 
-			{#if previousDeployments.length > 0}
+			{#if previousDeployments.length > 0 && !showDeploymentStatePreview}
 				<!-- mt-8, not mt-5: history is a different subject from what is running
 				     now, and at 20px it sat closer to the current card than the card's own
 				     rows sit to each other — proximity said "same thing" while the label

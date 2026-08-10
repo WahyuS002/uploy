@@ -65,9 +65,17 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load service configuration"})
 		return
 	}
+	if len(cfg.Domains) > 0 && svcWithServer.ProxyStatus != "ready" {
+		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "rolling deployment requires a ready proxy; upgrade the server proxy first"})
+		return
+	}
 
 	deployment, err := db.CreateDeployment(context.Background(), sc.WorkspaceID, svcWithServer.ID, cfg)
 	if err != nil {
+		if errors.Is(err, db.ErrDeploymentInProgress) {
+			respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "a deployment is already in progress for this service"})
+			return
+		}
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create deployment"})
 		return
 	}
@@ -255,10 +263,14 @@ func (s *Server) ListServiceDeployments(w http.ResponseWriter, r *http.Request, 
 	resp := make([]gen.DeploymentResponse, len(deployments))
 	for i, d := range deployments {
 		resp[i] = gen.DeploymentResponse{
-			Id:        d.ID,
-			Status:    gen.DeploymentResponseStatus(d.Status),
-			ServiceId: d.ServiceID,
-			CreatedAt: d.CreatedAt,
+			Id:         d.ID,
+			Status:     gen.DeploymentResponseStatus(d.Status),
+			ServiceId:  d.ServiceID,
+			CreatedAt:  d.CreatedAt,
+			Phase:      d.Phase,
+			IsActive:   d.IsActive,
+			IsDraining: d.IsDraining,
+			IsRolling:  d.IsRolling,
 		}
 	}
 

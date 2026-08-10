@@ -228,7 +228,7 @@
 								? 'bg-input'
 								: pending
 									? 'bg-warning'
-									: 'bg-success'}"
+									: 'bg-success-fill'}"
 						></span>
 						{#if env}
 							<span
