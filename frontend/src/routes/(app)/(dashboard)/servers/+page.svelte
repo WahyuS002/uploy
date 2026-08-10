@@ -9,10 +9,10 @@
 	import LogStream from '$lib/components/app/LogStream.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
-	import { Button, EmptyState, toast } from '$lib/components/ui';
+	import { Button, EmptyState, Tooltip, toast } from '$lib/components/ui';
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { ChevronRight, Key, Plus, Server } from '@steeze-ui/heroicons';
+	import { ChevronRight, InformationCircle, Key, Plus, Server } from '@steeze-ui/heroicons';
 
 	let { data }: { data: PageData } = $props();
 
@@ -147,14 +147,20 @@
 									{/if}
 								</td>
 								<td class="py-2.5 align-top">
-									<StatusBadge status={server.proxy_status} />
-									{#if server.proxy_last_error}
-										<p class="mt-0.5 text-xs text-destructive" title={server.proxy_last_error}>
-											{server.proxy_last_error.length > 50
-												? server.proxy_last_error.slice(0, 50) + '...'
-												: server.proxy_last_error}
-										</p>
-									{/if}
+									<div class="flex items-center gap-1.5">
+										<StatusBadge status={server.proxy_status} />
+										{#if server.proxy_last_error}
+											<Tooltip
+												text={server.proxy_last_error}
+												ariaLabel="Proxy error: {server.proxy_last_error}"
+												triggerClass="grid h-5 w-5 place-items-center rounded text-destructive transition-colors hover:text-destructive/80 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+											>
+												{#snippet children()}
+													<Icon src={InformationCircle} theme="outline" class="h-3.5 w-3.5" />
+												{/snippet}
+											</Tooltip>
+										{/if}
+									</div>
 									<!-- Under the status, not in a column of its own: the log is what you
 									     reach for to find out what the badge means, and a proxy that never
 									     came up is exactly when it is worth reading. -->
@@ -174,7 +180,9 @@
 												disabled={upgradingProxyId !== null}
 												onclick={() => upgradeProxy(server)}
 											>
-												{server.proxy_status === 'not_configured' ? 'Install proxy' : 'Upgrade proxy'}
+												{server.proxy_status === 'not_configured'
+													? 'Install proxy'
+													: 'Upgrade proxy'}
 											</Button>
 										{/if}
 									</div>
