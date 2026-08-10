@@ -78,3 +78,7 @@ Open `http://localhost:5173` in your browser.
 - `pnpm lint`: Run Prettier and ESLint checks
 - `pnpm format`: Format frontend code
 - `pnpm generate:api`: Generate TypeScript types from OpenAPI spec
+
+## License
+
+Uploy is licensed under the [Apache License 2.0](LICENSE).
