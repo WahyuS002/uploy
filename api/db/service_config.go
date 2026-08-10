@@ -14,7 +14,7 @@ import (
 // read after this struct grows a field. Nothing branches on it yet; it is here
 // because the alternative is a migration over a JSONB column later, and one
 // integer now is cheaper than that.
-const configSchemaVersion = 1
+const configSchemaVersion = 2
 
 // ServiceConfig is everything about a service that a deploy actually puts on the
 // server, and nothing else.

@@ -1,9 +1,15 @@
 package proxy
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/WahyuS002/uploy/ssh"
 )
@@ -13,6 +19,7 @@ const proxyBaseDir = "/data/uploy/proxy"
 const composeFilePath = proxyBaseDir + "/docker-compose.yaml"
 const proxyContainerName = "uploy-proxy"
 const traefikImage = "traefik:v3.6"
+const proxyAPIAddress = "127.0.0.1:8081"
 
 // ProgressFunc is a callback for reporting proxy setup progress.
 type ProgressFunc func(msg string)
@@ -59,6 +66,7 @@ func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
 	progress("preparing Traefik state...")
 	setupCmds := []string{
 		fmt.Sprintf("mkdir -p %s", proxyBaseDir),
+		fmt.Sprintf("mkdir -p %s/dynamic", proxyBaseDir),
 		fmt.Sprintf("touch %s/acme.json", proxyBaseDir),
 		fmt.Sprintf("chmod 600 %s/acme.json", proxyBaseDir),
 	}
@@ -80,6 +88,7 @@ func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
     ports:
       - "80:80"
       - "443:443"
+      - "127.0.0.1:8081:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - %s:/traefik
@@ -98,9 +107,12 @@ func EnsureProxy(client *ssh.Client, progress ProgressFunc) error {
       # rather than JSON — this is read by people, and one request as JSON is
       # 400 characters of quoting around the four fields anyone wants.
       - --accesslog=true
+      - --api.insecure=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=%s
+      - --providers.file.directory=/traefik/dynamic
+      - --providers.file.watch=true
       - --entrypoints.http.address=:80
       - --entrypoints.https.address=:443
       - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
@@ -141,9 +153,67 @@ networks:
 	if !running {
 		return fmt.Errorf("proxy container %s is not running", proxyContainerName)
 	}
+	if err := VerifyRollingReady(context.Background(), client); err != nil {
+		return err
+	}
 
 	progress("reverse proxy ready")
 	return nil
+}
+
+func VerifyRollingReady(ctx context.Context, client *ssh.Client) error {
+	output, err := client.Run(ctx, fmt.Sprintf("%s inspect --format '{{json .Config.Cmd}}' %s", client.DockerBin(), proxyContainerName))
+	if err != nil {
+		return fmt.Errorf("inspect proxy configuration: %w", err)
+	}
+	var args []string
+	if err := json.Unmarshal([]byte(output), &args); err != nil {
+		return fmt.Errorf("decode proxy configuration: %w", err)
+	}
+	joined := strings.Join(args, "\n")
+	for _, required := range []string{"--providers.file.directory=/traefik/dynamic", "--providers.file.watch=true", "--api.insecure=true"} {
+		if !strings.Contains(joined, required) {
+			return fmt.Errorf("proxy upgrade required: missing %s", required)
+		}
+	}
+
+	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	for {
+		status, _, requestErr := traefikAPIRequest(checkCtx, client, "/api/version")
+		if requestErr == nil && status == http.StatusOK {
+			return nil
+		}
+		select {
+		case <-checkCtx.Done():
+			if requestErr != nil {
+				return fmt.Errorf("proxy API unavailable: %w", requestErr)
+			}
+			return fmt.Errorf("proxy API unavailable: HTTP %d", status)
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+func traefikAPIRequest(ctx context.Context, client *ssh.Client, path string) (int, []byte, error) {
+	transport := &http.Transport{
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
+			return client.Dial("tcp", proxyAPIAddress)
+		},
+	}
+	defer transport.CloseIdleConnections()
+	httpClient := &http.Client{Transport: transport}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+proxyAPIAddress+path, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	return resp.StatusCode, body, err
 }
 
 func isContainerRunning(client *ssh.Client, name string) (bool, error) {

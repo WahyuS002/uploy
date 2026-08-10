@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +107,37 @@ func NewClient(cfg ServerConfig) (*Client, error) {
 func (c *Client) Close() {
 	// TODO: Consider returning an error from Close() so the caller can handle failures.
 	c.client.Close()
+}
+
+func (c *Client) Dial(network, address string) (net.Conn, error) {
+	return c.client.Dial(network, address)
+}
+
+func (c *Client) Run(ctx context.Context, command string) (string, error) {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	type result struct {
+		output []byte
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		output, runErr := session.CombinedOutput(command)
+		done <- result{output: output, err: runErr}
+	}()
+
+	select {
+	case res := <-done:
+		return strings.TrimSpace(string(res.output)), res.err
+	case <-ctx.Done():
+		_ = session.Close()
+		<-done
+		return "", ctx.Err()
+	}
 }
 
 // TestSession opens an SSH session and runs "echo ok" to verify the server

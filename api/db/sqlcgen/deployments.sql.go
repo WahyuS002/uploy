@@ -76,12 +76,112 @@ func (q *Queries) GetDeployment(ctx context.Context, id string) (GetDeploymentRo
 	return i, err
 }
 
-const listDeploymentsByService = `-- name: ListDeploymentsByService :many
-SELECT id, status, workspace_id, service_id, created_at
+const getDeploymentConfig = `-- name: GetDeploymentConfig :one
+SELECT configuration_snapshot
+FROM deployments
+WHERE id = $1
+`
+
+func (q *Queries) GetDeploymentConfig(ctx context.Context, id string) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getDeploymentConfig, id)
+	var configuration_snapshot pgtype.Text
+	err := row.Scan(&configuration_snapshot)
+	return configuration_snapshot, err
+}
+
+const getLatestDeploymentPhase = `-- name: GetLatestDeploymentPhase :one
+SELECT COALESCE((
+    SELECT phase
+    FROM deployment_logs
+    WHERE deployment_id = $1
+      AND phase <> 'recovery_pending'
+    ORDER BY "order" DESC
+    LIMIT 1
+), '')::text AS phase
+`
+
+func (q *Queries) GetLatestDeploymentPhase(ctx context.Context, deploymentID string) (string, error) {
+	row := q.db.QueryRow(ctx, getLatestDeploymentPhase, deploymentID)
+	var phase string
+	err := row.Scan(&phase)
+	return phase, err
+}
+
+const getLatestSuccessfulDeploymentConfig = `-- name: GetLatestSuccessfulDeploymentConfig :one
+SELECT id, configuration_snapshot
 FROM deployments
 WHERE service_id = $1
+  AND status = 'success'
 ORDER BY created_at DESC
-LIMIT $2
+LIMIT 1
+`
+
+type GetLatestSuccessfulDeploymentConfigRow struct {
+	ID                    string      `json:"id"`
+	ConfigurationSnapshot pgtype.Text `json:"configuration_snapshot"`
+}
+
+func (q *Queries) GetLatestSuccessfulDeploymentConfig(ctx context.Context, serviceID string) (GetLatestSuccessfulDeploymentConfigRow, error) {
+	row := q.db.QueryRow(ctx, getLatestSuccessfulDeploymentConfig, serviceID)
+	var i GetLatestSuccessfulDeploymentConfigRow
+	err := row.Scan(&i.ID, &i.ConfigurationSnapshot)
+	return i, err
+}
+
+const listDeploymentsByService = `-- name: ListDeploymentsByService :many
+WITH service_deployments AS (
+    SELECT d.id, d.status, d.workspace_id, d.service_id, d.created_at, d.configuration_snapshot,
+           COALESCE((
+               SELECT phase
+               FROM deployment_logs l
+               WHERE l.deployment_id = d.id
+                 AND l.phase <> 'recovery_pending'
+               ORDER BY l."order" DESC
+               LIMIT 1
+           ), '') AS phase
+    FROM deployments d
+    WHERE d.service_id = $1
+), current_deployment AS (
+    SELECT id, status, phase
+    FROM service_deployments
+    ORDER BY created_at DESC
+    LIMIT 1
+), latest_success AS (
+    SELECT id
+    FROM service_deployments
+    WHERE status = 'success'
+    ORDER BY created_at DESC
+    LIMIT 1
+)
+, marked AS (
+SELECT d.id,
+       d.status::text AS status,
+       d.workspace_id,
+       d.service_id,
+       d.created_at,
+       d.configuration_snapshot,
+       d.phase::text AS phase,
+       COALESCE((CASE
+           WHEN current_deployment.status = 'in_progress' AND current_deployment.phase IN ('active', 'drain')
+               THEN d.id = current_deployment.id
+           ELSE d.id = latest_success.id
+       END), false)::boolean AS is_active,
+       COALESCE(
+           current_deployment.status = 'in_progress'
+           AND current_deployment.phase = 'drain'
+           AND d.id = latest_success.id,
+           false
+       )::boolean AS is_draining
+FROM service_deployments d
+LEFT JOIN current_deployment ON true
+LEFT JOIN latest_success ON true
+)
+SELECT id, status, workspace_id, service_id, created_at, configuration_snapshot, phase, is_active, is_draining
+FROM marked
+WHERE id IN (SELECT id FROM marked ORDER BY created_at DESC LIMIT $2)
+   OR is_active
+   OR is_draining
+ORDER BY created_at DESC
 `
 
 type ListDeploymentsByServiceParams struct {
@@ -90,11 +190,15 @@ type ListDeploymentsByServiceParams struct {
 }
 
 type ListDeploymentsByServiceRow struct {
-	ID          string      `json:"id"`
-	Status      string      `json:"status"`
-	WorkspaceID pgtype.Text `json:"workspace_id"`
-	ServiceID   string      `json:"service_id"`
-	CreatedAt   time.Time   `json:"created_at"`
+	ID                    string      `json:"id"`
+	Status                string      `json:"status"`
+	WorkspaceID           pgtype.Text `json:"workspace_id"`
+	ServiceID             string      `json:"service_id"`
+	CreatedAt             time.Time   `json:"created_at"`
+	ConfigurationSnapshot pgtype.Text `json:"configuration_snapshot"`
+	Phase                 string      `json:"phase"`
+	IsActive              bool        `json:"is_active"`
+	IsDraining            bool        `json:"is_draining"`
 }
 
 func (q *Queries) ListDeploymentsByService(ctx context.Context, arg ListDeploymentsByServiceParams) ([]ListDeploymentsByServiceRow, error) {
@@ -112,10 +216,41 @@ func (q *Queries) ListDeploymentsByService(ctx context.Context, arg ListDeployme
 			&i.WorkspaceID,
 			&i.ServiceID,
 			&i.CreatedAt,
+			&i.ConfigurationSnapshot,
+			&i.Phase,
+			&i.IsActive,
+			&i.IsDraining,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInProgressDeploymentIDs = `-- name: ListInProgressDeploymentIDs :many
+SELECT id
+FROM deployments
+WHERE status = 'in_progress'
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListInProgressDeploymentIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listInProgressDeploymentIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

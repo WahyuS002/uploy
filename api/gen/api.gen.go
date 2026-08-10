@@ -356,10 +356,14 @@ type DeployResponse struct {
 
 // DeploymentResponse defines model for DeploymentResponse.
 type DeploymentResponse struct {
-	CreatedAt time.Time                `json:"created_at"`
-	Id        string                   `json:"id"`
-	ServiceId string                   `json:"service_id"`
-	Status    DeploymentResponseStatus `json:"status"`
+	CreatedAt  time.Time                `json:"created_at"`
+	Id         string                   `json:"id"`
+	IsActive   bool                     `json:"is_active"`
+	IsDraining bool                     `json:"is_draining"`
+	IsRolling  bool                     `json:"is_rolling"`
+	Phase      string                   `json:"phase"`
+	ServiceId  string                   `json:"service_id"`
+	Status     DeploymentResponseStatus `json:"status"`
 }
 
 // DeploymentResponseStatus defines model for DeploymentResponse.Status.
@@ -706,6 +710,9 @@ type ServerInterface interface {
 	// Test SSH connectivity to a server
 	// (POST /api/servers/check-connection)
 	CheckConnection(w http.ResponseWriter, r *http.Request)
+	// Install or upgrade the managed Traefik proxy
+	// (POST /api/servers/{id}/proxy)
+	UpgradeServerProxy(w http.ResponseWriter, r *http.Request, id string)
 	// Stream the reverse proxy's logs via SSE
 	// (GET /api/servers/{id}/proxy-logs)
 	GetProxyLogs(w http.ResponseWriter, r *http.Request, id string, params GetProxyLogsParams)
@@ -1310,6 +1317,37 @@ func (siw *ServerInterfaceWrapper) CheckConnection(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CheckConnection(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpgradeServerProxy operation middleware
+func (siw *ServerInterfaceWrapper) UpgradeServerProxy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpgradeServerProxy(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2054,6 +2092,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers", wrapper.ListServers)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers", wrapper.CreateServer)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/check-connection", wrapper.CheckConnection)
+	m.HandleFunc("POST "+options.BaseURL+"/api/servers/{id}/proxy", wrapper.UpgradeServerProxy)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/proxy-logs", wrapper.GetProxyLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services", wrapper.ListServices)
 	m.HandleFunc("POST "+options.BaseURL+"/api/services", wrapper.CreateService)

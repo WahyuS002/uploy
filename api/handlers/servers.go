@@ -11,8 +11,10 @@ import (
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
+	"github.com/WahyuS002/uploy/proxy"
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/WahyuS002/uploy/ssh"
+	"github.com/jackc/pgx/v5"
 )
 
 // probeFailure is an SSH probe failure tagged with the stage that failed.
@@ -179,6 +181,54 @@ func (s *Server) ListServers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond.JSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) UpgradeServerProxy(w http.ResponseWriter, r *http.Request, id string) {
+	sc, _ := auth.GetSessionContext(r)
+	if sc.WorkspaceRole != "owner" {
+		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
+		return
+	}
+
+	srv, err := db.GetServerWithKey(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
+		} else {
+			log.Printf("GetServerWithKey id=%s error: %v", id, err)
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up server"})
+		}
+		return
+	}
+	if srv.WorkspaceID != sc.WorkspaceID {
+		respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
+		return
+	}
+
+	client, err := ssh.NewClient(ssh.ServerConfig{Host: srv.Host, Port: int(srv.Port), User: srv.SSHUser, PrivateKey: srv.PrivateKey})
+	if err == nil {
+		defer client.Close()
+		err = client.DetectDocker()
+	}
+	if err == nil {
+		err = proxy.EnsureProxy(client, nil)
+	}
+	if err != nil {
+		_ = db.SetServerProxyError(r.Context(), id, "degraded", err.Error())
+		respond.JSON(w, http.StatusUnprocessableEntity, gen.ErrorResponse{Error: "proxy upgrade failed: " + err.Error()})
+		return
+	}
+	if err := db.SetServerProxyReady(r.Context(), id, "ready"); err != nil {
+		log.Printf("SetServerProxyReady id=%s error: %v", id, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "proxy upgraded but status update failed"})
+		return
+	}
+	updated, err := db.GetServerByID(r.Context(), id)
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "proxy upgraded but server reload failed"})
+		return
+	}
+	respond.JSON(w, http.StatusOK, serverToResponse(updated))
 }
 
 func (s *Server) CheckConnection(w http.ResponseWriter, r *http.Request) {

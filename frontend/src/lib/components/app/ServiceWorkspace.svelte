@@ -128,7 +128,25 @@
 	let currentDeploymentStatus = $derived(
 		deploymentId ? (streamedStatus ?? 'in_progress') : (latestDeployment?.status ?? null)
 	);
-	let previousDeployments = $derived(deployments.slice(1));
+	let supportingDeployment = $derived(
+		latestDeployment?.is_rolling && latestDeployment.status !== 'success'
+			? latestDeployment.is_active
+				? (deployments.find((deployment) => deployment.is_draining) ?? null)
+				: (deployments.find((deployment) => deployment.is_active) ?? null)
+			: null
+	);
+	let latestDeploymentLabel = $derived(
+		latestDeployment?.is_active ? 'active' : (currentDeploymentStatus ?? 'in_progress')
+	);
+	let supportingDeploymentLabel = $derived(
+		supportingDeployment?.is_draining ? 'draining' : 'active'
+	);
+	let previousDeployments = $derived(
+		deployments.filter(
+			(deployment) =>
+				deployment.id !== latestDeployment?.id && deployment.id !== supportingDeployment?.id
+		)
+	);
 
 	// The service only carries a server_id and there is no GET /api/servers/{id},
 	// so the list is the only way to put a name on it. Fetched once per mount, not
@@ -687,10 +705,34 @@
 			{/if}
 
 			{#if latestDeployment || deploymentId}
+				{#if supportingDeployment && !latestDeployment?.is_active}
+					<div class="mt-4 overflow-hidden rounded-lg border border-border bg-card">
+						<div class="flex items-center gap-2.5 p-3">
+							<StatusBadge status={supportingDeploymentLabel} class="flex-none" />
+							<div class="min-w-0 flex-1">
+								<p class="truncate font-mono text-[15px] text-foreground">
+									{supportingDeployment.id.slice(0, 8)}
+								</p>
+								<p class="mt-0.5 text-[13px] text-muted-foreground">
+									{formatRelativeTime(supportingDeployment.created_at)}
+								</p>
+							</div>
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								class="flex-none"
+								onclick={() => (openDeployment = supportingDeployment)}
+							>
+								View logs
+							</Button>
+						</div>
+					</div>
+				{/if}
 				<div
 					class={cn(
-						'mt-4 overflow-hidden rounded-lg border',
-						currentDeploymentStatus === 'in_progress'
+						`${supportingDeployment ? 'mt-3' : 'mt-4'} overflow-hidden rounded-lg border`,
+						latestDeploymentLabel === 'in_progress'
 							? 'border-blue-200 bg-blue-50/50'
 							: 'border-border'
 					)}
@@ -701,10 +743,10 @@
 					     from being two short lines against half a metre of nothing. -->
 					<div class="flex items-start gap-2.5 p-3 @2xl:items-center">
 						<StatusBadge
-							status={currentDeploymentStatus ?? 'in_progress'}
+							status={latestDeploymentLabel}
 							class={cn(
 								'mt-px flex-none @2xl:mt-0',
-								currentDeploymentStatus === 'in_progress' && 'bg-blue-100 text-blue-700'
+								latestDeploymentLabel === 'in_progress' && 'bg-blue-100 text-blue-700'
 							)}
 						/>
 						<div
@@ -747,6 +789,30 @@
 						/>
 					{/if}
 				</div>
+				{#if supportingDeployment && latestDeployment?.is_active}
+					<div class="mt-3 overflow-hidden rounded-lg border border-border bg-card">
+						<div class="flex items-center gap-2.5 p-3">
+							<StatusBadge status={supportingDeploymentLabel} class="flex-none" />
+							<div class="min-w-0 flex-1">
+								<p class="truncate font-mono text-[15px] text-foreground">
+									{supportingDeployment.id.slice(0, 8)}
+								</p>
+								<p class="mt-0.5 text-[13px] text-muted-foreground">
+									{formatRelativeTime(supportingDeployment.created_at)}
+								</p>
+							</div>
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								class="flex-none"
+								onclick={() => (openDeployment = supportingDeployment)}
+							>
+								View logs
+							</Button>
+						</div>
+					</div>
+				{/if}
 			{:else}
 				<div class="mt-4 rounded-lg border border-dashed border-border">
 					<EmptyState

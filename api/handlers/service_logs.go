@@ -8,6 +8,7 @@ import (
 	"github.com/WahyuS002/uploy/auth"
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
+	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/WahyuS002/uploy/ssh"
 	"github.com/jackc/pgx/v5"
@@ -48,11 +49,17 @@ func (s *Server) GetServiceLogs(w http.ResponseWriter, r *http.Request, id strin
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "service has not been deployed yet, so it has no logs"})
 		return
 	}
+	activeDeployment, activeConfig, err := db.GetActiveDeploymentConfig(r.Context(), svc.ID)
+	if err != nil {
+		log.Printf("GetActiveDeploymentConfig service=%s error: %v", id, err)
+		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "service has no active deployment"})
+		return
+	}
 
 	streamContainerLogs(w, r, ssh.ServerConfig{
 		Host:       svc.Host,
 		Port:       int(svc.ServerPort),
 		User:       svc.SSHUser,
 		PrivateKey: svc.PrivateKey,
-	}, svc.ContainerName, sinceFlag, "service logs id="+id)
+	}, jobs.ContainerNameForDeployment(activeConfig, activeDeployment.ID), sinceFlag, "service logs id="+id)
 }

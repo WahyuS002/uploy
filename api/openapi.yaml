@@ -178,6 +178,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The server proxy must be upgraded before a domain deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal server error
           content:
@@ -369,6 +375,56 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/servers/{id}/proxy:
+    post:
+      operationId: upgradeServerProxy
+      summary: Install or upgrade the managed Traefik proxy
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Proxy upgraded and ready for rolling deployments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Proxy installation or upgrade failed
           content:
             application/json:
               schema:
@@ -1785,6 +1841,10 @@ components:
         - status
         - service_id
         - created_at
+        - phase
+        - is_active
+        - is_draining
+        - is_rolling
       properties:
         id:
           type: string
@@ -1799,6 +1859,14 @@ components:
         created_at:
           type: string
           format: date-time
+        phase:
+          type: string
+        is_active:
+          type: boolean
+        is_draining:
+          type: boolean
+        is_rolling:
+          type: boolean
 
     ErrorResponse:
       type: object
