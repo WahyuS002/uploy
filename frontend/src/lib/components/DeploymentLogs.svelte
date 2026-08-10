@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { Check, Copy, Search } from 'lucide-svelte';
+	import { Check, CircleCheck, CircleX, Copy, LoaderCircle, Search } from 'lucide-svelte';
 	import { untrack } from 'svelte';
+	import { dev } from '$app/environment';
 	import { cn } from '$lib/components/ui/cn.js';
 	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -8,6 +9,13 @@
 	import type { components } from '$lib/api/v1';
 
 	type LogEntry = components['schemas']['LogEntry'];
+	type BannerStatus = 'active' | 'success' | 'error';
+	type CompactState = {
+		status: BannerStatus;
+		title: string;
+		detail: string;
+		elapsedSeconds: number;
+	};
 
 	interface Props {
 		deploymentId: string;
@@ -27,6 +35,7 @@
 		deploymentStatus?: string;
 		onDone?: (status: string) => void;
 		compact?: boolean;
+		previewState?: BannerStatus;
 		/**
 		 * Drops the card's own border and radius so it can sit inside another card
 		 * as its bottom section — the deployment header and its output are one
@@ -54,6 +63,7 @@
 		deploymentStatus,
 		onDone,
 		compact = false,
+		previewState,
 		flush = false,
 		fill = false,
 		elapsedSeconds = $bindable(0)
@@ -150,7 +160,7 @@
 		return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${String(date.getMilliseconds()).padStart(3, '0')}`;
 	}
 
-	let bannerStatus: 'active' | 'success' | 'error' = $derived.by(() => {
+	let bannerStatus: BannerStatus = $derived.by(() => {
 		if (status === 'success') return 'success';
 		if (status === 'failed') return 'error';
 		return 'active';
@@ -168,6 +178,36 @@
 		}
 		if (bannerStatus === 'success') return 'Service is live.';
 		return currentSubtext || streamError || 'Open logs to review the failure.';
+	});
+	let showStatePreview = $derived(dev && previewState !== undefined);
+	const statePreview: Record<BannerStatus, CompactState> = {
+		active: {
+			status: 'active',
+			title: 'Deployment in progress',
+			detail: 'Pulling Image',
+			elapsedSeconds: 8
+		},
+		error: {
+			status: 'error',
+			title: 'Deployment failed',
+			detail: 'Rolling proxy is not ready; upgrade it from the Servers page.',
+			elapsedSeconds: 9
+		},
+		success: {
+			status: 'success',
+			title: 'Deployment successful',
+			detail: 'Service is live.',
+			elapsedSeconds: 12
+		}
+	};
+	let compactState: CompactState = $derived.by(() => {
+		if (showStatePreview && previewState) return statePreview[previewState];
+		return {
+			status: bannerStatus,
+			title: compactTitle,
+			detail: compactDetail,
+			elapsedSeconds
+		};
 	});
 	let query = $state('');
 	let visibleLogs = $derived.by(() => {
@@ -218,6 +258,8 @@
 	 * Complete.
 	 */
 	$effect(() => {
+		if (showStatePreview && compact) return;
+
 		const id = deploymentId;
 
 		// untracked: only the id may rebuild the stream. The status changes from
@@ -298,45 +340,55 @@
 
 <svelte:window onkeydown={focusLogSearch} />
 
-<div
-	class={cn(
-		'flex items-center gap-3 px-3 py-3',
-		!compact && 'hidden',
-		flush ? 'border-t' : 'rounded-lg border',
-		bannerStatus === 'active' && 'border-blue-200 bg-blue-50 text-blue-950',
-		bannerStatus === 'success' && 'border-success/20 bg-success-muted text-success',
-		bannerStatus === 'error' && 'border-destructive/20 bg-destructive/10 text-destructive'
-	)}
-	role="status"
-	aria-live="polite"
-	aria-atomic="true"
->
-	<span
+{#snippet compactBanner(state: CompactState, attached: boolean, hidden: boolean, announce: boolean)}
+	<div
 		class={cn(
-			'h-2.5 w-2.5 flex-none rounded-full',
-			bannerStatus === 'active' && 'bg-blue-500 motion-safe:animate-pulse',
-			bannerStatus === 'success' && 'bg-success-fill',
-			bannerStatus === 'error' && 'bg-destructive'
+			'flex items-center gap-3 px-3 py-3',
+			hidden && 'hidden',
+			attached ? 'border-t' : 'rounded-lg border',
+			state.status === 'active' && 'border-[#5b709c]/25 bg-[#f5f7fb] text-[#5b709c]',
+			state.status === 'success' && 'border-[#43946e]/25 bg-[#f4faf8] text-[#43946e]',
+			state.status === 'error' && 'border-[#a65353]/20 bg-[#fdf7f7] text-[#a65353]'
 		)}
-		aria-hidden="true"
-	></span>
-	<div class="min-w-0 flex-1">
-		<p class="truncate text-[14px] font-medium">{compactTitle}</p>
-		<p
-			class={cn(
-				'mt-0.5 truncate text-[13px]',
-				bannerStatus === 'active' && 'text-blue-700',
-				bannerStatus === 'success' && 'text-success/80',
-				bannerStatus === 'error' && 'text-destructive/80'
-			)}
-		>
-			{compactDetail}
-		</p>
+		role={announce ? 'status' : undefined}
+		aria-live={announce ? 'polite' : undefined}
+		aria-atomic={announce ? 'true' : undefined}
+		data-deployment-state={state.status}
+	>
+		{#if state.status === 'success'}
+			<CircleCheck class="h-5 w-5 flex-none text-[#43946e]" strokeWidth={1.75} aria-hidden="true" />
+		{:else if state.status === 'active'}
+			<LoaderCircle
+				class="h-5 w-5 flex-none animate-[spin_2s_linear_infinite] text-[#5b709c]"
+				strokeWidth={1.75}
+				aria-hidden="true"
+			/>
+		{:else}
+			<CircleX class="h-5 w-5 flex-none text-[#a65353]" strokeWidth={1.75} aria-hidden="true" />
+		{/if}
+		<div class="min-w-0 flex-1">
+			<p class="truncate text-[14px] font-medium">{state.title}</p>
+			{#if state.status !== 'success'}
+				<p
+					class={cn(
+						'mt-0.5 truncate text-[13px]',
+						state.status === 'active' && 'text-[#5b709c]/80',
+						state.status === 'error' && 'text-[#a65353]/80'
+					)}
+				>
+					{state.detail}
+				</p>
+			{/if}
+		</div>
+		{#if state.status !== 'success'}
+			<span class="flex-none text-[13px] tabular-nums opacity-75">
+				{formatDuration(state.elapsedSeconds)}
+			</span>
+		{/if}
 	</div>
-	<span class="flex-none text-[13px] tabular-nums opacity-75">
-		{formatDuration(elapsedSeconds)}
-	</span>
-</div>
+{/snippet}
+
+{@render compactBanner(compactState, flush, !compact, !showStatePreview)}
 
 <!-- One surface, not two. The status row and the output belong to the same
      deployment, so stacking a tinted banner on top of a separate black slab was
@@ -355,7 +407,7 @@
 				class={cn(
 					'h-2 w-2 flex-none rounded-full bg-muted-foreground',
 					bannerStatus === 'error' && 'bg-destructive',
-					bannerStatus === 'active' && 'motion-safe:animate-pulse'
+					bannerStatus === 'active' && 'animate-pulse'
 				)}
 				aria-hidden="true"
 			></span>
