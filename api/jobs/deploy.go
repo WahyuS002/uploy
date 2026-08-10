@@ -317,7 +317,7 @@ func ContainerNameForDeployment(cfg db.ServiceConfig, deploymentID string) strin
 }
 
 func imageHasHealthcheck(ctx context.Context, client *ssh.Client, docker, image string) (bool, error) {
-	output, err := client.Run(ctx, fmt.Sprintf("%s image inspect --format '{{json .Config.Healthcheck.Test}}' %s", docker, image))
+	output, err := client.Run(ctx, fmt.Sprintf("%s image inspect --format '{{if .Config.Healthcheck}}{{json .Config.Healthcheck.Test}}{{end}}' %s", docker, image))
 	if err != nil {
 		return false, err
 	}
