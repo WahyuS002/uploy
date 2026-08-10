@@ -26,6 +26,7 @@
 		 */
 		deploymentStatus?: string;
 		onDone?: (status: string) => void;
+		compact?: boolean;
 		/**
 		 * Drops the card's own border and radius so it can sit inside another card
 		 * as its bottom section — the deployment header and its output are one
@@ -52,6 +53,7 @@
 		deploymentId,
 		deploymentStatus,
 		onDone,
+		compact = false,
 		flush = false,
 		fill = false,
 		elapsedSeconds = $bindable(0)
@@ -153,6 +155,20 @@
 		if (status === 'failed') return 'error';
 		return 'active';
 	});
+	let compactTitle = $derived(
+		bannerStatus === 'active'
+			? 'Deployment in progress'
+			: bannerStatus === 'success'
+				? 'Deployment successful'
+				: 'Deployment failed'
+	);
+	let compactDetail = $derived.by(() => {
+		if (bannerStatus === 'active') {
+			return currentPhase === 'Starting...' ? 'Preparing deployment...' : currentPhase;
+		}
+		if (bannerStatus === 'success') return 'Service is live.';
+		return currentSubtext || streamError || 'Open logs to review the failure.';
+	});
 	let query = $state('');
 	let visibleLogs = $derived.by(() => {
 		const normalizedQuery = query.trim().toLowerCase();
@@ -172,6 +188,7 @@
 	}
 
 	function focusLogSearch(event: KeyboardEvent) {
+		if (compact) return;
 		if (event.key.toLowerCase() !== 'f' || !(event.metaKey || event.ctrlKey)) return;
 		event.preventDefault();
 		searchInput?.focus();
@@ -281,12 +298,53 @@
 
 <svelte:window onkeydown={focusLogSearch} />
 
+<div
+	class={cn(
+		'flex items-center gap-3 px-3 py-3',
+		!compact && 'hidden',
+		flush ? 'border-t' : 'rounded-lg border',
+		bannerStatus === 'active' && 'border-blue-200 bg-blue-50 text-blue-950',
+		bannerStatus === 'success' && 'border-success/20 bg-success-muted text-success',
+		bannerStatus === 'error' && 'border-destructive/20 bg-destructive/10 text-destructive'
+	)}
+	role="status"
+	aria-live="polite"
+	aria-atomic="true"
+>
+	<span
+		class={cn(
+			'h-2.5 w-2.5 flex-none rounded-full',
+			bannerStatus === 'active' && 'bg-blue-500 motion-safe:animate-pulse',
+			bannerStatus === 'success' && 'bg-success-fill',
+			bannerStatus === 'error' && 'bg-destructive'
+		)}
+		aria-hidden="true"
+	></span>
+	<div class="min-w-0 flex-1">
+		<p class="truncate text-[14px] font-medium">{compactTitle}</p>
+		<p
+			class={cn(
+				'mt-0.5 truncate text-[13px]',
+				bannerStatus === 'active' && 'text-blue-700',
+				bannerStatus === 'success' && 'text-success/80',
+				bannerStatus === 'error' && 'text-destructive/80'
+			)}
+		>
+			{compactDetail}
+		</p>
+	</div>
+	<span class="flex-none text-[13px] tabular-nums opacity-75">
+		{formatDuration(elapsedSeconds)}
+	</span>
+</div>
+
 <!-- One surface, not two. The status row and the output belong to the same
      deployment, so stacking a tinted banner on top of a separate black slab was
      saying it twice and spending two surfaces to do it. -->
 <div
 	class={cn(
 		'overflow-hidden',
+		compact && 'hidden',
 		flush ? 'border-t border-border' : 'rounded-lg border border-border',
 		fill && 'flex h-full min-h-0 flex-col'
 	)}

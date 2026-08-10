@@ -125,6 +125,9 @@
 	// the log panel needs the status of. Undefined until the list has it, which
 	// reads as "still running" — the right guess for one just started.
 	let streamedStatus = $derived(deployments.find((d) => d.id === deploymentId)?.status);
+	let currentDeploymentStatus = $derived(
+		deploymentId ? (streamedStatus ?? 'in_progress') : (latestDeployment?.status ?? null)
+	);
 	let previousDeployments = $derived(deployments.slice(1));
 
 	// The service only carries a server_id and there is no GET /api/servers/{id},
@@ -684,18 +687,25 @@
 			{/if}
 
 			{#if latestDeployment || deploymentId}
-				<!-- The current deployment and its output are one object, so they share
-				     one card: the log panel drops its own edge and joins on below. Two
-				     stacked outlines read as two unrelated things stacked by accident. -->
-				<div class="mt-4 overflow-hidden rounded-lg border border-border">
+				<div
+					class={cn(
+						'mt-4 overflow-hidden rounded-lg border',
+						currentDeploymentStatus === 'in_progress'
+							? 'border-blue-200 bg-blue-50/50'
+							: 'border-border'
+					)}
+				>
 					<!-- Narrow, the meta stacks under the image because there is no room for it
 					     anywhere else. Once the panel is wide the same two facts sit on one
 					     line, image left and meta right — which is what stops a 960px card
 					     from being two short lines against half a metre of nothing. -->
 					<div class="flex items-start gap-2.5 p-3 @2xl:items-center">
 						<StatusBadge
-							status={latestDeployment?.status ?? 'in_progress'}
-							class="mt-px flex-none @2xl:mt-0"
+							status={currentDeploymentStatus ?? 'in_progress'}
+							class={cn(
+								'mt-px flex-none @2xl:mt-0',
+								currentDeploymentStatus === 'in_progress' && 'bg-blue-100 text-blue-700'
+							)}
 						/>
 						<div
 							class="min-w-0 flex-1 @2xl:flex @2xl:items-baseline @2xl:justify-between @2xl:gap-6"
@@ -715,11 +725,23 @@
 								{/if}
 							</p>
 						</div>
+						{#if latestDeployment}
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								class="flex-none"
+								onclick={() => (openDeployment = latestDeployment)}
+							>
+								View logs
+							</Button>
+						{/if}
 					</div>
 					{#if deploymentId}
 						<DeploymentLogs
 							{deploymentId}
 							deploymentStatus={streamedStatus}
+							compact
 							flush
 							onDone={onDeploymentDone}
 						/>
@@ -730,7 +752,7 @@
 					<EmptyState
 						icon={Server}
 						title="No deployments yet"
-						description="Deploy this service to see its status, live logs and history here."
+						description="Deploy this service to see its status and history here."
 						class="px-5 py-8"
 					/>
 				</div>
