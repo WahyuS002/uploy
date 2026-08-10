@@ -30,10 +30,11 @@ const (
 )
 
 type DeployConfig struct {
-	DeploymentID  string
-	ServiceID     string
-	Image         string
-	ContainerName string
+	DeploymentID       string
+	ServiceID          string
+	Image              string
+	ContainerName      string
+	HealthcheckCommand string
 	// ContainerPort is what the image listens on inside the container; HostPort
 	// is where it is published on the machine. They are equal for a database
 	// reached on its own well-known number, and different for anything
@@ -204,14 +205,14 @@ func runRollingDeploy(ctx context.Context, client *ssh.Client, docker string, cf
 		failDeploy(cfg.DeploymentID, "Could not inspect image healthcheck: "+err.Error())
 		return false
 	}
-	if !hasHealthcheck {
-		failDeploy(cfg.DeploymentID, "Domain deployments require a Docker HEALTHCHECK in the image")
-		return false
-	}
 
 	candidateName := DeploymentContainerName(cfg.ContainerName, cfg.DeploymentID)
 	candidate := cfg
 	candidate.ContainerName = candidateName
+	if !hasHealthcheck {
+		candidate.HealthcheckCommand = fallbackHealthcheckCommand(cfg.ContainerPort)
+		appendLog(ctx, cfg.DeploymentID, fmt.Sprintf("image has no Docker healthcheck; using HTTP readiness check on port %d...", cfg.ContainerPort), "stdout", "health_check")
+	}
 	appendLog(ctx, cfg.DeploymentID, "starting candidate container...", "stdout", "start_container")
 	if !runStep(ctx, client, cfg.DeploymentID, buildDockerRunCmd(docker, candidate)) {
 		return false
@@ -322,6 +323,10 @@ func imageHasHealthcheck(ctx context.Context, client *ssh.Client, docker, image 
 		return false, err
 	}
 	return output != "" && output != "null" && output != `["NONE"]`, nil
+}
+
+func fallbackHealthcheckCommand(port int) string {
+	return fmt.Sprintf("curl -fsS http://127.0.0.1:%d/ >/dev/null || wget -q -O /dev/null http://127.0.0.1:%d/ || exit 1", port, port)
 }
 
 func containerHealth(ctx context.Context, client *ssh.Client, docker, containerName string) (string, error) {
@@ -441,6 +446,10 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 	// Survive server reboots and daemon restarts. Without this a reboot silently
 	// kills every deployed service until someone redeploys by hand.
 	args += " --restart unless-stopped"
+	if cfg.HealthcheckCommand != "" {
+		escaped := strings.ReplaceAll(cfg.HealthcheckCommand, "'", "'\\''")
+		args += fmt.Sprintf(" --health-cmd '%s' --health-interval 5s --health-timeout 5s --health-retries 10 --health-start-period 5s", escaped)
+	}
 
 	for _, env := range cfg.EnvVars {
 		escaped := strings.ReplaceAll(env.Value, "'", "'\\''")

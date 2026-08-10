@@ -66,6 +66,28 @@ func TestBuildDockerRunCmdAddsDeploymentOwnershipLabels(t *testing.T) {
 	}
 }
 
+func TestBuildDockerRunCmdAddsFallbackHealthcheck(t *testing.T) {
+	cmd := buildDockerRunCmd("docker", DeployConfig{
+		ContainerName:      "nginx-app-candidate",
+		Image:              "nginx:latest",
+		ContainerPort:      80,
+		Domains:            []string{"example.com"},
+		HealthcheckCommand: fallbackHealthcheckCommand(80),
+	})
+
+	for _, option := range []string{
+		"--health-cmd 'curl -fsS http://127.0.0.1:80/ >/dev/null || wget -q -O /dev/null http://127.0.0.1:80/ || exit 1'",
+		"--health-interval 5s",
+		"--health-timeout 5s",
+		"--health-retries 10",
+		"--health-start-period 5s",
+	} {
+		if !strings.Contains(cmd, option) {
+			t.Errorf("missing fallback healthcheck option %q: %s", option, cmd)
+		}
+	}
+}
+
 func TestDeploymentContainerNameUsesShortDeploymentID(t *testing.T) {
 	if got := DeploymentContainerName("web-app", "12345678-aaaa-bbbb"); got != "web-app-12345678" {
 		t.Fatalf("DeploymentContainerName = %q", got)
