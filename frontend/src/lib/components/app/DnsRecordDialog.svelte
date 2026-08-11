@@ -58,7 +58,7 @@
 		error: {
 			icon: ExclamationTriangle,
 			class: 'text-destructive',
-			label: 'Last check failed'
+			label: 'Check failed'
 		}
 	};
 	// The undeployed case outranks the status, because it explains it: with no
@@ -66,7 +66,7 @@
 	// the symptom and this is the cause.
 	const mark = $derived(
 		needsDeploy && domain?.status !== 'ready'
-			? { icon: ExclamationTriangle, class: 'text-warning', label: 'Not deployed yet' }
+			? { icon: ExclamationTriangle, class: 'text-warning', label: 'Needs deploy' }
 			: (marks[domain?.status ?? 'pending'] ?? marks.pending)
 	);
 

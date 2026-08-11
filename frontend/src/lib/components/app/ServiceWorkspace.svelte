@@ -299,9 +299,9 @@
 	 * strongest thing the panel can honestly say.
 	 */
 	const domainMarks = {
-		pending: { icon: ExclamationTriangle, class: 'text-warning', label: 'Waiting for DNS' },
+		pending: { icon: ExclamationTriangle, class: 'text-warning', label: 'Verifying DNS' },
 		ready: { icon: GlobeAlt, class: 'text-success', label: 'HTTPS active' },
-		error: { icon: ExclamationTriangle, class: 'text-destructive', label: 'Last check failed' }
+		error: { icon: ExclamationTriangle, class: 'text-destructive', label: 'Check failed' }
 	};
 
 	/**
@@ -962,7 +962,7 @@
 						<div class="min-w-0">
 							<h2 class="text-[15px] font-semibold text-foreground">Custom domains</h2>
 							<p class="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
-								Route traffic to this service through a hostname you own.
+								Connect your custom domain to this service.
 							</p>
 						</div>
 					</div>
@@ -980,7 +980,7 @@
 							e.preventDefault();
 							addDomain();
 						}}
-						class="grid gap-3 border-y border-border bg-muted/30 px-4 py-4 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-end"
+						class="border-y border-border bg-muted/30 px-4 py-4"
 					>
 						<FormField label="Domain name">
 							<Input
@@ -991,9 +991,11 @@
 								class="bg-card"
 							/>
 						</FormField>
-						<Button type="submit" size="sm" loading={domainAdding} class="w-full @sm:w-auto">
-							{domainAdding ? 'Adding...' : 'Add domain'}
-						</Button>
+						<div class="mt-3">
+							<Button type="submit" size="sm" loading={domainAdding}>
+								{domainAdding ? 'Adding...' : 'Add domain'}
+							</Button>
+						</div>
 					</form>
 					{#if domainError}
 						<p class="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
@@ -1007,8 +1009,8 @@
 						icon={GlobeAlt}
 						title="No domains attached"
 						description={canEdit
-							? 'Add a hostname above. Uploy will show the exact DNS record to configure next.'
-							: 'This service is only reachable through its server address.'}
+							? 'Add a domain above to set up custom routing.'
+							: 'Reachable only via server address.'}
 						class="px-5 py-10"
 					/>
 				{:else}
@@ -1053,7 +1055,7 @@
 										     "Waiting for DNS" to someone whose DNS is already correct is
 										     what sent this panel's reader off to check a record that was
 										     never the problem. -->
-											<span class="min-w-0 truncate text-muted-foreground">Not deployed yet</span>
+											<span class="min-w-0 truncate text-muted-foreground">Needs deploy</span>
 											<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
 											<button
 												type="button"
@@ -1085,7 +1087,7 @@
 												onclick={() => (dnsDomainId = domain.id)}
 												class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
 											>
-												Show DNS record
+												View DNS
 											</button>
 											<!-- No countdown while the deploy is the missing piece: that
 										     check cannot succeed yet, and counting down to it is the
@@ -1110,7 +1112,7 @@
 											     by the text beside it the moment it arrives. -->
 												<span class="flex-none whitespace-nowrap tabular-nums" aria-hidden="true">
 													{nextCheck.seconds > 0
-														? `next check in ${nextCheck.seconds}s`
+														? `Re-checking in ${nextCheck.seconds}s`
 														: 'checking now…'}
 												</span>
 											{/if}
