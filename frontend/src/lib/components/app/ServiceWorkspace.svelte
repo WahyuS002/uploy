@@ -951,95 +951,148 @@
 				/>
 			{/if}
 		{:else if activeTab === 'domains'}
-			{#if domains.length === 0}
-				<div class="rounded-lg border border-dashed border-border px-4 py-5 text-center">
-					<p class="text-[15px] text-muted-foreground">No domains attached</p>
-					<p class="mt-1 text-[13px] text-muted-foreground">
-						Add one below to reach this service by name instead of by port.
-					</p>
-				</div>
-			{:else}
-				<!-- One divided card, not a stack of separate bordered pills: these are
-				     rows of the same list, and giving each its own edge made a three-domain
-				     panel read as three unrelated objects. -->
-				<div class="overflow-hidden rounded-lg border border-border">
-					{#each domains as domain (domain.id)}
-						{@const waiting = domain.status !== 'ready' && needsDeploy(domain)}
-						{@const mark = domainMarks[domain.status] ?? domainMarks.pending}
-						<DataRow density="dense" class="items-start gap-2.5">
-							<!-- The state leads the row instead of trailing it as a badge. It is
+			<section class="overflow-hidden rounded-xl border border-border bg-card">
+				<header class="flex items-start justify-between gap-4 px-4 py-4">
+					<div class="flex min-w-0 items-start gap-3">
+						<div
+							class="grid h-9 w-9 flex-none place-content-center rounded-lg bg-muted text-foreground"
+						>
+							<Icon src={GlobeAlt} theme="outline" class="h-4.5 w-4.5" aria-hidden="true" />
+						</div>
+						<div class="min-w-0">
+							<h2 class="text-[15px] font-semibold text-foreground">Custom domains</h2>
+							<p class="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">
+								Route traffic to this service through a hostname you own.
+							</p>
+						</div>
+					</div>
+					<span
+						class="flex-none rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground tabular-nums"
+					>
+						{domains.length}
+						{domains.length === 1 ? 'domain' : 'domains'}
+					</span>
+				</header>
+
+				{#if canEdit}
+					<form
+						onsubmit={(e) => {
+							e.preventDefault();
+							addDomain();
+						}}
+						class="grid gap-3 border-y border-border bg-muted/30 px-4 py-4 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-end"
+					>
+						<FormField label="Domain name">
+							<Input
+								type="text"
+								bind:value={domainInput}
+								placeholder="myapp.example.com"
+								required
+								class="bg-card"
+							/>
+						</FormField>
+						<Button type="submit" size="sm" loading={domainAdding} class="w-full @sm:w-auto">
+							{domainAdding ? 'Adding...' : 'Add domain'}
+						</Button>
+					</form>
+					{#if domainError}
+						<p class="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
+							{domainError}
+						</p>
+					{/if}
+				{/if}
+
+				{#if domains.length === 0}
+					<EmptyState
+						icon={GlobeAlt}
+						title="No domains attached"
+						description={canEdit
+							? 'Add a hostname above. Uploy will show the exact DNS record to configure next.'
+							: 'This service is only reachable through its server address.'}
+						class="px-5 py-10"
+					/>
+				{:else}
+					<div class="border-b border-border px-4 py-2.5 last:border-b-0">
+						<p class="text-xs font-medium text-muted-foreground">Attached domains</p>
+					</div>
+					<div>
+						{#each domains as domain (domain.id)}
+							{@const waiting = domain.status !== 'ready' && needsDeploy(domain)}
+							{@const mark = domainMarks[domain.status] ?? domainMarks.pending}
+							<DataRow density="comfortable" class="items-start gap-3 px-4">
+								<!-- The state leads the row instead of trailing it as a badge. It is
 							     the first thing you want to know about an address, and reading it
 							     in the margin beats hunting for a word on the far side — which is
 							     also what frees the second line to say what to do about it. -->
-							<Icon
-								src={mark.icon}
-								theme="outline"
-								class={cn('mt-0.5 h-4 w-4 flex-none', mark.class)}
-								aria-hidden="true"
-							/>
-							<div class="min-w-0 flex-1">
-								<div class="flex min-w-0 items-center gap-2">
-									<a
-										href="https://{domain.domain}"
-										target="_blank"
-										rel="noreferrer"
-										class="truncate text-[15px] font-medium text-foreground hover:underline"
-									>
-										{domain.domain}
-									</a>
-									{#if domain.is_primary}
-										<Badge tone="info" class="flex-none">primary</Badge>
-									{/if}
-								</div>
-								<!-- State and the way out of it on one line: what is wrong and what
+								<Icon
+									src={mark.icon}
+									theme="outline"
+									class={cn('mt-0.5 h-4 w-4 flex-none', mark.class)}
+									aria-hidden="true"
+								/>
+								<div class="min-w-0 flex-1">
+									<div class="flex min-w-0 items-center gap-2">
+										<a
+											href="https://{domain.domain}"
+											target="_blank"
+											rel="noreferrer"
+											class="truncate text-[15px] font-medium text-foreground hover:underline"
+										>
+											{domain.domain}
+										</a>
+										{#if domain.is_primary}
+											<Badge tone="info" class="flex-none">primary</Badge>
+										{/if}
+									</div>
+									<!-- State and the way out of it on one line: what is wrong and what
 								     to press about it belong next to each other, not stacked as two
 								     separate remarks. -->
-								<div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px]">
-									{#if waiting}
-										<!-- The prerequisite that is actually outstanding. Saying
+									<div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px]">
+										{#if waiting}
+											<!-- The prerequisite that is actually outstanding. Saying
 										     "Waiting for DNS" to someone whose DNS is already correct is
 										     what sent this panel's reader off to check a record that was
 										     never the problem. -->
-										<span class="min-w-0 truncate text-muted-foreground">Not deployed yet</span>
-										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
-										<button
-											type="button"
-											onclick={deployAndWatch}
-											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
-										>
-											Deploy
-										</button>
-									{:else}
-										<span
-											class={cn(
-												'min-w-0 truncate',
-												domain.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
-											)}
-											title={domain.status === 'error' ? (domain.last_error ?? '') : undefined}
-										>
-											{domain.status === 'error' && domain.last_error
-												? domain.last_error
-												: mark.label}
-										</span>
-									{/if}
-									<!-- Only while it is still waiting: once the certificate is issued
+											<span class="min-w-0 truncate text-muted-foreground">Not deployed yet</span>
+											<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+											<button
+												type="button"
+												onclick={deployAndWatch}
+												class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+											>
+												Deploy
+											</button>
+										{:else}
+											<span
+												class={cn(
+													'min-w-0 truncate',
+													domain.status === 'error' ? 'text-destructive' : 'text-muted-foreground'
+												)}
+												title={domain.status === 'error' ? (domain.last_error ?? '') : undefined}
+											>
+												{domain.status === 'error' && domain.last_error
+													? domain.last_error
+													: mark.label}
+											</span>
+										{/if}
+										<!-- Only while it is still waiting: once the certificate is issued
 									     the record is demonstrably correct, and a link to instructions
 									     for something already done is just noise on the row. -->
-									{#if domain.status !== 'ready'}
-										<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
-										<button
-											type="button"
-											onclick={() => (dnsDomainId = domain.id)}
-											class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
-										>
-											Show DNS record
-										</button>
-										<!-- No countdown while the deploy is the missing piece: that
+										{#if domain.status !== 'ready'}
+											<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+											<button
+												type="button"
+												onclick={() => (dnsDomainId = domain.id)}
+												class="flex-none cursor-pointer rounded font-medium text-primary-deep transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+											>
+												Show DNS record
+											</button>
+											<!-- No countdown while the deploy is the missing piece: that
 										     check cannot succeed yet, and counting down to it is the
 										     exact reassurance that wasted somebody's afternoon. -->
-										{#if !waiting && nextCheck.seconds !== null}
-											<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
-											<!-- Counting to the reconciler's own pass, not to a refresh of
+											{#if !waiting && nextCheck.seconds !== null}
+												<span class="flex-none text-muted-foreground/50" aria-hidden="true">·</span>
+												<!-- Counting to the reconciler's own pass, not to a refresh of
 											     ours: that is the moment the answer can change. A number
 											     running out four times a minute while nothing happened
 											     would teach the reader to stop looking at it.
@@ -1055,57 +1108,30 @@
 											     Hidden from screen readers: a digit changing every second
 											     is unusable read aloud, and the state itself is announced
 											     by the text beside it the moment it arrives. -->
-											<span class="flex-none whitespace-nowrap tabular-nums" aria-hidden="true">
-												{nextCheck.seconds > 0
-													? `next check in ${nextCheck.seconds}s`
-													: 'checking now…'}
-											</span>
+												<span class="flex-none whitespace-nowrap tabular-nums" aria-hidden="true">
+													{nextCheck.seconds > 0
+														? `next check in ${nextCheck.seconds}s`
+														: 'checking now…'}
+												</span>
+											{/if}
 										{/if}
-									{/if}
+									</div>
 								</div>
-							</div>
-							{#if canEdit}
-								<IconButton
-									variant="ghost"
-									onclick={() => deleteDomain(domain.id)}
-									class="-mr-1 flex-none hover:text-destructive"
-									aria-label="Remove {domain.domain}"
-								>
-									<Icon src={XMark} theme="outline" class="h-3.5 w-3.5" />
-								</IconButton>
-							{/if}
-						</DataRow>
-					{/each}
-				</div>
-			{/if}
-
-			{#if canEdit}
-				<form
-					onsubmit={(e) => {
-						e.preventDefault();
-						addDomain();
-					}}
-					class="mt-4 flex items-end gap-2"
-				>
-					<FormField label="Add domain">
-						<Input type="text" bind:value={domainInput} placeholder="myapp.example.com" required />
-					</FormField>
-					<Button type="submit" size="sm" loading={domainAdding}>
-						{domainAdding ? 'Adding...' : 'Add'}
-					</Button>
-				</form>
-				{#if domainError}
-					<p class="mt-1 text-[15px] text-destructive">{domainError}</p>
+								{#if canEdit}
+									<IconButton
+										variant="ghost"
+										onclick={() => deleteDomain(domain.id)}
+										class="-mr-1 flex-none hover:text-destructive"
+										aria-label="Remove {domain.domain}"
+									>
+										<Icon src={XMark} theme="outline" class="h-3.5 w-3.5" />
+									</IconButton>
+								{/if}
+							</DataRow>
+						{/each}
+					</div>
 				{/if}
-				<!-- One line where a two-case list used to be. The list was the generic
-				     version of what the dialog now says exactly — with the actual record
-				     name and the actual server address — so keeping both meant saying it
-				     twice and saying it vaguely first. This only has to stop someone from
-				     expecting the domain to work the moment they press Add. -->
-				<p class="mt-2 text-[13px] text-muted-foreground">
-					A domain needs a DNS record before it resolves. You'll get the exact one to add next.
-				</p>
-			{/if}
+			</section>
 		{:else if activeTab === 'env'}
 			{#if canEdit && envsLoaded}
 				<form
