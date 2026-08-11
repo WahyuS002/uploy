@@ -13,12 +13,14 @@
 		routeId.endsWith('/projects/new') ||
 			routeId.endsWith('/projects/new/image') ||
 			routeId.endsWith('/projects/[id]') ||
+			routeId.endsWith('/projects/[id]/observability') ||
 			routeId.endsWith('/projects/[id]/settings')
 	);
 
 	let defaultLabel = $derived.by(() => {
 		if (routeId.endsWith('/projects/new/image')) return 'New project / Docker Image';
 		if (routeId.endsWith('/projects/new')) return 'New project';
+		if (routeId.endsWith('/projects/[id]/observability')) return 'VM observability';
 		if (routeId.endsWith('/projects/[id]/settings')) return 'Project settings';
 		if (routeId.endsWith('/projects/[id]')) return 'Project builder';
 		return '';
