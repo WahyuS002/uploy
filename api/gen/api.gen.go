@@ -78,25 +78,25 @@ func (e DeploymentResponseStatus) Valid() bool {
 
 // Defines values for ErrorResponseCode.
 const (
-	DockerMissing ErrorResponseCode = "docker_missing"
-	KeyInvalid    ErrorResponseCode = "key_invalid"
-	KeyRejected   ErrorResponseCode = "key_rejected"
-	SessionFailed ErrorResponseCode = "session_failed"
-	Unreachable   ErrorResponseCode = "unreachable"
+	ErrorResponseCodeDockerMissing ErrorResponseCode = "docker_missing"
+	ErrorResponseCodeKeyInvalid    ErrorResponseCode = "key_invalid"
+	ErrorResponseCodeKeyRejected   ErrorResponseCode = "key_rejected"
+	ErrorResponseCodeSessionFailed ErrorResponseCode = "session_failed"
+	ErrorResponseCodeUnreachable   ErrorResponseCode = "unreachable"
 )
 
 // Valid indicates whether the value is a known member of the ErrorResponseCode enum.
 func (e ErrorResponseCode) Valid() bool {
 	switch e {
-	case DockerMissing:
+	case ErrorResponseCodeDockerMissing:
 		return true
-	case KeyInvalid:
+	case ErrorResponseCodeKeyInvalid:
 		return true
-	case KeyRejected:
+	case ErrorResponseCodeKeyRejected:
 		return true
-	case SessionFailed:
+	case ErrorResponseCodeSessionFailed:
 		return true
-	case Unreachable:
+	case ErrorResponseCodeUnreachable:
 		return true
 	default:
 		return false
@@ -160,6 +160,33 @@ func (e ServiceDomainResponseStatus) Valid() bool {
 	case ServiceDomainResponseStatusPending:
 		return true
 	case ServiceDomainResponseStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServiceObservabilityStatus.
+const (
+	ServiceObservabilityStatusError       ServiceObservabilityStatus = "error"
+	ServiceObservabilityStatusNotDeployed ServiceObservabilityStatus = "not_deployed"
+	ServiceObservabilityStatusRunning     ServiceObservabilityStatus = "running"
+	ServiceObservabilityStatusStopped     ServiceObservabilityStatus = "stopped"
+	ServiceObservabilityStatusUnreachable ServiceObservabilityStatus = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the ServiceObservabilityStatus enum.
+func (e ServiceObservabilityStatus) Valid() bool {
+	switch e {
+	case ServiceObservabilityStatusError:
+		return true
+	case ServiceObservabilityStatusNotDeployed:
+		return true
+	case ServiceObservabilityStatusRunning:
+		return true
+	case ServiceObservabilityStatusStopped:
+		return true
+	case ServiceObservabilityStatusUnreachable:
 		return true
 	default:
 		return false
@@ -272,6 +299,19 @@ type ConfigChange struct {
 
 // ConfigChangeType defines model for ConfigChange.Type.
 type ConfigChangeType string
+
+// ContainerObservability defines model for ContainerObservability.
+type ContainerObservability struct {
+	CpuPercent           float64 `json:"cpu_percent"`
+	Id                   string  `json:"id"`
+	MemoryLimitBytes     int64   `json:"memory_limit_bytes"`
+	MemoryUsedBytes      int64   `json:"memory_used_bytes"`
+	Name                 string  `json:"name"`
+	NetworkInBytesTotal  int64   `json:"network_in_bytes_total"`
+	NetworkOutBytesTotal int64   `json:"network_out_bytes_total"`
+	State                string  `json:"state"`
+	UptimeSeconds        int64   `json:"uptime_seconds"`
+}
 
 // CreateDomainRequest defines model for CreateDomainRequest.
 type CreateDomainRequest struct {
@@ -427,6 +467,27 @@ type PendingChangesResponse struct {
 	HasBaseline bool `json:"has_baseline"`
 }
 
+// ProjectObservabilityResponse defines model for ProjectObservabilityResponse.
+type ProjectObservabilityResponse struct {
+	// RefreshAfterSeconds Recommended client refresh interval.
+	RefreshAfterSeconds int                         `json:"refresh_after_seconds"`
+	SampledAt           time.Time                   `json:"sampled_at"`
+	Services            []ServiceObservability      `json:"services"`
+	Summary             ProjectObservabilitySummary `json:"summary"`
+}
+
+// ProjectObservabilitySummary defines model for ProjectObservabilitySummary.
+type ProjectObservabilitySummary struct {
+	CpuPercent           float64 `json:"cpu_percent"`
+	DegradedServices     int     `json:"degraded_services"`
+	MemoryLimitBytes     int64   `json:"memory_limit_bytes"`
+	MemoryUsedBytes      int64   `json:"memory_used_bytes"`
+	NetworkInBytesTotal  int64   `json:"network_in_bytes_total"`
+	NetworkOutBytesTotal int64   `json:"network_out_bytes_total"`
+	RunningServices      int     `json:"running_services"`
+	TotalServices        int     `json:"total_services"`
+}
+
 // ProjectResponse defines model for ProjectResponse.
 type ProjectResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
@@ -490,6 +551,20 @@ type ServiceEnvResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	Value     string    `json:"value"`
 }
+
+// ServiceObservability defines model for ServiceObservability.
+type ServiceObservability struct {
+	Container       *ContainerObservability    `json:"container,omitempty"`
+	DeploymentId    *string                    `json:"deployment_id,omitempty"`
+	EnvironmentName string                     `json:"environment_name"`
+	Error           *string                    `json:"error,omitempty"`
+	Name            string                     `json:"name"`
+	ServiceId       string                     `json:"service_id"`
+	Status          ServiceObservabilityStatus `json:"status"`
+}
+
+// ServiceObservabilityStatus defines model for ServiceObservability.Status.
+type ServiceObservabilityStatus string
 
 // ServiceResponse defines model for ServiceResponse.
 type ServiceResponse struct {
@@ -698,6 +773,9 @@ type ServerInterface interface {
 	// Update environment
 	// (PUT /api/projects/{id}/environments/{envId})
 	UpdateEnvironment(w http.ResponseWriter, r *http.Request, id string, envId string)
+	// Get current project container metrics
+	// (GET /api/projects/{id}/observability)
+	GetProjectObservability(w http.ResponseWriter, r *http.Request, id string)
 	// List services in a project
 	// (GET /api/projects/{id}/services)
 	ListProjectServices(w http.ResponseWriter, r *http.Request, id string)
@@ -1226,6 +1304,37 @@ func (siw *ServerInterfaceWrapper) UpdateEnvironment(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateEnvironment(w, r, id, envId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectObservability operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectObservability(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectObservability(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2088,6 +2197,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.DeleteEnvironment)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.GetEnvironment)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/projects/{id}/environments/{envId}", wrapper.UpdateEnvironment)
+	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}/observability", wrapper.GetProjectObservability)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects/{id}/services", wrapper.ListProjectServices)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers", wrapper.ListServers)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers", wrapper.CreateServer)

@@ -923,6 +923,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/projects/{id}/observability:
+    get:
+      operationId: getProjectObservability
+      summary: Get current project container metrics
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current metrics for active project deployments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectObservabilityResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/services:
     post:
       operationId: createService
@@ -2295,6 +2333,128 @@ components:
             Combined with has_pending_changes it distinguishes a service that
             will be created on its server from one that will be updated.
             Derived per request, never stored.
+
+    ProjectObservabilityResponse:
+      type: object
+      required:
+        - sampled_at
+        - refresh_after_seconds
+        - summary
+        - services
+      properties:
+        sampled_at:
+          type: string
+          format: date-time
+        refresh_after_seconds:
+          type: integer
+          description: Recommended client refresh interval.
+        summary:
+          $ref: "#/components/schemas/ProjectObservabilitySummary"
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceObservability"
+
+    ProjectObservabilitySummary:
+      type: object
+      required:
+        - total_services
+        - running_services
+        - degraded_services
+        - cpu_percent
+        - memory_used_bytes
+        - memory_limit_bytes
+        - network_in_bytes_total
+        - network_out_bytes_total
+      properties:
+        total_services:
+          type: integer
+        running_services:
+          type: integer
+        degraded_services:
+          type: integer
+        cpu_percent:
+          type: number
+          format: double
+        memory_used_bytes:
+          type: integer
+          format: int64
+        memory_limit_bytes:
+          type: integer
+          format: int64
+        network_in_bytes_total:
+          type: integer
+          format: int64
+        network_out_bytes_total:
+          type: integer
+          format: int64
+
+    ServiceObservability:
+      type: object
+      required:
+        - service_id
+        - name
+        - environment_name
+        - status
+      properties:
+        service_id:
+          type: string
+        name:
+          type: string
+        environment_name:
+          type: string
+        status:
+          type: string
+          enum:
+            - not_deployed
+            - running
+            - stopped
+            - unreachable
+            - error
+        deployment_id:
+          type: string
+        error:
+          type: string
+        container:
+          $ref: "#/components/schemas/ContainerObservability"
+
+    ContainerObservability:
+      type: object
+      required:
+        - id
+        - name
+        - state
+        - cpu_percent
+        - memory_used_bytes
+        - memory_limit_bytes
+        - network_in_bytes_total
+        - network_out_bytes_total
+        - uptime_seconds
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        state:
+          type: string
+        cpu_percent:
+          type: number
+          format: double
+        memory_used_bytes:
+          type: integer
+          format: int64
+        memory_limit_bytes:
+          type: integer
+          format: int64
+        network_in_bytes_total:
+          type: integer
+          format: int64
+        network_out_bytes_total:
+          type: integer
+          format: int64
+        uptime_seconds:
+          type: integer
+          format: int64
 
     ConfigChange:
       type: object
