@@ -43,14 +43,14 @@ func probeServer(host string, port int, user, privateKey string) (*ssh.Client, *
 	if err := client.TestSession(); err != nil {
 		client.Close()
 		return nil, &probeFailure{
-			code:    gen.SessionFailed,
+			code:    gen.ErrorResponseCodeSessionFailed,
 			message: "Connected, but the server could not run a command: " + err.Error(),
 		}
 	}
 
 	if err := client.DetectDocker(); err != nil {
 		client.Close()
-		return nil, &probeFailure{code: gen.DockerMissing, message: err.Error()}
+		return nil, &probeFailure{code: gen.ErrorResponseCodeDockerMissing, message: err.Error()}
 	}
 
 	return client, nil
@@ -63,7 +63,7 @@ func probeServer(host string, port int, user, privateKey string) (*ssh.Client, *
 func classifyDialError(err error) *probeFailure {
 	if errors.Is(err, ssh.ErrInvalidPrivateKey) {
 		return &probeFailure{
-			code:    gen.KeyInvalid,
+			code:    gen.ErrorResponseCodeKeyInvalid,
 			message: "The stored SSH key could not be parsed: " + err.Error(),
 		}
 	}
@@ -71,13 +71,13 @@ func classifyDialError(err error) *probeFailure {
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
 		return &probeFailure{
-			code:    gen.Unreachable,
+			code:    gen.ErrorResponseCodeUnreachable,
 			message: "Could not reach the server: " + err.Error(),
 		}
 	}
 
 	return &probeFailure{
-		code:    gen.KeyRejected,
+		code:    gen.ErrorResponseCodeKeyRejected,
 		message: "SSH authentication failed: " + err.Error(),
 	}
 }
