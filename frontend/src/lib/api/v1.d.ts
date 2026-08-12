@@ -290,6 +290,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/projects/{id}/observability': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get current project container metrics */
+		get: operations['getProjectObservability'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/services': {
 		parameters: {
 			query?: never;
@@ -731,6 +748,56 @@ export interface components {
 			pending_change_count: number;
 			/** @description True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored. */
 			has_deployed: boolean;
+		};
+		ProjectObservabilityResponse: {
+			/** Format: date-time */
+			sampled_at: string;
+			/** @description Recommended client refresh interval. */
+			refresh_after_seconds: number;
+			summary: components['schemas']['ProjectObservabilitySummary'];
+			services: components['schemas']['ServiceObservability'][];
+		};
+		ProjectObservabilitySummary: {
+			total_services: number;
+			running_services: number;
+			degraded_services: number;
+			/** Format: double */
+			cpu_percent: number;
+			/** Format: int64 */
+			memory_used_bytes: number;
+			/** Format: int64 */
+			memory_limit_bytes: number;
+			/** Format: int64 */
+			network_in_bytes_total: number;
+			/** Format: int64 */
+			network_out_bytes_total: number;
+		};
+		ServiceObservability: {
+			service_id: string;
+			name: string;
+			environment_name: string;
+			/** @enum {string} */
+			status: 'not_deployed' | 'running' | 'stopped' | 'unreachable' | 'error';
+			deployment_id?: string;
+			error?: string;
+			container?: components['schemas']['ContainerObservability'];
+		};
+		ContainerObservability: {
+			id: string;
+			name: string;
+			state: string;
+			/** Format: double */
+			cpu_percent: number;
+			/** Format: int64 */
+			memory_used_bytes: number;
+			/** Format: int64 */
+			memory_limit_bytes: number;
+			/** Format: int64 */
+			network_in_bytes_total: number;
+			/** Format: int64 */
+			network_out_bytes_total: number;
+			/** Format: int64 */
+			uptime_seconds: number;
 		};
 		ConfigChange: {
 			/** @description Stable identifier for this change, unique within the list — "image", "domain:app.example.com", "env:DATABASE_URL". */
@@ -1954,6 +2021,55 @@ export interface operations {
 				};
 				content: {
 					'application/json': components['schemas']['ServiceResponse'][];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Project not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Internal server error */
+			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	getProjectObservability: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Current metrics for active project deployments */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectObservabilityResponse'];
 				};
 			};
 			/** @description Not authenticated */
