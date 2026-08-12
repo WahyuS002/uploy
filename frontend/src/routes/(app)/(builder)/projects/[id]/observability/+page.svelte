@@ -1,297 +1,555 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import { api } from '$lib/api/client';
+	import type { components } from '$lib/api/v1';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import {
-		ArrowTrendingDown,
-		ArrowTrendingUp,
+		ChartBar,
 		CircleStack,
 		CpuChip,
-		Server,
+		ExclamationTriangle,
 		Signal
 	} from '@steeze-ui/heroicons';
+	import { untrack } from 'svelte';
 
-	const metrics = [
-		{
-			label: 'CPU usage',
-			value: '38%',
-			detail: '4 vCPU',
-			trend: '6.2%',
-			trendLabel: 'higher than previous hour',
-			trendIcon: ArrowTrendingUp,
-			icon: CpuChip,
-			class: 'text-info'
-		},
-		{
-			label: 'Memory',
-			value: '5.8 GB',
-			detail: 'of 8 GB',
-			trend: '2.1%',
-			trendLabel: 'lower than previous hour',
-			trendIcon: ArrowTrendingDown,
-			icon: CircleStack,
-			class: 'text-success'
-		},
-		{
-			label: 'Disk usage',
-			value: '42%',
-			detail: '34 of 80 GB',
-			trend: '1.4 GB',
-			trendLabel: 'written in the last hour',
-			trendIcon: ArrowTrendingUp,
-			icon: Server,
-			class: 'text-warning'
-		},
-		{
-			label: 'Network',
-			value: '18.6 MB/s',
-			detail: '12.4 in · 6.2 out',
-			trend: '8.4%',
-			trendLabel: 'higher than previous hour',
-			trendIcon: ArrowTrendingUp,
-			icon: Signal,
-			class: 'text-primary-deep'
+	type ObservabilityResponse = components['schemas']['ProjectObservabilityResponse'];
+	type ServiceObservability = components['schemas']['ServiceObservability'];
+	type Status = ServiceObservability['status'];
+	type HistoryPoint = {
+		at: string;
+		cpu: number;
+		memory: number;
+		networkIn: number;
+		networkOut: number;
+	};
+
+	const REFRESH_SECONDS = 10;
+	const MAX_HISTORY_POINTS = 300;
+	const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit'
+	});
+
+	let projectId = $derived(page.params.id as string);
+	let snapshot = $state<ObservabilityResponse | null>(null);
+	let history = $state<HistoryPoint[]>([]);
+	let serviceRates = $state<Record<string, number>>({});
+	let loading = $state(true);
+	let refreshing = $state(false);
+	let loadError = $state('');
+	let refreshError = $state('');
+	let retryVersion = $state(0);
+	let timer: ReturnType<typeof setTimeout> | null = null;
+
+	let memoryPercent = $derived(
+		snapshot?.summary.memory_limit_bytes
+			? (snapshot.summary.memory_used_bytes / snapshot.summary.memory_limit_bytes) * 100
+			: 0
+	);
+	let networkRate = $derived({
+		in: history.at(-1)?.networkIn ?? 0,
+		out: history.at(-1)?.networkOut ?? 0
+	});
+	let chartNetworkMax = $derived(
+		Math.max(1, ...history.flatMap((point) => [point.networkIn, point.networkOut]))
+	);
+
+	$effect(() => {
+		const id = projectId;
+		retryVersion;
+		let cancelled = false;
+
+		function clearRefresh() {
+			if (timer) clearTimeout(timer);
+			timer = null;
 		}
-	];
 
-	const processes = [
-		{
-			name: 'docker',
-			detail: 'Container runtime',
-			cpu: '12.8%',
-			memory: '1.4 GB',
-			state: 'Healthy'
-		},
-		{ name: 'postgres', detail: 'Database', cpu: '8.4%', memory: '2.1 GB', state: 'Healthy' },
-		{ name: 'traefik', detail: 'Edge proxy', cpu: '4.9%', memory: '328 MB', state: 'Healthy' },
-		{ name: 'node', detail: 'Application', cpu: '3.7%', memory: '612 MB', state: 'Healthy' }
-	];
+		function scheduleRefresh() {
+			clearRefresh();
+			if (cancelled || document.hidden) return;
+			timer = setTimeout(async () => {
+				await fetchSnapshot();
+				scheduleRefresh();
+			}, REFRESH_SECONDS * 1000);
+		}
+
+		async function fetchSnapshot() {
+			if (cancelled) return;
+			if (snapshot) refreshing = true;
+			else loading = true;
+			refreshError = '';
+			try {
+				const previous = snapshot;
+				const { data, error } = await api.GET('/api/projects/{id}/observability', {
+					params: { path: { id } }
+				});
+				if (cancelled) return;
+				if (error || !data) {
+					const message =
+						(error as { error?: string } | undefined)?.error ?? 'Failed to load metrics';
+					if (previous) refreshError = message;
+					else loadError = message;
+					return;
+				}
+
+				const previousAt = previous ? new Date(previous.sampled_at).getTime() : 0;
+				const currentAt = new Date(data.sampled_at).getTime();
+				const seconds = previousAt ? Math.max(1, (currentAt - previousAt) / 1000) : 0;
+				const previousServices = new Map(
+					(previous?.services ?? []).map((service) => [service.service_id, service])
+				);
+				const nextRates: Record<string, number> = {};
+				for (const service of data.services) {
+					const prior = previousServices.get(service.service_id)?.container;
+					if (!service.container || !prior || !seconds) continue;
+					const inDelta = service.container.network_in_bytes_total - prior.network_in_bytes_total;
+					const outDelta =
+						service.container.network_out_bytes_total - prior.network_out_bytes_total;
+					nextRates[service.service_id] = Math.max(0, (inDelta + outDelta) / seconds);
+				}
+				const inDelta = previous
+					? data.summary.network_in_bytes_total - previous.summary.network_in_bytes_total
+					: 0;
+				const outDelta = previous
+					? data.summary.network_out_bytes_total - previous.summary.network_out_bytes_total
+					: 0;
+				snapshot = data;
+				serviceRates = nextRates;
+				history = [
+					...history,
+					{
+						at: data.sampled_at,
+						cpu: data.summary.cpu_percent,
+						memory: data.summary.memory_limit_bytes
+							? (data.summary.memory_used_bytes / data.summary.memory_limit_bytes) * 100
+							: 0,
+						networkIn: seconds ? Math.max(0, inDelta / seconds) : 0,
+						networkOut: seconds ? Math.max(0, outDelta / seconds) : 0
+					}
+				].slice(-MAX_HISTORY_POINTS);
+			} catch {
+				if (cancelled) return;
+				if (snapshot) refreshError = 'Network error while refreshing metrics';
+				else loadError = 'Network error';
+			} finally {
+				if (!cancelled) {
+					loading = false;
+					refreshing = false;
+				}
+			}
+		}
+
+		function handleVisibility() {
+			clearRefresh();
+			if (!document.hidden) {
+				untrack(() => void fetchSnapshot().finally(scheduleRefresh));
+			}
+		}
+
+		document.addEventListener('visibilitychange', handleVisibility);
+		untrack(() => void fetchSnapshot().finally(scheduleRefresh));
+		return () => {
+			cancelled = true;
+			clearRefresh();
+			document.removeEventListener('visibilitychange', handleVisibility);
+		};
+	});
+
+	function retry() {
+		loadError = '';
+		refreshError = '';
+		retryVersion++;
+	}
+
+	function formatBytes(bytes: number, perSecond = false): string {
+		const suffix = perSecond ? '/s' : '';
+		if (bytes < 1024) return `${Math.round(bytes)} B${suffix}`;
+		if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB${suffix}`;
+		if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB${suffix}`;
+		return `${(bytes / 1024 ** 3).toFixed(1)} GB${suffix}`;
+	}
+
+	function formatPercent(value: number): string {
+		return `${value.toFixed(value >= 10 ? 0 : 1)}%`;
+	}
+
+	function formatTime(value: string | undefined): string {
+		return value ? timeFormatter.format(new Date(value)) : '—';
+	}
+
+	function statusLabel(status: Status): string {
+		return {
+			not_deployed: 'Not deployed',
+			running: 'Running',
+			stopped: 'Stopped',
+			unreachable: 'Unreachable',
+			error: 'Failed'
+		}[status];
+	}
+
+	function statusTone(status: Status): 'neutral' | 'success' | 'warning' | 'danger' {
+		if (status === 'running') return 'success';
+		if (status === 'not_deployed') return 'neutral';
+		if (status === 'stopped') return 'warning';
+		return 'danger';
+	}
+
+	function chartPath(values: number[], maxValue: number): string {
+		if (!values.length) return '';
+		const width = 720;
+		const height = 180;
+		const step = values.length === 1 ? width : width / (values.length - 1);
+		return values
+			.map((value, index) => {
+				const x = index * step;
+				const y = height - Math.min(1, Math.max(0, value / maxValue)) * height;
+				return `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`;
+			})
+			.join(' ');
+	}
+
+	function chartPoints(values: number[], maxValue: number): string {
+		if (!values.length) return '';
+		const width = 720;
+		const height = 180;
+		const step = values.length === 1 ? width : width / (values.length - 1);
+		return values
+			.map((value, index) => {
+				const x = index * step;
+				const y = height - Math.min(1, Math.max(0, value / maxValue)) * height;
+				return `${x.toFixed(1)},${y.toFixed(1)}`;
+			})
+			.join(' ');
+	}
+
+	function serviceNetworkRate(service: ServiceObservability): number {
+		return serviceRates[service.service_id] ?? 0;
+	}
 </script>
 
 <svelte:head>
-	<title>VM observability · Uploy</title>
+	<title>Project observability · Uploy</title>
 </svelte:head>
 
 <div class="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border bg-card">
 	<div class="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
 		<header class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 			<div class="max-w-2xl">
-				<h1 class="text-2xl font-semibold tracking-[-0.02em] text-foreground">VM observability</h1>
+				<h1 class="text-2xl font-semibold tracking-[-0.02em] text-foreground">
+					Project observability
+				</h1>
 				<p class="mt-2 text-sm leading-relaxed text-muted-foreground">
-					Inspect resource pressure, throughput, and the workloads consuming this virtual machine.
+					Live health and resource usage for active deployment containers across every environment.
 				</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<Badge tone="warning">Preview data</Badge>
+				<Badge tone={snapshot ? 'success' : 'neutral'}>
+					<span class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"></span>
+					{snapshot ? 'Live' : 'Connecting'}
+				</Badge>
 				<span class="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
-					Last 60 minutes
+					{refreshing ? 'Refreshing…' : `Updates every ${REFRESH_SECONDS}s`}
 				</span>
 			</div>
 		</header>
 
-		<section class="overflow-hidden rounded-xl border border-border" aria-label="VM overview">
-			<div
-				class="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-			>
-				<div class="flex min-w-0 items-center gap-3">
-					<span
-						class="grid h-9 w-9 flex-none place-content-center rounded-lg bg-muted text-foreground"
-					>
-						<Icon src={Server} theme="outline" class="h-4.5 w-4.5" />
-					</span>
-					<div class="min-w-0">
-						<h2 class="truncate text-[15px] font-semibold text-foreground">production-vm-01</h2>
-						<p class="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-							203.0.113.24 · Ubuntu 24.04
-						</p>
-					</div>
+		{#if loading && !snapshot}
+			<div class="space-y-5" aria-label="Loading observability" aria-busy="true">
+				<div
+					class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3"
+				>
+					{#each Array(3)}
+						<div class="h-28 animate-pulse bg-card"></div>
+					{/each}
 				</div>
-				<div class="flex items-center gap-2 text-xs text-success">
-					<span class="h-1.5 w-1.5 rounded-full bg-current"></span>
-					Healthy · 24d uptime
-				</div>
+				<div class="h-72 animate-pulse rounded-xl border border-border bg-muted/30"></div>
 			</div>
-
-			<div class="grid sm:grid-cols-2 xl:grid-cols-4">
-				{#each metrics as metric, index (metric.label)}
-					<div
-						class="px-5 py-5 {index < metrics.length - 1
-							? 'border-b border-border sm:border-r xl:border-b-0'
-							: ''} {index === 1 ? 'sm:border-r-0 xl:border-r' : ''} {index === 2
-							? 'sm:border-b-0'
-							: ''}"
-					>
+		{:else if loadError && !snapshot}
+			<EmptyState icon={ExclamationTriangle} title="Metrics unavailable" description={loadError}>
+				{#snippet actions()}
+					<Button size="sm" variant="secondary" onclick={retry}>Try again</Button>
+				{/snippet}
+			</EmptyState>
+		{:else if snapshot && snapshot.summary.total_services === 0}
+			<EmptyState
+				icon={ChartBar}
+				title="No services in this project"
+				description="Add a service to see container health and resource usage here."
+			/>
+		{:else if snapshot}
+			<section class="overflow-hidden rounded-xl border border-border" aria-label="Project summary">
+				<div class="grid sm:grid-cols-3">
+					<div class="border-b border-border px-5 py-5 sm:border-r sm:border-b-0">
 						<div class="flex items-center justify-between gap-3">
-							<p class="text-xs font-medium text-muted-foreground">{metric.label}</p>
-							<Icon src={metric.icon} theme="outline" class={`h-4 w-4 ${metric.class}`} />
+							<p class="text-xs font-medium text-muted-foreground">CPU usage</p>
+							<Icon src={CpuChip} theme="outline" class="h-4 w-4 text-info" />
 						</div>
-						<div class="mt-3 flex items-baseline gap-2">
-							<p class="text-2xl font-semibold tracking-[-0.02em] text-foreground">
-								{metric.value}
-							</p>
-							<span class="text-xs text-muted-foreground">{metric.detail}</span>
+						<p class="mt-3 text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+							{formatPercent(snapshot.summary.cpu_percent)}
+						</p>
+						<p class="mt-1 text-xs text-muted-foreground">Aggregate across running containers</p>
+					</div>
+					<div class="border-b border-border px-5 py-5 sm:border-r sm:border-b-0">
+						<div class="flex items-center justify-between gap-3">
+							<p class="text-xs font-medium text-muted-foreground">Memory</p>
+							<Icon src={CircleStack} theme="outline" class="h-4 w-4 text-success" />
 						</div>
-						<p class="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-							<Icon src={metric.trendIcon} theme="outline" class="h-3.5 w-3.5" />
-							<span class="font-medium text-foreground">{metric.trend}</span>
-							{metric.trendLabel}
+						<p class="mt-3 text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+							{formatBytes(snapshot.summary.memory_used_bytes)}
+							<span class="text-sm font-normal text-muted-foreground">
+								/ {formatBytes(snapshot.summary.memory_limit_bytes)}</span
+							>
+						</p>
+						<p class="mt-1 text-xs text-muted-foreground">
+							{formatPercent(memoryPercent)} of allocated limits
 						</p>
 					</div>
-				{/each}
-			</div>
-		</section>
-
-		<section
-			class="mt-5 overflow-hidden rounded-xl border border-border"
-			aria-labelledby="usage-title"
-		>
-			<header class="flex items-center justify-between gap-3 px-5 py-4">
-				<div>
-					<h2 id="usage-title" class="text-[15px] font-semibold text-foreground">Resource usage</h2>
-					<p class="mt-0.5 text-xs text-muted-foreground">Illustrative one-minute samples</p>
+					<div class="px-5 py-5">
+						<div class="flex items-center justify-between gap-3">
+							<p class="text-xs font-medium text-muted-foreground">Network rate</p>
+							<Icon src={Signal} theme="outline" class="h-4 w-4 text-primary-deep" />
+						</div>
+						<p class="mt-3 text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+							{formatBytes(networkRate.in + networkRate.out, true)}
+						</p>
+						<p class="mt-1 text-xs text-muted-foreground">
+							{formatBytes(networkRate.in, true)} in · {formatBytes(networkRate.out, true)} out
+						</p>
+					</div>
 				</div>
-				<div class="flex items-center gap-4 text-xs">
-					<span class="flex items-center gap-1.5 text-muted-foreground">
-						<span class="h-1.5 w-1.5 rounded-full bg-info"></span>CPU
+				<div
+					class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs"
+				>
+					<span class="text-muted-foreground">
+						<span class="font-medium text-foreground">{snapshot.summary.running_services}</span> of {snapshot
+							.summary.total_services} services running
 					</span>
-					<span class="flex items-center gap-1.5 text-muted-foreground">
-						<span class="h-1.5 w-1.5 rounded-full bg-success"></span>Memory
+					<span
+						class={snapshot.summary.degraded_services ? 'text-warning' : 'text-muted-foreground'}
+					>
+						{snapshot.summary.degraded_services} degraded · sampled {formatTime(
+							snapshot.sampled_at
+						)}
 					</span>
 				</div>
-			</header>
+			</section>
 
-			<div class="grid border-t border-border lg:grid-cols-[minmax(0,1.8fr)_minmax(260px,1fr)]">
-				<div class="min-w-0 px-4 py-5 sm:px-5">
-					<div class="h-64 w-full text-border">
-						<svg
-							viewBox="0 0 720 240"
-							class="h-full w-full overflow-visible"
-							role="img"
-							aria-label="Illustrative CPU and memory usage over the last sixty minutes"
-							preserveAspectRatio="none"
+			<section
+				class="mt-5 overflow-hidden rounded-xl border border-border"
+				aria-labelledby="history-title"
+			>
+				<header
+					class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+				>
+					<div>
+						<h2 id="history-title" class="text-[15px] font-semibold text-foreground">
+							Session history
+						</h2>
+						<p class="mt-0.5 text-xs text-muted-foreground">
+							Samples collected while this page stays open
+						</p>
+					</div>
+					<div class="flex flex-wrap gap-3 text-xs text-muted-foreground">
+						<span class="flex items-center gap-1.5"
+							><span class="h-1.5 w-1.5 rounded-full bg-info"></span>CPU</span
 						>
-							<path
-								d="M0 24H720M0 72H720M0 120H720M0 168H720M0 216H720"
-								stroke="currentColor"
-								stroke-width="1"
-							/>
-							<path
-								d="M0 216V0M144 216V0M288 216V0M432 216V0M576 216V0M720 216V0"
-								stroke="currentColor"
-								stroke-width="1"
-							/>
-							<path
-								d="M0 166 C36 151 58 160 90 142 S148 112 180 126 S240 170 270 145 S326 96 360 108 S418 146 450 126 S510 84 540 98 S596 138 630 116 S684 74 720 88"
-								class="text-info"
-								fill="none"
-								stroke="currentColor"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="3"
-							/>
-							<path
-								d="M0 126 C46 122 62 116 90 118 S142 132 180 120 S236 104 270 110 S328 130 360 122 S414 102 450 106 S514 124 540 114 S596 96 630 102 S686 112 720 98"
-								class="text-success"
-								fill="none"
-								stroke="currentColor"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="3"
-							/>
-						</svg>
+						<span class="flex items-center gap-1.5"
+							><span class="h-1.5 w-1.5 rounded-full bg-success"></span>Memory</span
+						>
+						<span class="flex items-center gap-1.5"
+							><span class="h-1.5 w-1.5 rounded-full bg-primary-deep"></span>Network</span
+						>
 					</div>
+				</header>
+				<div class="border-t border-border px-5 py-5">
+					<svg
+						viewBox="0 0 720 180"
+						class="h-56 w-full text-border"
+						role="img"
+						aria-label="CPU and memory usage during this session"
+						preserveAspectRatio="none"
+					>
+						<path
+							d="M0 0V180M180 0V180M360 0V180M540 0V180M720 0V180M0 0H720M0 90H720M0 180H720"
+							stroke="currentColor"
+							stroke-width="1"
+						/>
+						<path
+							d={chartPath(
+								history.map((point) => point.cpu),
+								100
+							)}
+							class="text-info"
+							fill="none"
+							stroke="currentColor"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="3"
+						/>
+						<path
+							d={chartPath(
+								history.map((point) => point.memory),
+								100
+							)}
+							class="text-success"
+							fill="none"
+							stroke="currentColor"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="3"
+						/>
+					</svg>
 					<div class="mt-3 flex justify-between text-[11px] text-muted-foreground tabular-nums">
-						<span>60m ago</span><span>45m</span><span>30m</span><span>15m</span><span>Now</span>
+						<span>{history.length ? formatTime(history[0].at) : 'Waiting'}</span><span
+							>CPU {formatPercent(snapshot.summary.cpu_percent)}</span
+						><span>Memory {formatPercent(memoryPercent)}</span><span>{history.length} samples</span>
 					</div>
 				</div>
-
-				<div class="border-t border-border px-5 py-5 lg:border-t-0 lg:border-l">
-					<h3 class="text-sm font-semibold text-foreground">Capacity</h3>
-					<div class="mt-5 space-y-5">
+				<div class="border-t border-border px-5 py-5">
+					<div class="mb-3 flex items-center justify-between gap-3">
 						<div>
-							<div class="flex items-center justify-between text-xs">
-								<span class="text-muted-foreground">CPU headroom</span>
-								<span class="font-medium text-foreground tabular-nums">62%</span>
-							</div>
-							<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-								<div class="h-full w-[62%] rounded-full bg-info"></div>
-							</div>
+							<h3 class="text-sm font-semibold text-foreground">Network throughput</h3>
+							<p class="mt-0.5 text-xs text-muted-foreground">
+								Calculated from cumulative Docker counters
+							</p>
 						</div>
-						<div>
-							<div class="flex items-center justify-between text-xs">
-								<span class="text-muted-foreground">Memory headroom</span>
-								<span class="font-medium text-foreground tabular-nums">28%</span>
-							</div>
-							<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-								<div class="h-full w-[28%] rounded-full bg-success"></div>
-							</div>
-						</div>
-						<div>
-							<div class="flex items-center justify-between text-xs">
-								<span class="text-muted-foreground">Disk headroom</span>
-								<span class="font-medium text-foreground tabular-nums">58%</span>
-							</div>
-							<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-								<div class="h-full w-[58%] rounded-full bg-warning"></div>
-							</div>
-						</div>
+						<span class="text-xs text-muted-foreground tabular-nums"
+							>{formatBytes(networkRate.in + networkRate.out, true)}</span
+						>
 					</div>
+					<svg
+						viewBox="0 0 720 180"
+						class="h-40 w-full text-border"
+						role="img"
+						aria-label="Network throughput during this session"
+						preserveAspectRatio="none"
+					>
+						<path
+							d="M0 0V180M180 0V180M360 0V180M540 0V180M720 0V180M0 0H720M0 90H720M0 180H720"
+							stroke="currentColor"
+							stroke-width="1"
+						/>
+						<polyline
+							points={chartPoints(
+								history.map((point) => point.networkIn),
+								chartNetworkMax
+							)}
+							class="text-primary-deep"
+							fill="none"
+							stroke="currentColor"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="3"
+						/>
+						<polyline
+							points={chartPoints(
+								history.map((point) => point.networkOut),
+								chartNetworkMax
+							)}
+							class="text-warning"
+							fill="none"
+							stroke="currentColor"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="3"
+						/>
+					</svg>
+				</div>
+			</section>
 
-					<div class="mt-6 border-t border-border pt-4">
-						<p class="text-xs text-muted-foreground">Peak CPU</p>
-						<p class="mt-1 text-lg font-semibold text-foreground tabular-nums">
-							71% <span class="text-xs font-normal text-muted-foreground">at 14:42</span>
+			<section
+				class="mt-5 overflow-hidden rounded-xl border border-border"
+				aria-labelledby="services-title"
+			>
+				<header
+					class="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+				>
+					<div>
+						<h2 id="services-title" class="text-[15px] font-semibold text-foreground">
+							Services and containers
+						</h2>
+						<p class="mt-0.5 text-xs text-muted-foreground">
+							Only active deployments contribute metrics; every service remains visible.
 						</p>
 					</div>
-				</div>
-			</div>
-		</section>
-
-		<section
-			class="mt-5 overflow-hidden rounded-xl border border-border"
-			aria-labelledby="process-title"
-		>
-			<header class="flex items-center justify-between gap-3 px-5 py-4">
-				<div>
-					<h2 id="process-title" class="text-[15px] font-semibold text-foreground">
-						Top processes
-					</h2>
-					<p class="mt-0.5 text-xs text-muted-foreground">Example workloads sorted by CPU usage</p>
-				</div>
-				<Badge tone="success" variant="outline">4 healthy</Badge>
-			</header>
-			<div class="overflow-x-auto border-t border-border">
-				<table class="w-full min-w-150 text-left text-sm">
-					<thead class="bg-muted/40 text-xs text-muted-foreground">
-						<tr>
-							<th class="px-5 py-2.5 font-medium">Process</th>
-							<th class="px-4 py-2.5 font-medium">CPU</th>
-							<th class="px-4 py-2.5 font-medium">Memory</th>
-							<th class="px-5 py-2.5 text-right font-medium">State</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each processes as process (process.name)}
-							<tr class="border-t border-border first:border-t-0">
-								<td class="px-5 py-3">
-									<p class="font-mono text-[13px] font-medium text-foreground">{process.name}</p>
-									<p class="mt-0.5 text-xs text-muted-foreground">{process.detail}</p>
-								</td>
-								<td class="px-4 py-3 font-mono text-[13px] text-foreground tabular-nums"
-									>{process.cpu}</td
-								>
-								<td class="px-4 py-3 font-mono text-[13px] text-foreground tabular-nums"
-									>{process.memory}</td
-								>
-								<td class="px-5 py-3 text-right">
-									<span class="inline-flex items-center gap-1.5 text-xs text-success">
-										<span class="h-1.5 w-1.5 rounded-full bg-current"></span>{process.state}
-									</span>
-								</td>
+					<Badge
+						tone={snapshot.summary.degraded_services ? 'warning' : 'success'}
+						variant="outline"
+					>
+						{snapshot.summary.degraded_services
+							? `${snapshot.summary.degraded_services} need attention`
+							: 'All healthy'}
+					</Badge>
+				</header>
+				<div class="overflow-x-auto border-t border-border">
+					<table class="w-full min-w-[760px] text-left text-sm">
+						<thead class="bg-muted/40 text-xs text-muted-foreground">
+							<tr>
+								<th class="px-5 py-2.5 font-medium">Service</th>
+								<th class="px-4 py-2.5 font-medium">Environment</th>
+								<th class="px-4 py-2.5 font-medium">Status</th>
+								<th class="px-4 py-2.5 text-right font-medium">CPU</th>
+								<th class="px-4 py-2.5 text-right font-medium">Memory</th>
+								<th class="px-5 py-2.5 text-right font-medium">Network</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each snapshot.services as service (service.service_id)}
+								<tr class="border-t border-border first:border-t-0">
+									<td class="max-w-[260px] px-5 py-3">
+										<a
+											href="/services/{service.service_id}"
+											class="block truncate font-medium text-foreground hover:underline"
+											>{service.name}</a
+										>
+										{#if service.error}<p
+												class="mt-1 truncate text-xs text-destructive"
+												title={service.error}
+											>
+												{service.error}
+											</p>{/if}
+									</td>
+									<td class="px-4 py-3 text-xs text-muted-foreground"
+										>{service.environment_name || 'Unknown'}</td
+									>
+									<td class="px-4 py-3"
+										><Badge tone={statusTone(service.status)}>{statusLabel(service.status)}</Badge
+										></td
+									>
+									<td
+										class="px-4 py-3 text-right font-mono text-[13px] text-foreground tabular-nums"
+										>{service.container ? formatPercent(service.container.cpu_percent) : '—'}</td
+									>
+									<td
+										class="px-4 py-3 text-right font-mono text-[13px] text-foreground tabular-nums"
+										>{service.container
+											? formatBytes(service.container.memory_used_bytes)
+											: '—'}</td
+									>
+									<td
+										class="px-5 py-3 text-right font-mono text-[13px] text-foreground tabular-nums"
+										>{service.container ? formatBytes(serviceNetworkRate(service), true) : '—'}</td
+									>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		{/if}
+
+		{#if refreshError && snapshot}
+			<div
+				class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning-muted px-4 py-3 text-sm text-warning"
+				role="status"
+			>
+				<span>{refreshError} Showing the last successful sample.</span>
+				<Button size="sm" variant="secondary" onclick={retry}>Retry</Button>
 			</div>
-		</section>
+		{/if}
 	</div>
 </div>
