@@ -442,6 +442,150 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/servers/{id}/monitoring:
+    post:
+      operationId: configureServerMonitoring
+      summary: Enable or update retained container metrics on a server
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfigureServerMonitoringRequest"
+      responses:
+        "200":
+          description: Monitoring agent provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerResponse"
+        "400":
+          description: Invalid monitoring configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Monitoring FQDN is already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Monitoring agent could not be provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: disableServerMonitoring
+      summary: Disable retained metrics while retaining local history for seven days
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Monitoring agent removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Monitoring agent could not be removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/servers/{id}/monitoring/history:
+    delete:
+      operationId: deleteServerMonitoringHistory
+      summary: Permanently delete retained monitoring history
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: History deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Monitoring history could not be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/projects:
     post:
       operationId: createProject
@@ -956,6 +1100,59 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/projects/{id}/observability/history:
+    get:
+      operationId: getProjectObservabilityHistory
+      summary: Get retained metrics grouped by service deployment
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 7d
+        - name: max_points
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 300
+      responses:
+        "200":
+          description: Retained samples per deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectObservabilityHistoryResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: A monitoring agent could not be reached
           content:
             application/json:
               schema:
@@ -2019,6 +2216,7 @@ components:
         - ssh_user
         - ssh_key_id
         - proxy_status
+        - monitoring
         - created_at
       properties:
         id:
@@ -2045,7 +2243,67 @@ components:
           format: date-time
         proxy_last_error:
           type: string
+        monitoring:
+          $ref: "#/components/schemas/ServerMonitoringResponse"
         created_at:
+          type: string
+          format: date-time
+
+    ConfigureServerMonitoringRequest:
+      type: object
+      required:
+        - private_address
+      properties:
+        private_address:
+          type: string
+          description: RFC1918, IPv6 ULA, or CGNAT address reachable by the control plane.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          default: 9184
+        retention_days:
+          type: integer
+          minimum: 1
+          maximum: 30
+          default: 7
+        fqdn:
+          type: string
+          description: Optional public FQDN. Uploy routes it through Traefik with HTTPS.
+        reader_token:
+          type: string
+          format: password
+          minLength: 32
+          description: Optional external read token. Omit only when updating an already configured server.
+
+    ServerMonitoringResponse:
+      type: object
+      required:
+        - enabled
+        - port
+        - retention_days
+        - private_address
+        - status
+      properties:
+        enabled:
+          type: boolean
+        port:
+          type: integer
+        retention_days:
+          type: integer
+        private_address:
+          type: string
+        fqdn:
+          type: string
+        status:
+          type: string
+          enum: [disabled, provisioning, ready, error]
+        last_reconciled_at:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+        cleanup_at:
           type: string
           format: date-time
 
@@ -2354,6 +2612,89 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServiceObservability"
+
+    ProjectObservabilityHistoryResponse:
+      type: object
+      required:
+        - services
+      properties:
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceObservabilityHistory"
+
+    ServiceObservabilityHistory:
+      type: object
+      required:
+        - service_id
+        - name
+        - deployments
+      properties:
+        service_id:
+          type: string
+        name:
+          type: string
+        deployments:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeploymentObservabilityHistory"
+
+    DeploymentObservabilityHistory:
+      type: object
+      required:
+        - deployment_id
+        - points
+      properties:
+        deployment_id:
+          type: string
+        unavailable_reason:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContainerObservabilitySample"
+
+    ContainerObservabilitySample:
+      type: object
+      required:
+        - sampled_at
+        - container_id
+        - container_name
+        - state
+        - cpu_percent
+        - memory_used_bytes
+        - memory_limit_bytes
+        - network_in_bytes_total
+        - network_out_bytes_total
+        - uptime_seconds
+      properties:
+        sampled_at:
+          type: string
+          format: date-time
+        container_id:
+          type: string
+        container_name:
+          type: string
+        state:
+          type: string
+        cpu_percent:
+          type: number
+          format: double
+        memory_used_bytes:
+          type: integer
+          format: int64
+        memory_limit_bytes:
+          type: integer
+          format: int64
+        network_in_bytes_total:
+          type: integer
+          format: int64
+        network_out_bytes_total:
+          type: integer
+          format: int64
+        uptime_seconds:
+          type: integer
+          format: int64
 
     ProjectObservabilitySummary:
       type: object

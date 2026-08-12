@@ -182,6 +182,41 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/servers/{id}/monitoring': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Enable or update retained container metrics on a server */
+		post: operations['configureServerMonitoring'];
+		/** Disable retained metrics while retaining local history for seven days */
+		delete: operations['disableServerMonitoring'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/servers/{id}/monitoring/history': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		post?: never;
+		/** Permanently delete retained monitoring history */
+		delete: operations['deleteServerMonitoringHistory'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/projects': {
 		parameters: {
 			query?: never;
@@ -299,6 +334,23 @@ export interface paths {
 		};
 		/** Get current project container metrics */
 		get: operations['getProjectObservability'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/projects/{id}/observability/history': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get retained metrics grouped by service deployment */
+		get: operations['getProjectObservabilityHistory'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -632,8 +684,38 @@ export interface components {
 			/** Format: date-time */
 			proxy_last_reconciled_at?: string;
 			proxy_last_error?: string;
+			monitoring: components['schemas']['ServerMonitoringResponse'];
 			/** Format: date-time */
 			created_at: string;
+		};
+		ConfigureServerMonitoringRequest: {
+			/** @description RFC1918, IPv6 ULA, or CGNAT address reachable by the control plane. */
+			private_address: string;
+			/** @default 9184 */
+			port: number;
+			/** @default 7 */
+			retention_days: number;
+			/** @description Optional public FQDN. Uploy routes it through Traefik with HTTPS. */
+			fqdn?: string;
+			/**
+			 * Format: password
+			 * @description Optional external read token. Omit only when updating an already configured server.
+			 */
+			reader_token?: string;
+		};
+		ServerMonitoringResponse: {
+			enabled: boolean;
+			port: number;
+			retention_days: number;
+			private_address: string;
+			fqdn?: string;
+			/** @enum {string} */
+			status: 'disabled' | 'provisioning' | 'ready' | 'error';
+			/** Format: date-time */
+			last_reconciled_at?: string;
+			last_error?: string;
+			/** Format: date-time */
+			cleanup_at?: string;
 		};
 		LogEntry: {
 			/** Format: int64 */
@@ -756,6 +838,38 @@ export interface components {
 			refresh_after_seconds: number;
 			summary: components['schemas']['ProjectObservabilitySummary'];
 			services: components['schemas']['ServiceObservability'][];
+		};
+		ProjectObservabilityHistoryResponse: {
+			services: components['schemas']['ServiceObservabilityHistory'][];
+		};
+		ServiceObservabilityHistory: {
+			service_id: string;
+			name: string;
+			deployments: components['schemas']['DeploymentObservabilityHistory'][];
+		};
+		DeploymentObservabilityHistory: {
+			deployment_id: string;
+			unavailable_reason?: string;
+			points: components['schemas']['ContainerObservabilitySample'][];
+		};
+		ContainerObservabilitySample: {
+			/** Format: date-time */
+			sampled_at: string;
+			container_id: string;
+			container_name: string;
+			state: string;
+			/** Format: double */
+			cpu_percent: number;
+			/** Format: int64 */
+			memory_used_bytes: number;
+			/** Format: int64 */
+			memory_limit_bytes: number;
+			/** Format: int64 */
+			network_in_bytes_total: number;
+			/** Format: int64 */
+			network_out_bytes_total: number;
+			/** Format: int64 */
+			uptime_seconds: number;
 		};
 		ProjectObservabilitySummary: {
 			total_services: number;
@@ -1433,6 +1547,200 @@ export interface operations {
 			};
 		};
 	};
+	configureServerMonitoring: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['ConfigureServerMonitoringRequest'];
+			};
+		};
+		responses: {
+			/** @description Monitoring agent provisioned */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServerResponse'];
+				};
+			};
+			/** @description Invalid monitoring configuration */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring FQDN is already in use */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring agent could not be provisioned */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	disableServerMonitoring: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Monitoring agent removed */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServerResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring agent could not be removed */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	deleteServerMonitoringHistory: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description History deleted */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring history could not be deleted */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
 	listProjects: {
 		parameters: {
 			query?: never;
@@ -2092,6 +2400,58 @@ export interface operations {
 			};
 			/** @description Internal server error */
 			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	getProjectObservabilityHistory: {
+		parameters: {
+			query?: {
+				since?: '1h' | '6h' | '24h' | '7d' | '30d';
+				max_points?: number;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Retained samples per deployment */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ProjectObservabilityHistoryResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Project not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description A monitoring agent could not be reached */
+			502: {
 				headers: {
 					[name: string]: unknown;
 				};

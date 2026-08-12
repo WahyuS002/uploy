@@ -14,6 +14,7 @@
 		active: 'success',
 		draining: 'warning',
 		pending: 'warning',
+		provisioning: 'warning',
 		in_progress: 'warning',
 		not_configured: 'warning',
 		error: 'danger',

@@ -27,6 +27,15 @@ func TestRouteBackend(t *testing.T) {
 	}
 }
 
+func TestMonitoringRouteConfigRateLimitsPublicScrapes(t *testing.T) {
+	config := monitoringRouteConfig("monitoring-server-1", []string{"metrics.example.com"}, "uploy-monitor", 9184)
+	for _, expected := range []string{"rateLimit:", "average: 30", "burst: 60", "Host(`metrics.example.com`)"} {
+		if !strings.Contains(config, expected) {
+			t.Fatalf("monitoring route missing %q:\n%s", expected, config)
+		}
+	}
+}
+
 func TestHostnamesFromRule(t *testing.T) {
 	got := hostnamesFromRule("Host(`app.example.com`) || Host(`www.example.com`)")
 	want := []string{"app.example.com", "www.example.com"}

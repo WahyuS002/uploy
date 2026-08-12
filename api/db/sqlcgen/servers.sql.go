@@ -12,10 +12,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearServerMonitoringData = `-- name: ClearServerMonitoringData :exec
+UPDATE servers
+SET monitoring_control_token = NULL,
+    monitoring_reader_token = NULL,
+    monitoring_cleanup_at = NULL,
+    monitoring_last_error = NULL
+WHERE id = $1
+`
+
+func (q *Queries) ClearServerMonitoringData(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, clearServerMonitoringData, id)
+	return err
+}
+
 const createServer = `-- name: CreateServer :one
 INSERT INTO servers (name, host, port, ssh_user, ssh_key_id, workspace_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at
+RETURNING id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at,
+          monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_private_address, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
+          monitoring_status, monitoring_last_reconciled_at, monitoring_last_error, monitoring_cleanup_at
 `
 
 type CreateServerParams struct {
@@ -28,17 +44,28 @@ type CreateServerParams struct {
 }
 
 type CreateServerRow struct {
-	ID                    string             `json:"id"`
-	Name                  string             `json:"name"`
-	Host                  string             `json:"host"`
-	Port                  int32              `json:"port"`
-	SshUser               string             `json:"ssh_user"`
-	SshKeyID              string             `json:"ssh_key_id"`
-	WorkspaceID           string             `json:"workspace_id"`
-	ProxyStatus           string             `json:"proxy_status"`
-	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
-	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
-	CreatedAt             time.Time          `json:"created_at"`
+	ID                         string             `json:"id"`
+	Name                       string             `json:"name"`
+	Host                       string             `json:"host"`
+	Port                       int32              `json:"port"`
+	SshUser                    string             `json:"ssh_user"`
+	SshKeyID                   string             `json:"ssh_key_id"`
+	WorkspaceID                string             `json:"workspace_id"`
+	ProxyStatus                string             `json:"proxy_status"`
+	ProxyLastReconciledAt      pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
+	ProxyLastError             pgtype.Text        `json:"proxy_last_error"`
+	CreatedAt                  time.Time          `json:"created_at"`
+	MonitoringEnabled          bool               `json:"monitoring_enabled"`
+	MonitoringPort             int32              `json:"monitoring_port"`
+	MonitoringRetentionDays    int32              `json:"monitoring_retention_days"`
+	MonitoringPrivateAddress   string             `json:"monitoring_private_address"`
+	MonitoringFqdn             pgtype.Text        `json:"monitoring_fqdn"`
+	MonitoringControlToken     pgtype.Text        `json:"monitoring_control_token"`
+	MonitoringReaderToken      pgtype.Text        `json:"monitoring_reader_token"`
+	MonitoringStatus           string             `json:"monitoring_status"`
+	MonitoringLastReconciledAt pgtype.Timestamptz `json:"monitoring_last_reconciled_at"`
+	MonitoringLastError        pgtype.Text        `json:"monitoring_last_error"`
+	MonitoringCleanupAt        pgtype.Timestamptz `json:"monitoring_cleanup_at"`
 }
 
 func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (CreateServerRow, error) {
@@ -63,27 +90,51 @@ func (q *Queries) CreateServer(ctx context.Context, arg CreateServerParams) (Cre
 		&i.ProxyLastReconciledAt,
 		&i.ProxyLastError,
 		&i.CreatedAt,
+		&i.MonitoringEnabled,
+		&i.MonitoringPort,
+		&i.MonitoringRetentionDays,
+		&i.MonitoringPrivateAddress,
+		&i.MonitoringFqdn,
+		&i.MonitoringControlToken,
+		&i.MonitoringReaderToken,
+		&i.MonitoringStatus,
+		&i.MonitoringLastReconciledAt,
+		&i.MonitoringLastError,
+		&i.MonitoringCleanupAt,
 	)
 	return i, err
 }
 
 const getServerByID = `-- name: GetServerByID :one
-SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at
+SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at,
+       monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_private_address, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
+       monitoring_status, monitoring_last_reconciled_at, monitoring_last_error, monitoring_cleanup_at
 FROM servers WHERE id = $1
 `
 
 type GetServerByIDRow struct {
-	ID                    string             `json:"id"`
-	Name                  string             `json:"name"`
-	Host                  string             `json:"host"`
-	Port                  int32              `json:"port"`
-	SshUser               string             `json:"ssh_user"`
-	SshKeyID              string             `json:"ssh_key_id"`
-	WorkspaceID           string             `json:"workspace_id"`
-	ProxyStatus           string             `json:"proxy_status"`
-	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
-	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
-	CreatedAt             time.Time          `json:"created_at"`
+	ID                         string             `json:"id"`
+	Name                       string             `json:"name"`
+	Host                       string             `json:"host"`
+	Port                       int32              `json:"port"`
+	SshUser                    string             `json:"ssh_user"`
+	SshKeyID                   string             `json:"ssh_key_id"`
+	WorkspaceID                string             `json:"workspace_id"`
+	ProxyStatus                string             `json:"proxy_status"`
+	ProxyLastReconciledAt      pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
+	ProxyLastError             pgtype.Text        `json:"proxy_last_error"`
+	CreatedAt                  time.Time          `json:"created_at"`
+	MonitoringEnabled          bool               `json:"monitoring_enabled"`
+	MonitoringPort             int32              `json:"monitoring_port"`
+	MonitoringRetentionDays    int32              `json:"monitoring_retention_days"`
+	MonitoringPrivateAddress   string             `json:"monitoring_private_address"`
+	MonitoringFqdn             pgtype.Text        `json:"monitoring_fqdn"`
+	MonitoringControlToken     pgtype.Text        `json:"monitoring_control_token"`
+	MonitoringReaderToken      pgtype.Text        `json:"monitoring_reader_token"`
+	MonitoringStatus           string             `json:"monitoring_status"`
+	MonitoringLastReconciledAt pgtype.Timestamptz `json:"monitoring_last_reconciled_at"`
+	MonitoringLastError        pgtype.Text        `json:"monitoring_last_error"`
+	MonitoringCleanupAt        pgtype.Timestamptz `json:"monitoring_cleanup_at"`
 }
 
 func (q *Queries) GetServerByID(ctx context.Context, id string) (GetServerByIDRow, error) {
@@ -101,28 +152,51 @@ func (q *Queries) GetServerByID(ctx context.Context, id string) (GetServerByIDRo
 		&i.ProxyLastReconciledAt,
 		&i.ProxyLastError,
 		&i.CreatedAt,
+		&i.MonitoringEnabled,
+		&i.MonitoringPort,
+		&i.MonitoringRetentionDays,
+		&i.MonitoringPrivateAddress,
+		&i.MonitoringFqdn,
+		&i.MonitoringControlToken,
+		&i.MonitoringReaderToken,
+		&i.MonitoringStatus,
+		&i.MonitoringLastReconciledAt,
+		&i.MonitoringLastError,
+		&i.MonitoringCleanupAt,
 	)
 	return i, err
 }
 
 const getServerWithKey = `-- name: GetServerWithKey :one
 SELECT s.id, s.name, s.host, s.port, s.ssh_user, s.ssh_key_id, s.workspace_id, s.created_at,
-       k.private_key
+       s.monitoring_enabled, s.monitoring_port, s.monitoring_retention_days, s.monitoring_private_address, s.monitoring_fqdn, s.monitoring_control_token, s.monitoring_reader_token,
+       s.monitoring_status, s.monitoring_last_reconciled_at, s.monitoring_last_error, s.monitoring_cleanup_at, k.private_key
 FROM servers s
 JOIN ssh_keys k ON k.id = s.ssh_key_id
 WHERE s.id = $1
 `
 
 type GetServerWithKeyRow struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Host        string    `json:"host"`
-	Port        int32     `json:"port"`
-	SshUser     string    `json:"ssh_user"`
-	SshKeyID    string    `json:"ssh_key_id"`
-	WorkspaceID string    `json:"workspace_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	PrivateKey  string    `json:"private_key"`
+	ID                         string             `json:"id"`
+	Name                       string             `json:"name"`
+	Host                       string             `json:"host"`
+	Port                       int32              `json:"port"`
+	SshUser                    string             `json:"ssh_user"`
+	SshKeyID                   string             `json:"ssh_key_id"`
+	WorkspaceID                string             `json:"workspace_id"`
+	CreatedAt                  time.Time          `json:"created_at"`
+	MonitoringEnabled          bool               `json:"monitoring_enabled"`
+	MonitoringPort             int32              `json:"monitoring_port"`
+	MonitoringRetentionDays    int32              `json:"monitoring_retention_days"`
+	MonitoringPrivateAddress   string             `json:"monitoring_private_address"`
+	MonitoringFqdn             pgtype.Text        `json:"monitoring_fqdn"`
+	MonitoringControlToken     pgtype.Text        `json:"monitoring_control_token"`
+	MonitoringReaderToken      pgtype.Text        `json:"monitoring_reader_token"`
+	MonitoringStatus           string             `json:"monitoring_status"`
+	MonitoringLastReconciledAt pgtype.Timestamptz `json:"monitoring_last_reconciled_at"`
+	MonitoringLastError        pgtype.Text        `json:"monitoring_last_error"`
+	MonitoringCleanupAt        pgtype.Timestamptz `json:"monitoring_cleanup_at"`
+	PrivateKey                 string             `json:"private_key"`
 }
 
 func (q *Queries) GetServerWithKey(ctx context.Context, id string) (GetServerWithKeyRow, error) {
@@ -137,29 +211,128 @@ func (q *Queries) GetServerWithKey(ctx context.Context, id string) (GetServerWit
 		&i.SshKeyID,
 		&i.WorkspaceID,
 		&i.CreatedAt,
+		&i.MonitoringEnabled,
+		&i.MonitoringPort,
+		&i.MonitoringRetentionDays,
+		&i.MonitoringPrivateAddress,
+		&i.MonitoringFqdn,
+		&i.MonitoringControlToken,
+		&i.MonitoringReaderToken,
+		&i.MonitoringStatus,
+		&i.MonitoringLastReconciledAt,
+		&i.MonitoringLastError,
+		&i.MonitoringCleanupAt,
 		&i.PrivateKey,
 	)
 	return i, err
 }
 
+const listMonitoringCleanupDue = `-- name: ListMonitoringCleanupDue :many
+SELECT s.id, s.name, s.host, s.port, s.ssh_user, s.ssh_key_id, s.workspace_id, s.created_at,
+       s.monitoring_enabled, s.monitoring_port, s.monitoring_retention_days, s.monitoring_private_address, s.monitoring_fqdn, s.monitoring_control_token, s.monitoring_reader_token,
+       s.monitoring_status, s.monitoring_last_reconciled_at, s.monitoring_last_error, s.monitoring_cleanup_at, k.private_key
+FROM servers s
+JOIN ssh_keys k ON k.id = s.ssh_key_id
+WHERE s.monitoring_enabled = FALSE
+  AND s.monitoring_cleanup_at IS NOT NULL
+  AND s.monitoring_cleanup_at <= NOW()
+`
+
+type ListMonitoringCleanupDueRow struct {
+	ID                         string             `json:"id"`
+	Name                       string             `json:"name"`
+	Host                       string             `json:"host"`
+	Port                       int32              `json:"port"`
+	SshUser                    string             `json:"ssh_user"`
+	SshKeyID                   string             `json:"ssh_key_id"`
+	WorkspaceID                string             `json:"workspace_id"`
+	CreatedAt                  time.Time          `json:"created_at"`
+	MonitoringEnabled          bool               `json:"monitoring_enabled"`
+	MonitoringPort             int32              `json:"monitoring_port"`
+	MonitoringRetentionDays    int32              `json:"monitoring_retention_days"`
+	MonitoringPrivateAddress   string             `json:"monitoring_private_address"`
+	MonitoringFqdn             pgtype.Text        `json:"monitoring_fqdn"`
+	MonitoringControlToken     pgtype.Text        `json:"monitoring_control_token"`
+	MonitoringReaderToken      pgtype.Text        `json:"monitoring_reader_token"`
+	MonitoringStatus           string             `json:"monitoring_status"`
+	MonitoringLastReconciledAt pgtype.Timestamptz `json:"monitoring_last_reconciled_at"`
+	MonitoringLastError        pgtype.Text        `json:"monitoring_last_error"`
+	MonitoringCleanupAt        pgtype.Timestamptz `json:"monitoring_cleanup_at"`
+	PrivateKey                 string             `json:"private_key"`
+}
+
+func (q *Queries) ListMonitoringCleanupDue(ctx context.Context) ([]ListMonitoringCleanupDueRow, error) {
+	rows, err := q.db.Query(ctx, listMonitoringCleanupDue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMonitoringCleanupDueRow{}
+	for rows.Next() {
+		var i ListMonitoringCleanupDueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Host,
+			&i.Port,
+			&i.SshUser,
+			&i.SshKeyID,
+			&i.WorkspaceID,
+			&i.CreatedAt,
+			&i.MonitoringEnabled,
+			&i.MonitoringPort,
+			&i.MonitoringRetentionDays,
+			&i.MonitoringPrivateAddress,
+			&i.MonitoringFqdn,
+			&i.MonitoringControlToken,
+			&i.MonitoringReaderToken,
+			&i.MonitoringStatus,
+			&i.MonitoringLastReconciledAt,
+			&i.MonitoringLastError,
+			&i.MonitoringCleanupAt,
+			&i.PrivateKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServersByWorkspace = `-- name: ListServersByWorkspace :many
-SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at
+SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at,
+       monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_private_address, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
+       monitoring_status, monitoring_last_reconciled_at, monitoring_last_error, monitoring_cleanup_at
 FROM servers WHERE workspace_id = $1
 ORDER BY created_at DESC
 `
 
 type ListServersByWorkspaceRow struct {
-	ID                    string             `json:"id"`
-	Name                  string             `json:"name"`
-	Host                  string             `json:"host"`
-	Port                  int32              `json:"port"`
-	SshUser               string             `json:"ssh_user"`
-	SshKeyID              string             `json:"ssh_key_id"`
-	WorkspaceID           string             `json:"workspace_id"`
-	ProxyStatus           string             `json:"proxy_status"`
-	ProxyLastReconciledAt pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
-	ProxyLastError        pgtype.Text        `json:"proxy_last_error"`
-	CreatedAt             time.Time          `json:"created_at"`
+	ID                         string             `json:"id"`
+	Name                       string             `json:"name"`
+	Host                       string             `json:"host"`
+	Port                       int32              `json:"port"`
+	SshUser                    string             `json:"ssh_user"`
+	SshKeyID                   string             `json:"ssh_key_id"`
+	WorkspaceID                string             `json:"workspace_id"`
+	ProxyStatus                string             `json:"proxy_status"`
+	ProxyLastReconciledAt      pgtype.Timestamptz `json:"proxy_last_reconciled_at"`
+	ProxyLastError             pgtype.Text        `json:"proxy_last_error"`
+	CreatedAt                  time.Time          `json:"created_at"`
+	MonitoringEnabled          bool               `json:"monitoring_enabled"`
+	MonitoringPort             int32              `json:"monitoring_port"`
+	MonitoringRetentionDays    int32              `json:"monitoring_retention_days"`
+	MonitoringPrivateAddress   string             `json:"monitoring_private_address"`
+	MonitoringFqdn             pgtype.Text        `json:"monitoring_fqdn"`
+	MonitoringControlToken     pgtype.Text        `json:"monitoring_control_token"`
+	MonitoringReaderToken      pgtype.Text        `json:"monitoring_reader_token"`
+	MonitoringStatus           string             `json:"monitoring_status"`
+	MonitoringLastReconciledAt pgtype.Timestamptz `json:"monitoring_last_reconciled_at"`
+	MonitoringLastError        pgtype.Text        `json:"monitoring_last_error"`
+	MonitoringCleanupAt        pgtype.Timestamptz `json:"monitoring_cleanup_at"`
 }
 
 func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string) ([]ListServersByWorkspaceRow, error) {
@@ -183,6 +356,17 @@ func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string
 			&i.ProxyLastReconciledAt,
 			&i.ProxyLastError,
 			&i.CreatedAt,
+			&i.MonitoringEnabled,
+			&i.MonitoringPort,
+			&i.MonitoringRetentionDays,
+			&i.MonitoringPrivateAddress,
+			&i.MonitoringFqdn,
+			&i.MonitoringControlToken,
+			&i.MonitoringReaderToken,
+			&i.MonitoringStatus,
+			&i.MonitoringLastReconciledAt,
+			&i.MonitoringLastError,
+			&i.MonitoringCleanupAt,
 		); err != nil {
 			return nil, err
 		}
@@ -192,6 +376,77 @@ func (q *Queries) ListServersByWorkspace(ctx context.Context, workspaceID string
 		return nil, err
 	}
 	return items, nil
+}
+
+const serverFQDNInUse = `-- name: ServerFQDNInUse :one
+SELECT EXISTS (
+    SELECT 1
+    FROM service_domains d
+    WHERE lower(d.domain) = lower($1::text)
+    UNION ALL
+    SELECT 1
+    FROM servers s
+    WHERE s.id <> $2::text AND lower(s.monitoring_fqdn) = lower($1::text)
+)
+`
+
+type ServerFQDNInUseParams struct {
+	Fqdn string `json:"fqdn"`
+	ID   string `json:"id"`
+}
+
+func (q *Queries) ServerFQDNInUse(ctx context.Context, arg ServerFQDNInUseParams) (bool, error) {
+	row := q.db.QueryRow(ctx, serverFQDNInUse, arg.Fqdn, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const setServerMonitoring = `-- name: SetServerMonitoring :exec
+UPDATE servers
+SET monitoring_enabled = $1::boolean,
+    monitoring_port = $2::integer,
+    monitoring_retention_days = $3::integer,
+    monitoring_private_address = $4::text,
+    monitoring_fqdn = NULLIF($5::text, ''),
+    monitoring_control_token = $6::text,
+    monitoring_reader_token = $7::text,
+    monitoring_status = $8::text,
+    monitoring_last_reconciled_at = NOW(),
+    monitoring_last_error = NULLIF($9::text, ''),
+    monitoring_cleanup_at = NULLIF($10::timestamptz, 'epoch'::timestamptz)
+WHERE id = $11::text
+`
+
+type SetServerMonitoringParams struct {
+	MonitoringEnabled        bool      `json:"monitoring_enabled"`
+	MonitoringPort           int32     `json:"monitoring_port"`
+	MonitoringRetentionDays  int32     `json:"monitoring_retention_days"`
+	MonitoringPrivateAddress string    `json:"monitoring_private_address"`
+	MonitoringFqdn           string    `json:"monitoring_fqdn"`
+	MonitoringControlToken   string    `json:"monitoring_control_token"`
+	MonitoringReaderToken    string    `json:"monitoring_reader_token"`
+	MonitoringStatus         string    `json:"monitoring_status"`
+	MonitoringLastError      string    `json:"monitoring_last_error"`
+	MonitoringCleanupAt      time.Time `json:"monitoring_cleanup_at"`
+	ID                       string    `json:"id"`
+}
+
+func (q *Queries) SetServerMonitoring(ctx context.Context, arg SetServerMonitoringParams) error {
+	_, err := q.db.Exec(ctx, setServerMonitoring,
+		arg.MonitoringEnabled,
+		arg.MonitoringPort,
+		arg.MonitoringRetentionDays,
+		arg.MonitoringPrivateAddress,
+		arg.MonitoringFqdn,
+		arg.MonitoringControlToken,
+		arg.MonitoringReaderToken,
+		arg.MonitoringStatus,
+		arg.MonitoringLastError,
+		arg.MonitoringCleanupAt,
+		arg.ID,
+	)
+	return err
 }
 
 const setServerProxyError = `-- name: SetServerProxyError :exec

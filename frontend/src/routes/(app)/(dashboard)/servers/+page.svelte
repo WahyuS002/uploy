@@ -9,7 +9,7 @@
 	import LogStream from '$lib/components/app/LogStream.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
-	import { Button, EmptyState, Tooltip, toast } from '$lib/components/ui';
+	import { Button, EmptyState, Input, Tooltip, toast } from '$lib/components/ui';
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { ChevronRight, InformationCircle, Key, Plus, Server } from '@steeze-ui/heroicons';
@@ -23,6 +23,13 @@
 	let dialogOpen = $state(false);
 	let expandedServerId = $state<string | null>(null);
 	let upgradingProxyId = $state<string | null>(null);
+	let monitoringActionId = $state<string | null>(null);
+	let monitoringServer = $state<(typeof servers)[number] | null>(null);
+	let monitoringPrivateAddress = $state('');
+	let monitoringPort = $state('9184');
+	let monitoringRetentionDays = $state('7');
+	let monitoringFQDN = $state('');
+	let monitoringReaderToken = $state('');
 
 	// The server whose proxy log is open, or null. Held whole rather than by id so
 	// the dialog can name the machine without looking it back up.
@@ -38,6 +45,160 @@
 	function openCreate() {
 		serverController.reset();
 		dialogOpen = true;
+	}
+
+	function openMonitoring(server: (typeof servers)[number]) {
+		monitoringServer = server;
+		monitoringPrivateAddress = server.monitoring.private_address;
+		monitoringPort = String(server.monitoring.port || 9184);
+		monitoringRetentionDays = String(server.monitoring.retention_days || 7);
+		monitoringFQDN = server.monitoring.fqdn ?? '';
+		monitoringReaderToken = '';
+	}
+
+	async function saveMonitoring() {
+		if (!monitoringServer || monitoringActionId) return;
+		const privateAddress = monitoringPrivateAddress.trim();
+		const port = Number(monitoringPort);
+		const retentionDays = Number(monitoringRetentionDays);
+		const readerToken = monitoringReaderToken.trim();
+		if (!privateAddress) {
+			toast.error({
+				title: 'Private address required',
+				description: 'Use the address reachable from Uploy.'
+			});
+			return;
+		}
+		const readerTokenRequired =
+			!monitoringServer.monitoring.enabled && !monitoringServer.monitoring.cleanup_at;
+		if (readerTokenRequired && (readerToken.length < 32 || readerToken.length > 512)) {
+			toast.error({
+				title: 'Reader token required',
+				description: 'Use 32 to 512 characters. It is shown only while you enter it.'
+			});
+			return;
+		}
+		if (!Number.isInteger(port) || port < 1 || port > 65535) {
+			toast.error({ title: 'Invalid port', description: 'Use a port from 1 to 65535.' });
+			return;
+		}
+		if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 30) {
+			toast.error({ title: 'Invalid retention', description: 'Use 1 to 30 days.' });
+			return;
+		}
+
+		monitoringActionId = monitoringServer.id;
+		const toastId = `monitoring-save-${monitoringServer.id}`;
+		toast.neutral({
+			id: toastId,
+			title: 'Provisioning monitoring',
+			description: 'Installing the edge agent on the server.',
+			icon: { kind: 'spinner' },
+			dismissible: false
+		});
+		try {
+			const { error } = await api.POST('/api/servers/{id}/monitoring', {
+				params: { path: { id: monitoringServer.id } },
+				body: {
+					private_address: privateAddress,
+					port,
+					retention_days: retentionDays,
+					fqdn: monitoringFQDN.trim(),
+					...(readerToken ? { reader_token: readerToken } : {})
+				}
+			});
+			if (error) {
+				toast.error({
+					id: toastId,
+					title: 'Monitoring setup failed',
+					description: (error as components['schemas']['ErrorResponse']).error
+				});
+				return;
+			}
+			monitoringServer = null;
+			await invalidateAll();
+			toast.success({
+				id: toastId,
+				title: 'Monitoring ready',
+				description: 'Uploy now reads live and retained metrics through the edge agent.'
+			});
+		} catch {
+			toast.error({
+				id: toastId,
+				title: 'Monitoring setup failed',
+				description: 'Network error. Check the server connection, then retry.'
+			});
+		} finally {
+			monitoringActionId = null;
+		}
+	}
+
+	async function disableMonitoring(server: (typeof servers)[number]) {
+		if (monitoringActionId) return;
+		monitoringActionId = server.id;
+		const toastId = `monitoring-disable-${server.id}`;
+		try {
+			const { error } = await api.DELETE('/api/servers/{id}/monitoring', {
+				params: { path: { id: server.id } }
+			});
+			if (error) {
+				toast.error({
+					id: toastId,
+					title: 'Monitoring disable failed',
+					description: (error as components['schemas']['ErrorResponse']).error
+				});
+				return;
+			}
+			await invalidateAll();
+			toast.success({
+				id: toastId,
+				title: 'Monitoring disabled',
+				description: 'History remains on this server for seven days unless deleted now.'
+			});
+		} catch {
+			toast.error({
+				id: toastId,
+				title: 'Monitoring disable failed',
+				description: 'Network error.'
+			});
+		} finally {
+			monitoringActionId = null;
+		}
+	}
+
+	async function purgeMonitoringHistory(server: (typeof servers)[number]) {
+		if (
+			!window.confirm(
+				`Delete all retained monitoring history on ${server.name}? This cannot be undone.`
+			)
+		)
+			return;
+		if (monitoringActionId) return;
+		monitoringActionId = server.id;
+		const toastId = `monitoring-purge-${server.id}`;
+		try {
+			const { error } = await api.DELETE('/api/servers/{id}/monitoring/history', {
+				params: { path: { id: server.id } }
+			});
+			if (error) {
+				toast.error({
+					id: toastId,
+					title: 'History deletion failed',
+					description: (error as components['schemas']['ErrorResponse']).error
+				});
+				return;
+			}
+			await invalidateAll();
+			toast.success({
+				id: toastId,
+				title: 'History deleted',
+				description: 'Retained metrics are gone.'
+			});
+		} catch {
+			toast.error({ id: toastId, title: 'History deletion failed', description: 'Network error.' });
+		} finally {
+			monitoringActionId = null;
+		}
 	}
 
 	async function upgradeProxy(server: (typeof servers)[number]) {
@@ -105,12 +266,13 @@
 	<div class="flex flex-1 flex-col">
 		{#if servers.length > 0}
 			<div class="overflow-x-auto">
-				<table class="w-full min-w-[44rem] text-left text-sm">
+				<table class="w-full min-w-[56rem] text-left text-sm">
 					<thead>
 						<tr class="border-b border-border text-xs text-muted-foreground">
 							<th scope="col" class="pb-2 font-medium">Server</th>
 							<th scope="col" class="pb-2 font-medium">SSH Access</th>
 							<th scope="col" class="pb-2 font-medium">Proxy Status</th>
+							<th scope="col" class="pb-2 font-medium">Monitoring</th>
 							<th scope="col" class="pb-2 font-medium">Created</th>
 						</tr>
 					</thead>
@@ -187,13 +349,72 @@
 										{/if}
 									</div>
 								</td>
+								<td class="py-2.5 align-top">
+									<div class="flex items-center gap-1.5">
+										<StatusBadge status={server.monitoring.status} />
+										{#if server.monitoring.last_error}
+											<Tooltip
+												text={server.monitoring.last_error}
+												ariaLabel="Monitoring error: {server.monitoring.last_error}"
+												triggerClass="grid h-5 w-5 place-items-center rounded text-destructive transition-colors hover:text-destructive/80 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+											>
+												{#snippet children()}
+													<Icon src={InformationCircle} theme="outline" class="h-3.5 w-3.5" />
+												{/snippet}
+											</Tooltip>
+										{/if}
+									</div>
+									{#if server.monitoring.enabled}
+										<p class="mt-1 font-mono text-xs text-muted-foreground">
+											{server.monitoring.fqdn ??
+												`${server.monitoring.private_address}:${server.monitoring.port}`}
+										</p>
+									{/if}
+									{#if server.monitoring.cleanup_at}
+										<p class="mt-1 text-xs text-muted-foreground">
+											History expires {formatDate(server.monitoring.cleanup_at ?? '')}
+										</p>
+									{/if}
+									{#if isOwner}
+										<div class="mt-1 flex flex-wrap items-center gap-2">
+											<Button
+												variant="secondary"
+												size="xs"
+												loading={monitoringActionId === server.id}
+												disabled={monitoringActionId !== null}
+												onclick={() => openMonitoring(server)}
+											>
+												{server.monitoring.enabled ? 'Configure' : 'Enable'}
+											</Button>
+											{#if server.monitoring.enabled}
+												<Button
+													variant="ghost"
+													size="xs"
+													disabled={monitoringActionId !== null}
+													onclick={() => disableMonitoring(server)}
+												>
+													Disable
+												</Button>
+											{:else if server.monitoring.cleanup_at}
+												<Button
+													variant="ghost"
+													size="xs"
+													disabled={monitoringActionId !== null}
+													onclick={() => purgeMonitoringHistory(server)}
+												>
+													Delete history
+												</Button>
+											{/if}
+										</div>
+									{/if}
+								</td>
 								<td class="py-2.5 align-top text-muted-foreground">
 									{formatDate(server.created_at)}
 								</td>
 							</tr>
 							{#if expanded && key?.public_key}
 								<tr class="border-b border-border">
-									<td colspan="4" class="pt-1 pb-3">
+									<td colspan="5" class="pt-1 pb-3">
 										<div id="public-key-{server.id}" class="max-w-2xl">
 											<PublicKeyHelper
 												publicKey={key.public_key}
@@ -249,6 +470,85 @@
 			bodyClass="max-h-[min(65vh,32rem)] overflow-y-auto px-5 pt-4 pb-5"
 			actionsClass="rounded-b-xl border-t border-border px-5 py-3"
 		/>
+	</DialogContent>
+</Dialog>
+
+<Dialog
+	open={monitoringServer !== null}
+	onOpenChange={(open) => !open && (monitoringServer = null)}
+>
+	<DialogContent class="w-[min(92vw,34rem)] max-w-none overflow-hidden">
+		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
+			<DialogTitle class="flex min-w-0 items-center gap-2 text-sm">
+				<span class="flex-none font-medium text-muted-foreground">Monitoring</span>
+				<Icon
+					src={ChevronRight}
+					theme="outline"
+					class="h-3.5 w-3.5 flex-none text-muted-foreground"
+				/>
+				<span class="truncate">{monitoringServer?.name}</span>
+			</DialogTitle>
+		</DialogHeader>
+		<form
+			class="space-y-4 px-5 py-4"
+			onsubmit={(event) => {
+				event.preventDefault();
+				void saveMonitoring();
+			}}
+		>
+			<p class="text-sm leading-6 text-muted-foreground">
+				Stores container metrics locally on this server. Uploy reads the private HTTP API; a public
+				FQDN is optional for external scrapers.
+			</p>
+			<label class="flex flex-col gap-1.5">
+				<span class="text-sm font-medium text-foreground">Private address</span>
+				<Input bind:value={monitoringPrivateAddress} placeholder="10.0.0.4" autocomplete="off" />
+			</label>
+			<div class="grid grid-cols-2 gap-3">
+				<label class="flex flex-col gap-1.5">
+					<span class="text-sm font-medium text-foreground">Port</span>
+					<Input bind:value={monitoringPort} inputmode="numeric" />
+				</label>
+				<label class="flex flex-col gap-1.5">
+					<span class="text-sm font-medium text-foreground">Retention days</span>
+					<Input bind:value={monitoringRetentionDays} inputmode="numeric" />
+				</label>
+			</div>
+			<label class="flex flex-col gap-1.5">
+				<span class="text-sm font-medium text-foreground"
+					>Public FQDN <span class="font-normal text-muted-foreground">(optional)</span></span
+				>
+				<Input bind:value={monitoringFQDN} placeholder="metrics.example.com" autocomplete="off" />
+			</label>
+			<label class="flex flex-col gap-1.5">
+				<span class="text-sm font-medium text-foreground"
+					>Reader token {#if !monitoringServer?.monitoring.enabled && !monitoringServer?.monitoring.cleanup_at}<span
+							class="text-destructive">required</span
+						>{:else}<span class="font-normal text-muted-foreground"
+							>(leave blank to keep current)</span
+						>{/if}</span
+				>
+				<Input
+					bind:value={monitoringReaderToken}
+					type="password"
+					minlength={32}
+					maxlength={512}
+					autocomplete="new-password"
+				/>
+				<p class="text-xs leading-5 text-muted-foreground">
+					This token authorizes `/metrics` and read-only JSON endpoints. Uploy never displays it
+					again.
+				</p>
+			</label>
+			<div class="flex justify-end gap-2 border-t border-border pt-4">
+				<Button type="button" variant="ghost" size="sm" onclick={() => (monitoringServer = null)}
+					>Cancel</Button
+				>
+				<Button type="submit" size="sm" loading={monitoringActionId === monitoringServer?.id}
+					>Save monitoring</Button
+				>
+			</div>
+		</form>
 	</DialogContent>
 </Dialog>
 

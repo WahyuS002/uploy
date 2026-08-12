@@ -18,6 +18,15 @@ var ErrLegacyRouteNotFound = errors.New("legacy route not found")
 
 func SetRoute(client *ssh.Client, serviceID string, domains []string, containerName string, containerPort int) error {
 	content := routeConfig(serviceID, domains, containerName, containerPort)
+	return setRouteConfig(client, serviceID, content)
+}
+
+func SetMonitoringRoute(client *ssh.Client, serviceID string, domains []string, containerName string, containerPort int) error {
+	content := monitoringRouteConfig(serviceID, domains, containerName, containerPort)
+	return setRouteConfig(client, serviceID, content)
+}
+
+func setRouteConfig(client *ssh.Client, serviceID, content string) error {
 	path := fmt.Sprintf("%s/dynamic/%s.yaml", proxyBaseDir, serviceID)
 	tmp := path + ".tmp"
 	write := fmt.Sprintf("cat <<'EOF' | tee %s >/dev/null\n%sEOF\nmv %s %s", tmp, content, tmp, path)
@@ -29,6 +38,40 @@ func SetRoute(client *ssh.Client, serviceID string, domains []string, containerN
 		return fmt.Errorf("write route for service %s: %w", serviceID, err)
 	}
 	return nil
+}
+
+func monitoringRouteConfig(serviceID string, domains []string, containerName string, containerPort int) string {
+	rules := make([]string, len(domains))
+	for index, domain := range domains {
+		rules[index] = fmt.Sprintf("Host(`%s`)", domain)
+	}
+	routeName := "service-" + serviceID
+	middlewareName := routeName + "-rate-limit"
+	return fmt.Sprintf(`http:
+  routers:
+    %s:
+      rule: %s
+      priority: 1000
+      entryPoints:
+        - https
+      middlewares:
+        - %s
+      tls:
+        certResolver: letsencrypt
+      service: %s
+  middlewares:
+    %s:
+      rateLimit:
+        average: 30
+        burst: 60
+        period: 1s
+  services:
+    %s:
+      loadBalancer:
+        servers:
+          - url: %s
+`, routeName, strconv.Quote(strings.Join(rules, " || ")), middlewareName, routeName, middlewareName, routeName,
+		strconv.Quote(fmt.Sprintf("http://%s:%d", containerName, containerPort)))
 }
 
 func routeConfig(serviceID string, domains []string, containerName string, containerPort int) string {

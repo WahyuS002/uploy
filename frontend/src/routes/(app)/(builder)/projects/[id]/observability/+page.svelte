@@ -26,7 +26,7 @@
 		networkOut: number;
 	};
 
-	const REFRESH_SECONDS = 10;
+	const DEFAULT_REFRESH_SECONDS = 15;
 	const MAX_HISTORY_POINTS = 300;
 	const timeFormatter = new Intl.DateTimeFormat('en-GB', {
 		hour: '2-digit',
@@ -79,7 +79,19 @@
 			timer = setTimeout(async () => {
 				await fetchSnapshot();
 				scheduleRefresh();
-			}, REFRESH_SECONDS * 1000);
+			}, (snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS) * 1000);
+		}
+
+		async function fetchHistory() {
+			try {
+				const { data } = await api.GET('/api/projects/{id}/observability/history', {
+					params: { path: { id }, query: { since: '7d', max_points: MAX_HISTORY_POINTS } }
+				});
+				if (cancelled || !data) return;
+				history = mergeHistory(history, retainedTimeline(data));
+			} catch {
+				// Live metrics remain useful when retained history is unavailable.
+			}
 		}
 
 		async function fetchSnapshot() {
@@ -124,8 +136,7 @@
 					: 0;
 				snapshot = data;
 				serviceRates = nextRates;
-				history = [
-					...history,
+				history = mergeHistory(history, [
 					{
 						at: data.sampled_at,
 						cpu: data.summary.cpu_percent,
@@ -135,7 +146,7 @@
 						networkIn: seconds ? Math.max(0, inDelta / seconds) : 0,
 						networkOut: seconds ? Math.max(0, outDelta / seconds) : 0
 					}
-				].slice(-MAX_HISTORY_POINTS);
+				]);
 			} catch {
 				if (cancelled) return;
 				if (snapshot) refreshError = 'Network error while refreshing metrics';
@@ -156,6 +167,7 @@
 		}
 
 		document.addEventListener('visibilitychange', handleVisibility);
+		untrack(() => void fetchHistory());
 		untrack(() => void fetchSnapshot().finally(scheduleRefresh));
 		return () => {
 			cancelled = true;
@@ -168,6 +180,74 @@
 		loadError = '';
 		refreshError = '';
 		retryVersion++;
+	}
+
+	function mergeHistory(current: HistoryPoint[], incoming: HistoryPoint[]): HistoryPoint[] {
+		const points = new Map(current.map((point) => [point.at, point]));
+		for (const point of incoming) points.set(point.at, point);
+		return [...points.values()]
+			.sort((left, right) => new Date(left.at).getTime() - new Date(right.at).getTime())
+			.slice(-MAX_HISTORY_POINTS);
+	}
+
+	function retainedTimeline(
+		response: components['schemas']['ProjectObservabilityHistoryResponse']
+	): HistoryPoint[] {
+		type Aggregate = {
+			at: string;
+			cpu: number;
+			memoryUsed: number;
+			memoryLimit: number;
+			networkIn: number;
+			networkOut: number;
+		};
+		const byTime = new Map<string, Aggregate>();
+		for (const service of response.services) {
+			for (const deployment of service.deployments) {
+				const points = [...deployment.points].sort(
+					(left, right) => new Date(left.sampled_at).getTime() - new Date(right.sampled_at).getTime()
+				);
+				for (let index = 0; index < points.length; index++) {
+					const point = points[index];
+					const previous = points[index - 1];
+					const seconds = previous
+						? Math.max(1, (new Date(point.sampled_at).getTime() - new Date(previous.sampled_at).getTime()) / 1000)
+						: 0;
+					const bucketAt = new Date(
+						Math.floor(new Date(point.sampled_at).getTime() / 60_000) * 60_000
+					).toISOString();
+					const aggregate = byTime.get(bucketAt) ?? {
+						at: bucketAt,
+						cpu: 0,
+						memoryUsed: 0,
+						memoryLimit: 0,
+						networkIn: 0,
+						networkOut: 0
+					};
+					aggregate.cpu += point.cpu_percent;
+					aggregate.memoryUsed += point.memory_used_bytes;
+					aggregate.memoryLimit += point.memory_limit_bytes;
+					if (previous && seconds) {
+						aggregate.networkIn += Math.max(
+							0,
+							(point.network_in_bytes_total - previous.network_in_bytes_total) / seconds
+						);
+						aggregate.networkOut += Math.max(
+							0,
+							(point.network_out_bytes_total - previous.network_out_bytes_total) / seconds
+						);
+					}
+					byTime.set(bucketAt, aggregate);
+				}
+			}
+		}
+		return [...byTime.values()].map((point) => ({
+			at: point.at,
+			cpu: point.cpu,
+			memory: point.memoryLimit ? (point.memoryUsed / point.memoryLimit) * 100 : 0,
+			networkIn: point.networkIn,
+			networkOut: point.networkOut
+		}));
 	}
 
 	function formatBytes(bytes: number, perSecond = false): string {
@@ -284,7 +364,9 @@
 					{snapshot ? 'Live' : 'Connecting'}
 				</Badge>
 				<span class="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
-					{refreshing ? 'Refreshing…' : `Updates every ${REFRESH_SECONDS}s`}
+					{refreshing
+						? 'Refreshing…'
+						: `Updates every ${snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS}s`}
 				</span>
 			</div>
 		</header>
@@ -401,10 +483,10 @@
 				>
 					<div>
 						<h2 id="history-title" class="text-[15px] font-semibold text-foreground">
-							Session history
+							Retained history
 						</h2>
 						<p class="mt-0.5 text-xs text-muted-foreground">
-							Samples collected while this page stays open
+							Up to seven days from servers with monitoring enabled
 						</p>
 					</div>
 					<div class="flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -425,7 +507,7 @@
 							viewBox="0 0 720 180"
 							class="h-52 w-full text-border"
 							role="img"
-							aria-label="CPU and memory usage during this session"
+							aria-label="Retained CPU and memory usage"
 							preserveAspectRatio="none"
 						>
 							<path
@@ -484,8 +566,8 @@
 								</p>
 								<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
 									{snapshot.summary.running_services
-										? `The next ${REFRESH_SECONDS}-second sample will extend this timeline.`
-										: 'Start or restore an active deployment to populate this chart.'}
+									? 'Enable server monitoring to retain this timeline across page visits.'
+									: 'Start or restore an active deployment to populate this chart.'}
 								</p>
 							</div>
 						</div>
@@ -496,7 +578,7 @@
 						<div>
 							<h3 class="text-sm font-semibold text-foreground">Network throughput</h3>
 							<p class="mt-0.5 text-xs text-muted-foreground">
-								Rate calculated between successive Docker counters.
+								Rate calculated between successive retained Docker counters.
 							</p>
 						</div>
 						<div class="flex items-center gap-4 text-xs text-muted-foreground tabular-nums">
@@ -519,7 +601,7 @@
 							viewBox="0 0 720 180"
 							class="mt-5 h-40 w-full text-border"
 							role="img"
-							aria-label="Network throughput during this session"
+							aria-label="Retained network throughput"
 							preserveAspectRatio="none"
 						>
 							<path
@@ -557,8 +639,8 @@
 							class="mt-5 flex min-h-40 items-center justify-center border border-dashed border-border bg-muted/20 px-6 text-center text-xs leading-relaxed text-muted-foreground"
 						>
 							{hasNetworkSamples
-								? 'No network traffic has been observed in this session.'
-								: `Waiting for the next ${REFRESH_SECONDS}-second sample to calculate throughput.`}
+								? 'No network traffic has been observed in retained samples.'
+								: `Waiting for the next ${snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS}-second sample to calculate throughput.`}
 						</div>
 					{/if}
 				</div>

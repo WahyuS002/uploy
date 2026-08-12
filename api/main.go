@@ -62,6 +62,7 @@ func main() {
 
 	go jobs.StartDomainReconciler(ctx)
 	go jobs.StartDeploymentReconciler(ctx)
+	go jobs.StartMonitoringCleanup(ctx)
 
 	srv := &http.Server{Addr: ":8080", Handler: mux}
 

@@ -9,23 +9,34 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/jobs"
+	"github.com/WahyuS002/uploy/monitoring"
 	"github.com/WahyuS002/uploy/respond"
 	"github.com/WahyuS002/uploy/ssh"
 )
 
-const observabilityRefreshSeconds = 10
+const observabilityRefreshSeconds = 15
+const observabilityServerConcurrency = 64
+const observabilitySampleMaxAge = 45 * time.Second
 const dockerFieldSeparator = "|"
 
 var dockerSizePattern = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*([[:alpha:]]*)$`)
 
 type observedService struct {
 	serviceIndex int
+	deploymentID string
 	container    string
+}
+
+type observedHistory struct {
+	serviceIndex    int
+	deploymentIndex int
+	deploymentID    string
 }
 
 type containerInspect struct {
@@ -100,13 +111,23 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 		response.Services[serviceIndex].DeploymentId = stringPointer(deployment.ID)
 		byServer[config.ServerID] = append(byServer[config.ServerID], observedService{
 			serviceIndex: serviceIndex,
+			deploymentID: deployment.ID,
 			container:    jobs.ContainerNameForDeployment(config, deployment.ID),
 		})
 	}
 
+	var waitGroup sync.WaitGroup
+	semaphore := make(chan struct{}, observabilityServerConcurrency)
 	for serverID, observedServices := range byServer {
-		s.collectServerObservability(ctx, serverID, observedServices, response.Services)
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			s.collectServerObservability(ctx, serverID, observedServices, response.Services)
+		}()
 	}
+	waitGroup.Wait()
 
 	for _, service := range response.Services {
 		if service.Status == gen.ServiceObservabilityStatusRunning && service.Container != nil {
@@ -131,6 +152,10 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 	if err != nil {
 		log.Printf("GetServerWithKey server=%s error: %v", serverID, err)
 		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusError, "Deployment server is unavailable")
+		return
+	}
+	if server.Monitoring.Enabled {
+		s.collectAgentObservability(ctx, server, observedServices, services)
 		return
 	}
 	client, err := ssh.NewClient(ssh.ServerConfig{
@@ -217,6 +242,170 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 		service.Container.NetworkInBytesTotal = stat.networkInBytes
 		service.Container.NetworkOutBytesTotal = stat.networkOutBytes
 	}
+}
+
+func (s *Server) collectAgentObservability(ctx context.Context, server db.ServerWithKey, observedServices []observedService, services []gen.ServiceObservability) {
+	latest, err := monitoring.GetLatestAll(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken)
+	if err != nil {
+		log.Printf("observability agent server=%s error: %v", server.ID, err)
+		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach monitoring agent")
+		return
+	}
+	metrics := make(map[string]monitoring.HistoryPoint, len(latest.Points))
+	for _, metric := range latest.Points {
+		metrics[metric.DeploymentID] = metric
+	}
+	for _, observedService := range observedServices {
+		service := &services[observedService.serviceIndex]
+		metric, found := metrics[observedService.deploymentID]
+		if !found {
+			service.Status = gen.ServiceObservabilityStatusStopped
+			continue
+		}
+		if time.Since(time.UnixMilli(metric.SampledAt)) > observabilitySampleMaxAge {
+			setObservabilityError(service, "Monitoring sample is stale")
+			continue
+		}
+		container := containerFromMetric(metric)
+		service.Container = &container
+		if metric.State != "running" {
+			service.Status = gen.ServiceObservabilityStatusStopped
+			continue
+		}
+		service.Status = gen.ServiceObservabilityStatusRunning
+	}
+}
+
+func containerFromMetric(metric monitoring.HistoryPoint) gen.ContainerObservability {
+	return gen.ContainerObservability{
+		Id: metric.ContainerID, Name: metric.ContainerName, State: metric.State, UptimeSeconds: metric.UptimeSeconds,
+		CpuPercent: metric.CPUPercent, MemoryUsedBytes: metric.MemoryUsedBytes, MemoryLimitBytes: metric.MemoryLimitBytes,
+		NetworkInBytesTotal: metric.NetworkInBytesTotal, NetworkOutBytesTotal: metric.NetworkOutBytesTotal,
+	}
+}
+
+func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.Request, id string, params gen.GetProjectObservabilityHistoryParams) {
+	if _, ok := s.requireProject(w, r, id); !ok {
+		return
+	}
+	from, err := observabilityHistorySince(params.Since)
+	if err != nil {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: err.Error()})
+		return
+	}
+	maxPoints := 300
+	if params.MaxPoints != nil {
+		maxPoints = *params.MaxPoints
+	}
+	if maxPoints < 1 || maxPoints > 1000 {
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "max_points must be between 1 and 1000"})
+		return
+	}
+	services, err := db.ListServicesByProject(r.Context(), id)
+	if err != nil {
+		log.Printf("ListServicesByProject project=%s error: %v", id, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list project services"})
+		return
+	}
+	response := gen.ProjectObservabilityHistoryResponse{Services: make([]gen.ServiceObservabilityHistory, len(services))}
+	byServer := make(map[string][]observedHistory)
+	for serviceIndex, service := range services {
+		response.Services[serviceIndex] = gen.ServiceObservabilityHistory{ServiceId: service.ID, Name: service.Name, Deployments: []gen.DeploymentObservabilityHistory{}}
+		deployments, err := db.ListDeploymentsByService(r.Context(), service.ID, 100)
+		if err != nil {
+			log.Printf("ListDeploymentsByService service=%s error: %v", service.ID, err)
+			continue
+		}
+		for _, deployment := range deployments {
+			if deployment.Status != "success" {
+				continue
+			}
+			deploymentIndex := len(response.Services[serviceIndex].Deployments)
+			response.Services[serviceIndex].Deployments = append(response.Services[serviceIndex].Deployments, gen.DeploymentObservabilityHistory{
+				DeploymentId: deployment.ID, Points: []gen.ContainerObservabilitySample{},
+			})
+			deploymentConfig, err := db.GetDeploymentConfig(r.Context(), deployment.ID)
+			if err != nil {
+				response.Services[serviceIndex].Deployments[deploymentIndex].UnavailableReason = stringPointer("Deployment configuration is unavailable")
+				continue
+			}
+			byServer[deploymentConfig.ServerID] = append(byServer[deploymentConfig.ServerID], observedHistory{
+				serviceIndex: serviceIndex, deploymentIndex: deploymentIndex, deploymentID: deployment.ID,
+			})
+		}
+	}
+	to := time.Now().UTC()
+	for serverID, observations := range byServer {
+		s.collectServerHistory(r.Context(), serverID, observations, response.Services, from, to, maxPoints)
+	}
+	respond.JSON(w, http.StatusOK, response)
+}
+
+func (s *Server) collectServerHistory(ctx context.Context, serverID string, observations []observedHistory, services []gen.ServiceObservabilityHistory, from, to time.Time, maxPoints int) {
+	server, err := db.GetServerWithKey(ctx, serverID)
+	if err != nil {
+		setHistoryUnavailable(observations, services, "Deployment server is unavailable")
+		return
+	}
+	if !server.Monitoring.Enabled {
+		setHistoryUnavailable(observations, services, "Retained monitoring is not enabled on this server")
+		return
+	}
+	ids := make([]string, len(observations))
+	for index, observation := range observations {
+		ids[index] = observation.deploymentID
+	}
+	pointsPerDeployment := maxPoints / len(observations)
+	if pointsPerDeployment < 1 {
+		pointsPerDeployment = 1
+	}
+	histories, err := monitoring.GetHistories(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken, ids, from, to, pointsPerDeployment)
+	if err != nil {
+		log.Printf("observability history agent server=%s error: %v", server.ID, err)
+		setHistoryUnavailable(observations, services, "Could not reach monitoring agent")
+		return
+	}
+	for _, observation := range observations {
+		points := histories.Deployments[observation.deploymentID].Points
+		mapped := make([]gen.ContainerObservabilitySample, len(points))
+		for index, point := range points {
+			mapped[index] = gen.ContainerObservabilitySample{
+				ContainerId: point.ContainerID, ContainerName: point.ContainerName, State: point.State,
+				SampledAt: time.UnixMilli(point.SampledAt).UTC(), CpuPercent: point.CPUPercent,
+				MemoryUsedBytes: point.MemoryUsedBytes, MemoryLimitBytes: point.MemoryLimitBytes,
+				NetworkInBytesTotal: point.NetworkInBytesTotal, NetworkOutBytesTotal: point.NetworkOutBytesTotal,
+				UptimeSeconds: point.UptimeSeconds,
+			}
+		}
+		services[observation.serviceIndex].Deployments[observation.deploymentIndex].Points = mapped
+	}
+}
+
+func setHistoryUnavailable(observations []observedHistory, services []gen.ServiceObservabilityHistory, reason string) {
+	for _, observation := range observations {
+		services[observation.serviceIndex].Deployments[observation.deploymentIndex].UnavailableReason = stringPointer(reason)
+	}
+}
+
+func observabilityHistorySince(value *gen.GetProjectObservabilityHistoryParamsSince) (time.Time, error) {
+	duration := 7 * 24 * time.Hour
+	if value != nil {
+		switch string(*value) {
+		case "1h":
+			duration = time.Hour
+		case "6h":
+			duration = 6 * time.Hour
+		case "24h":
+			duration = 24 * time.Hour
+		case "7d":
+			duration = 7 * 24 * time.Hour
+		case "30d":
+			duration = 30 * 24 * time.Hour
+		default:
+			return time.Time{}, fmt.Errorf("since must be one of 1h, 6h, 24h, 7d, or 30d")
+		}
+	}
+	return time.Now().UTC().Add(-duration), nil
 }
 
 func setServerObservabilityStatus(observedServices []observedService, services []gen.ServiceObservability, status gen.ServiceObservabilityStatus, message string) {
