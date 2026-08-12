@@ -19,6 +19,7 @@ import (
 )
 
 const observabilityRefreshSeconds = 10
+const dockerFieldSeparator = "|"
 
 var dockerSizePattern = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*([[:alpha:]]*)$`)
 
@@ -257,11 +258,11 @@ func containerFromInspect(inspect containerInspect) gen.ContainerObservability {
 
 func dockerInspectCommand(dockerBin string, containers []string) string {
 	quotedContainers := shellQuoteAll(containers)
-	return fmt.Sprintf(`for container in %s; do %s inspect --format '{{.ID}}\t{{.Name}}\t{{.State.Status}}\t{{.State.StartedAt}}' "$container" 2>/dev/null || printf '\t%%s\tmissing\t\n' "$container"; done`, quotedContainers, dockerBin)
+	return fmt.Sprintf(`for container in %s; do %s inspect --format '{{.ID}}|{{.Name}}|{{.State.Status}}|{{.State.StartedAt}}' "$container" 2>/dev/null || printf '|%%s|missing|\n' "$container"; done`, quotedContainers, dockerBin)
 }
 
 func dockerStatsCommand(dockerBin string, containers []string) string {
-	return fmt.Sprintf(`%s stats --no-stream --format '{{.ID}}\t{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}' %s`, dockerBin, shellQuoteAll(containers))
+	return fmt.Sprintf(`%s stats --no-stream --format '{{.ID}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.NetIO}}' %s`, dockerBin, shellQuoteAll(containers))
 }
 
 func shellQuoteAll(values []string) string {
@@ -280,7 +281,7 @@ func parseDockerInspect(output string) (map[string]containerInspect, error) {
 	inspections := make(map[string]containerInspect)
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), "\t")
+		fields := strings.Split(scanner.Text(), dockerFieldSeparator)
 		if len(fields) != 4 {
 			return nil, fmt.Errorf("invalid docker inspect row %q", scanner.Text())
 		}
@@ -313,7 +314,7 @@ func parseDockerStats(output string) (map[string]containerStats, error) {
 	stats := make(map[string]containerStats)
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), "\t")
+		fields := strings.Split(scanner.Text(), dockerFieldSeparator)
 		if len(fields) != 5 {
 			return nil, fmt.Errorf("invalid docker stats row %q", scanner.Text())
 		}

@@ -1,9 +1,12 @@
 package handlers
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseDockerStats(t *testing.T) {
-	stats, err := parseDockerStats("abc\tapp\t12.5%\t128MiB / 1GiB\t1.2MB / 3.4MiB\n")
+	stats, err := parseDockerStats("abc|app|12.5%|128MiB / 1GiB|1.2MB / 3.4MiB\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -14,7 +17,7 @@ func TestParseDockerStats(t *testing.T) {
 }
 
 func TestParseDockerInspect(t *testing.T) {
-	inspections, err := parseDockerInspect("abc\t/app\trunning\t2026-08-12T01:02:03.123456789Z\n\tmissing\tmissing\t\n")
+	inspections, err := parseDockerInspect("abc|/app|running|2026-08-12T01:02:03.123456789Z\n|missing|missing|\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,6 +26,17 @@ func TestParseDockerInspect(t *testing.T) {
 	}
 	if got := inspections["missing"]; got.id != "" || got.state != "missing" || !got.startedAt.IsZero() {
 		t.Fatalf("unexpected missing inspection: %+v", got)
+	}
+}
+
+func TestDockerCommandsUseParseableRows(t *testing.T) {
+	inspect := dockerInspectCommand("sudo -n docker", []string{"app"})
+	stats := dockerStatsCommand("sudo -n docker", []string{"app"})
+	if !strings.Contains(inspect, "{{.ID}}|{{.Name}}|{{.State.Status}}|{{.State.StartedAt}}") {
+		t.Fatalf("inspect command has incompatible row format: %s", inspect)
+	}
+	if !strings.Contains(stats, "{{.ID}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.NetIO}}") {
+		t.Fatalf("stats command has incompatible row format: %s", stats)
 	}
 }
 
