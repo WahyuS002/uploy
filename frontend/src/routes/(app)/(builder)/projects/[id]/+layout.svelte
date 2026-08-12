@@ -14,46 +14,45 @@
 	let settingsActive = $derived(page.url.pathname === settingsHref);
 </script>
 
-<div class="flex min-h-0 w-full flex-1">
+<div class="flex min-h-0 w-full flex-1 flex-col">
 	<nav
-		class="mr-3 flex w-14 flex-none flex-col items-center gap-1 border-r border-border py-3 pr-3"
-		aria-label="Project navigation"
+		class="flex-none overflow-x-auto overflow-y-hidden border-b border-border"
+		aria-label="Project sections"
 	>
-		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<a
-			href={builderHref}
-			aria-label="Builder"
-			aria-current={builderActive ? 'page' : undefined}
-			title="Builder"
-			class="grid h-10 w-10 place-content-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none {builderActive
-				? 'bg-muted text-foreground'
-				: ''}"
-		>
-			<Icon src={Squares2x2} theme="outline" class="h-5 w-5" />
-		</a>
-		<a
-			href={observabilityHref}
-			aria-label="VM observability"
-			aria-current={observabilityActive ? 'page' : undefined}
-			title="VM observability"
-			class="grid h-10 w-10 place-content-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none {observabilityActive
-				? 'bg-muted text-foreground'
-				: ''}"
-		>
-			<Icon src={ChartBar} theme="outline" class="h-5 w-5" />
-		</a>
-		<a
-			href={settingsHref}
-			aria-label="Project settings"
-			aria-current={settingsActive ? 'page' : undefined}
-			title="Project settings"
-			class="grid h-10 w-10 place-content-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none {settingsActive
-				? 'bg-muted text-foreground'
-				: ''}"
-		>
-			<Icon src={Cog6Tooth} theme="outline" class="h-5 w-5" />
-		</a>
-		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		<div class="flex min-w-max items-center gap-5 px-1">
+			<!-- eslint-disable svelte/no-navigation-without-resolve -->
+			<a
+				href={builderHref}
+				aria-current={builderActive ? 'page' : undefined}
+				class="-mb-px inline-flex items-center gap-2 border-b-2 py-3 text-sm transition-colors duration-150 outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 {builderActive
+					? 'border-foreground font-medium text-foreground'
+					: 'border-transparent text-muted-foreground hover:text-foreground'}"
+			>
+				<Icon src={Squares2x2} theme="outline" class="h-4 w-4" />
+				<span>Builder</span>
+			</a>
+			<a
+				href={observabilityHref}
+				aria-current={observabilityActive ? 'page' : undefined}
+				class="-mb-px inline-flex items-center gap-2 border-b-2 py-3 text-sm transition-colors duration-150 outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 {observabilityActive
+					? 'border-foreground font-medium text-foreground'
+					: 'border-transparent text-muted-foreground hover:text-foreground'}"
+			>
+				<Icon src={ChartBar} theme="outline" class="h-4 w-4" />
+				<span>Observability</span>
+			</a>
+			<a
+				href={settingsHref}
+				aria-current={settingsActive ? 'page' : undefined}
+				class="-mb-px inline-flex items-center gap-2 border-b-2 py-3 text-sm transition-colors duration-150 outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 {settingsActive
+					? 'border-foreground font-medium text-foreground'
+					: 'border-transparent text-muted-foreground hover:text-foreground'}"
+			>
+				<Icon src={Cog6Tooth} theme="outline" class="h-4 w-4" />
+				<span>Settings</span>
+			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		</div>
 	</nav>
 
 	<div class="flex min-h-0 min-w-0 flex-1">
