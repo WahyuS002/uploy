@@ -57,6 +57,11 @@
 	let chartNetworkMax = $derived(
 		Math.max(1, ...history.flatMap((point) => [point.networkIn, point.networkOut]))
 	);
+	let hasMetricHistory = $derived(history.some((point) => point.cpu > 0 || point.memory > 0));
+	let hasNetworkSamples = $derived(history.length > 1);
+	let hasNetworkActivity = $derived(
+		history.some((point) => point.networkIn > 0 || point.networkOut > 0)
+	);
 
 	$effect(() => {
 		const id = projectId;
@@ -181,6 +186,16 @@
 		return value ? timeFormatter.format(new Date(value)) : '—';
 	}
 
+	function formatUptime(seconds: number): string {
+		if (seconds < 60) return '< 1m';
+		const days = Math.floor(seconds / 86_400);
+		const hours = Math.floor((seconds % 86_400) / 3_600);
+		const minutes = Math.floor((seconds % 3_600) / 60);
+		if (days) return `${days}d ${hours}h`;
+		if (hours) return `${hours}h ${minutes}m`;
+		return `${minutes}m`;
+	}
+
 	function statusLabel(status: Status): string {
 		return {
 			not_deployed: 'Not deployed',
@@ -196,6 +211,23 @@
 		if (status === 'not_deployed') return 'neutral';
 		if (status === 'stopped') return 'warning';
 		return 'danger';
+	}
+
+	function healthTone(
+		degradedServices: number,
+		runningServices: number
+	): 'neutral' | 'success' | 'warning' {
+		if (degradedServices > 0) return 'warning';
+		if (runningServices > 0) return 'success';
+		return 'neutral';
+	}
+
+	function healthSummary(degradedServices: number, runningServices: number): string {
+		if (degradedServices > 0) {
+			return `${degradedServices} ${degradedServices === 1 ? 'service needs' : 'services need'} attention`;
+		}
+		if (runningServices > 0) return 'Active containers are reporting normally';
+		return 'No active containers are reporting metrics';
 	}
 
 	function chartPath(values: number[], maxValue: number): string {
@@ -281,31 +313,58 @@
 				description="Add a service to see container health and resource usage here."
 			/>
 		{:else if snapshot}
-			<section class="overflow-hidden rounded-xl border border-border" aria-label="Project summary">
+			<section
+				class="overflow-hidden rounded-xl border border-border motion-safe:animate-slide-up-fade"
+				aria-label="Project health"
+			>
+				<header
+					class="flex flex-col gap-3 border-b border-border bg-muted/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+				>
+					<div class="flex min-w-0 items-start gap-3">
+						<span
+							class="grid h-8 w-8 flex-none place-items-center rounded-md bg-card text-primary-deep ring-1 ring-border"
+						>
+							<Icon src={ChartBar} theme="outline" class="h-4 w-4" />
+						</span>
+						<div class="min-w-0">
+							<h2 class="text-[15px] font-semibold text-foreground">Project health</h2>
+							<p class="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+								{snapshot.summary.running_services} of {snapshot.summary.total_services} services are
+								contributing live metrics.
+							</p>
+						</div>
+					</div>
+					<Badge
+						tone={healthTone(snapshot.summary.degraded_services, snapshot.summary.running_services)}
+					>
+						{healthSummary(snapshot.summary.degraded_services, snapshot.summary.running_services)}
+					</Badge>
+				</header>
 				<div class="grid sm:grid-cols-3">
 					<div class="border-b border-border px-5 py-5 sm:border-r sm:border-b-0">
 						<div class="flex items-center justify-between gap-3">
 							<p class="text-xs font-medium text-muted-foreground">CPU usage</p>
 							<Icon src={CpuChip} theme="outline" class="h-4 w-4 text-info" />
 						</div>
-						<p class="mt-3 text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+						<p
+							class="mt-3 font-mono text-[1.75rem] leading-none font-semibold tracking-[-0.03em] text-foreground tabular-nums"
+						>
 							{formatPercent(snapshot.summary.cpu_percent)}
 						</p>
-						<p class="mt-1 text-xs text-muted-foreground">Aggregate across running containers</p>
+						<p class="mt-2 text-xs text-muted-foreground">Sum across running containers</p>
 					</div>
 					<div class="border-b border-border px-5 py-5 sm:border-r sm:border-b-0">
 						<div class="flex items-center justify-between gap-3">
 							<p class="text-xs font-medium text-muted-foreground">Memory</p>
 							<Icon src={CircleStack} theme="outline" class="h-4 w-4 text-success" />
 						</div>
-						<p class="mt-3 text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+						<p
+							class="mt-3 font-mono text-[1.75rem] leading-none font-semibold tracking-[-0.03em] text-foreground tabular-nums"
+						>
 							{formatBytes(snapshot.summary.memory_used_bytes)}
-							<span class="text-sm font-normal text-muted-foreground">
-								/ {formatBytes(snapshot.summary.memory_limit_bytes)}</span
-							>
 						</p>
-						<p class="mt-1 text-xs text-muted-foreground">
-							{formatPercent(memoryPercent)} of allocated limits
+						<p class="mt-2 text-xs text-muted-foreground">
+							{formatPercent(memoryPercent)} of {formatBytes(snapshot.summary.memory_limit_bytes)} allocated
 						</p>
 					</div>
 					<div class="px-5 py-5">
@@ -313,29 +372,24 @@
 							<p class="text-xs font-medium text-muted-foreground">Network rate</p>
 							<Icon src={Signal} theme="outline" class="h-4 w-4 text-primary-deep" />
 						</div>
-						<p class="mt-3 text-2xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
+						<p
+							class="mt-3 font-mono text-[1.75rem] leading-none font-semibold tracking-[-0.03em] text-foreground tabular-nums"
+						>
 							{formatBytes(networkRate.in + networkRate.out, true)}
 						</p>
-						<p class="mt-1 text-xs text-muted-foreground">
-							{formatBytes(networkRate.in, true)} in · {formatBytes(networkRate.out, true)} out
+						<p class="mt-2 text-xs text-muted-foreground">
+							{formatBytes(networkRate.in, true)} received · {formatBytes(networkRate.out, true)} sent
 						</p>
 					</div>
 				</div>
-				<div
-					class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs"
+				<footer
+					class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3 text-xs text-muted-foreground"
 				>
-					<span class="text-muted-foreground">
-						<span class="font-medium text-foreground">{snapshot.summary.running_services}</span> of {snapshot
-							.summary.total_services} services running
-					</span>
-					<span
-						class={snapshot.summary.degraded_services ? 'text-warning' : 'text-muted-foreground'}
-					>
-						{snapshot.summary.degraded_services} degraded · sampled {formatTime(
-							snapshot.sampled_at
-						)}
-					</span>
-				</div>
+					<span>Active deployments only · all environments</span>
+					<time datetime={snapshot.sampled_at} class="font-mono tabular-nums">
+						Sampled {formatTime(snapshot.sampled_at)}
+					</time>
+				</footer>
 			</section>
 
 			<section
@@ -366,98 +420,147 @@
 					</div>
 				</header>
 				<div class="border-t border-border px-5 py-5">
-					<svg
-						viewBox="0 0 720 180"
-						class="h-56 w-full text-border"
-						role="img"
-						aria-label="CPU and memory usage during this session"
-						preserveAspectRatio="none"
-					>
-						<path
-							d="M0 0V180M180 0V180M360 0V180M540 0V180M720 0V180M0 0H720M0 90H720M0 180H720"
-							stroke="currentColor"
-							stroke-width="1"
-						/>
-						<path
-							d={chartPath(
-								history.map((point) => point.cpu),
-								100
-							)}
-							class="text-info"
-							fill="none"
-							stroke="currentColor"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="3"
-						/>
-						<path
-							d={chartPath(
-								history.map((point) => point.memory),
-								100
-							)}
-							class="text-success"
-							fill="none"
-							stroke="currentColor"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="3"
-						/>
-					</svg>
-					<div class="mt-3 flex justify-between text-[11px] text-muted-foreground tabular-nums">
-						<span>{history.length ? formatTime(history[0].at) : 'Waiting'}</span><span
-							>CPU {formatPercent(snapshot.summary.cpu_percent)}</span
-						><span>Memory {formatPercent(memoryPercent)}</span><span>{history.length} samples</span>
-					</div>
+					{#if hasMetricHistory}
+						<svg
+							viewBox="0 0 720 180"
+							class="h-52 w-full text-border"
+							role="img"
+							aria-label="CPU and memory usage during this session"
+							preserveAspectRatio="none"
+						>
+							<path
+								d="M0 0V180M180 0V180M360 0V180M540 0V180M720 0V180M0 0H720M0 90H720M0 180H720"
+								stroke="currentColor"
+								stroke-width="1"
+							/>
+							<path
+								d={chartPath(
+									history.map((point) => point.cpu),
+									100
+								)}
+								class="text-info"
+								fill="none"
+								stroke="currentColor"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="3"
+							/>
+							<path
+								d={chartPath(
+									history.map((point) => point.memory),
+									100
+								)}
+								class="text-success"
+								fill="none"
+								stroke="currentColor"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="3"
+							/>
+						</svg>
+						<div
+							class="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground tabular-nums"
+						>
+							<span>{formatTime(history[0]?.at)}</span>
+							<span
+								>CPU {formatPercent(snapshot.summary.cpu_percent)} · Memory {formatPercent(
+									memoryPercent
+								)}</span
+							>
+							<span>{formatTime(history.at(-1)?.at)}</span>
+						</div>
+					{:else}
+						<div
+							class="grid min-h-52 place-items-center border border-dashed border-border bg-muted/20 px-6 text-center"
+						>
+							<div class="max-w-sm">
+								<Icon
+									src={ChartBar}
+									theme="outline"
+									class="mx-auto h-5 w-5 text-muted-foreground"
+								/>
+								<p class="mt-3 text-sm font-medium text-foreground">
+									Waiting for container metrics
+								</p>
+								<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+									{snapshot.summary.running_services
+										? `The next ${REFRESH_SECONDS}-second sample will extend this timeline.`
+										: 'Start or restore an active deployment to populate this chart.'}
+								</p>
+							</div>
+						</div>
+					{/if}
 				</div>
 				<div class="border-t border-border px-5 py-5">
-					<div class="mb-3 flex items-center justify-between gap-3">
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<div>
 							<h3 class="text-sm font-semibold text-foreground">Network throughput</h3>
 							<p class="mt-0.5 text-xs text-muted-foreground">
-								Calculated from cumulative Docker counters
+								Rate calculated between successive Docker counters.
 							</p>
 						</div>
-						<span class="text-xs text-muted-foreground tabular-nums"
-							>{formatBytes(networkRate.in + networkRate.out, true)}</span
-						>
+						<div class="flex items-center gap-4 text-xs text-muted-foreground tabular-nums">
+							<span class="flex items-center gap-1.5"
+								><span class="h-1.5 w-1.5 rounded-full bg-primary-deep"></span>{formatBytes(
+									networkRate.in,
+									true
+								)} in</span
+							>
+							<span class="flex items-center gap-1.5"
+								><span class="h-1.5 w-1.5 rounded-full bg-warning"></span>{formatBytes(
+									networkRate.out,
+									true
+								)} out</span
+							>
+						</div>
 					</div>
-					<svg
-						viewBox="0 0 720 180"
-						class="h-40 w-full text-border"
-						role="img"
-						aria-label="Network throughput during this session"
-						preserveAspectRatio="none"
-					>
-						<path
-							d="M0 0V180M180 0V180M360 0V180M540 0V180M720 0V180M0 0H720M0 90H720M0 180H720"
-							stroke="currentColor"
-							stroke-width="1"
-						/>
-						<polyline
-							points={chartPoints(
-								history.map((point) => point.networkIn),
-								chartNetworkMax
-							)}
-							class="text-primary-deep"
-							fill="none"
-							stroke="currentColor"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="3"
-						/>
-						<polyline
-							points={chartPoints(
-								history.map((point) => point.networkOut),
-								chartNetworkMax
-							)}
-							class="text-warning"
-							fill="none"
-							stroke="currentColor"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="3"
-						/>
-					</svg>
+					{#if hasNetworkActivity}
+						<svg
+							viewBox="0 0 720 180"
+							class="mt-5 h-40 w-full text-border"
+							role="img"
+							aria-label="Network throughput during this session"
+							preserveAspectRatio="none"
+						>
+							<path
+								d="M0 0V180M180 0V180M360 0V180M540 0V180M720 0V180M0 0H720M0 90H720M0 180H720"
+								stroke="currentColor"
+								stroke-width="1"
+							/>
+							<polyline
+								points={chartPoints(
+									history.map((point) => point.networkIn),
+									chartNetworkMax
+								)}
+								class="text-primary-deep"
+								fill="none"
+								stroke="currentColor"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="3"
+							/>
+							<polyline
+								points={chartPoints(
+									history.map((point) => point.networkOut),
+									chartNetworkMax
+								)}
+								class="text-warning"
+								fill="none"
+								stroke="currentColor"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="3"
+							/>
+						</svg>
+					{:else}
+						<div
+							class="mt-5 flex min-h-40 items-center justify-center border border-dashed border-border bg-muted/20 px-6 text-center text-xs leading-relaxed text-muted-foreground"
+						>
+							{hasNetworkSamples
+								? 'No network traffic has been observed in this session.'
+								: `Waiting for the next ${REFRESH_SECONDS}-second sample to calculate throughput.`}
+						</div>
+					{/if}
 				</div>
 			</section>
 
@@ -466,26 +569,68 @@
 				aria-labelledby="services-title"
 			>
 				<header
-					class="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+					class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
 				>
 					<div>
 						<h2 id="services-title" class="text-[15px] font-semibold text-foreground">
 							Services and containers
 						</h2>
 						<p class="mt-0.5 text-xs text-muted-foreground">
-							Only active deployments contribute metrics; every service remains visible.
+							Every service remains visible, even when its active deployment cannot report metrics.
 						</p>
 					</div>
 					<Badge
-						tone={snapshot.summary.degraded_services ? 'warning' : 'success'}
+						tone={healthTone(snapshot.summary.degraded_services, snapshot.summary.running_services)}
 						variant="outline"
 					>
-						{snapshot.summary.degraded_services
-							? `${snapshot.summary.degraded_services} need attention`
-							: 'All healthy'}
+						{snapshot.summary.running_services} running · {snapshot.summary.degraded_services}
+						degraded
 					</Badge>
 				</header>
-				<div class="overflow-x-auto border-t border-border">
+				<div class="sm:hidden">
+					{#each snapshot.services as service (service.service_id)}
+						<article class="border-t border-border px-5 py-4">
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<a
+										href="/services/{service.service_id}"
+										class="block truncate text-sm font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+										>{service.name}</a
+									>
+									<p class="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+										{service.container?.name ?? 'No active container'} · {service.environment_name ||
+											'Unknown environment'}
+									</p>
+								</div>
+								<Badge tone={statusTone(service.status)}>{statusLabel(service.status)}</Badge>
+							</div>
+							{#if service.error}
+								<p class="mt-3 text-xs leading-relaxed text-destructive">{service.error}</p>
+							{/if}
+							<dl class="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3 text-xs">
+								<div>
+									<dt class="text-muted-foreground">CPU</dt>
+									<dd class="mt-1 font-mono text-[13px] font-medium text-foreground tabular-nums">
+										{service.container ? formatPercent(service.container.cpu_percent) : '—'}
+									</dd>
+								</div>
+								<div>
+									<dt class="text-muted-foreground">Memory</dt>
+									<dd class="mt-1 font-mono text-[13px] font-medium text-foreground tabular-nums">
+										{service.container ? formatBytes(service.container.memory_used_bytes) : '—'}
+									</dd>
+								</div>
+								<div>
+									<dt class="text-muted-foreground">Network</dt>
+									<dd class="mt-1 font-mono text-[13px] font-medium text-foreground tabular-nums">
+										{service.container ? formatBytes(serviceNetworkRate(service), true) : '—'}
+									</dd>
+								</div>
+							</dl>
+						</article>
+					{/each}
+				</div>
+				<div class="hidden overflow-x-auto border-t border-border sm:block">
 					<table class="w-full min-w-[760px] text-left text-sm">
 						<thead class="bg-muted/40 text-xs text-muted-foreground">
 							<tr>
@@ -499,13 +644,20 @@
 						</thead>
 						<tbody>
 							{#each snapshot.services as service (service.service_id)}
-								<tr class="border-t border-border first:border-t-0">
-									<td class="max-w-[260px] px-5 py-3">
+								<tr
+									class="border-t border-border transition-colors first:border-t-0 hover:bg-muted/25"
+								>
+									<td class="max-w-[300px] px-5 py-3.5">
 										<a
 											href="/services/{service.service_id}"
-											class="block truncate font-medium text-foreground hover:underline"
+											class="block truncate font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
 											>{service.name}</a
 										>
+										<p class="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+											{service.container
+												? `${service.container.name} · up ${formatUptime(service.container.uptime_seconds)}`
+												: 'No active container'}
+										</p>
 										{#if service.error}<p
 												class="mt-1 truncate text-xs text-destructive"
 												title={service.error}
@@ -513,25 +665,25 @@
 												{service.error}
 											</p>{/if}
 									</td>
-									<td class="px-4 py-3 text-xs text-muted-foreground"
+									<td class="px-4 py-3.5 text-xs text-muted-foreground"
 										>{service.environment_name || 'Unknown'}</td
 									>
-									<td class="px-4 py-3"
+									<td class="px-4 py-3.5"
 										><Badge tone={statusTone(service.status)}>{statusLabel(service.status)}</Badge
 										></td
 									>
 									<td
-										class="px-4 py-3 text-right font-mono text-[13px] text-foreground tabular-nums"
+										class="px-4 py-3.5 text-right font-mono text-[13px] text-foreground tabular-nums"
 										>{service.container ? formatPercent(service.container.cpu_percent) : '—'}</td
 									>
 									<td
-										class="px-4 py-3 text-right font-mono text-[13px] text-foreground tabular-nums"
+										class="px-4 py-3.5 text-right font-mono text-[13px] text-foreground tabular-nums"
 										>{service.container
 											? formatBytes(service.container.memory_used_bytes)
 											: '—'}</td
 									>
 									<td
-										class="px-5 py-3 text-right font-mono text-[13px] text-foreground tabular-nums"
+										class="px-5 py-3.5 text-right font-mono text-[13px] text-foreground tabular-nums"
 										>{service.container ? formatBytes(serviceNetworkRate(service), true) : '—'}</td
 									>
 								</tr>
