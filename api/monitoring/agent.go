@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	ContainerName = "uploy-monitor"
-	AgentPort     = 9184
-	dataDir       = "/data/uploy/monitoring"
+	ContainerName        = "uploy-monitor"
+	AgentPort            = 9184
+	dataDir              = "/data/uploy/monitoring"
+	enableCleanupTimeout = 30 * time.Second
 )
 
 type Config struct {
@@ -59,11 +60,52 @@ type LatestResponse struct {
 	Points []HistoryPoint `json:"points"`
 }
 
-func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config) error {
+func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config) (err error) {
 	if err := ValidateConfig(cfg); err != nil {
 		return err
 	}
 
+	if err := prepareMonitoringHost(ctx, client, cfg); err != nil {
+		return err
+	}
+
+	docker := client.DockerBin()
+	rollbackName := ContainerName + "-rollback"
+	_, _ = client.Run(ctx, docker+" rm -f "+rollbackName+" >/dev/null 2>&1 || true")
+	hadOld, err := dockerapi.ContainerExists(ctx, client, ContainerName)
+	if err != nil {
+		return fmt.Errorf("inspect existing monitoring container: %w", err)
+	}
+
+	state := enableState{
+		hadOld:       hadOld,
+		rollbackName: rollbackName,
+	}
+	defer func() {
+		if cleanupErr := state.cleanup(ctx, client, err == nil); cleanupErr != nil {
+			err = errors.Join(err, cleanupErr)
+		}
+	}()
+
+	if err := state.prepareOld(ctx, client); err != nil {
+		return err
+	}
+
+	if _, err := client.Run(ctx, buildRunCommand(docker, cfg)); err != nil {
+		return fmt.Errorf("start monitoring agent: %w", err)
+	}
+	state.newStarted = true
+	if err := waitHealthy(ctx, client); err != nil {
+		return err
+	}
+
+	if err := syncRoute(client, serverID, cfg.FQDN); err != nil {
+		return err
+	}
+	return nil
+}
+
+func prepareMonitoringHost(ctx context.Context, client *ssh.Client, cfg Config) error {
 	if err := proxy.EnsureNetwork(client); err != nil {
 		return err
 	}
@@ -79,21 +121,12 @@ func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config
 	if _, err := client.RunElevated(ctx, "mkdir -p "+dataDir); err != nil {
 		return fmt.Errorf("prepare monitoring data: %w", err)
 	}
+	return nil
+}
 
-	rollbackName := ContainerName + "-rollback"
-	_, _ = client.Run(ctx, docker+" rm -f "+rollbackName+" >/dev/null 2>&1 || true")
-	hadOld, err := dockerapi.ContainerExists(ctx, client, ContainerName)
-	if err != nil {
-		return fmt.Errorf("inspect existing monitoring container: %w", err)
-	}
-	if hadOld {
-		if _, err := client.Run(ctx, docker+" stop "+ContainerName+" && "+docker+" rename "+ContainerName+" "+rollbackName); err != nil {
-			return fmt.Errorf("prepare monitoring rollback: %w", err)
-		}
-	}
-
+func buildRunCommand(docker string, cfg Config) string {
 	publishedAddress := net.JoinHostPort(cfg.PrivateAddress, strconv.Itoa(cfg.HostPort))
-	run := fmt.Sprintf(
+	return fmt.Sprintf(
 		"%s run -d --name %s --restart unless-stopped --network uploy -p %s:%d "+
 			"-v /var/run/docker.sock:/var/run/docker.sock:ro -v %s:/data "+
 			"-e UPLOY_MONITOR_CONTROL_TOKEN=%s -e UPLOY_MONITOR_READER_TOKEN=%s "+
@@ -101,29 +134,94 @@ func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config
 		docker, ContainerName, publishedAddress, AgentPort, dataDir,
 		ssh.ShellQuote(cfg.ControlToken), ssh.ShellQuote(cfg.ReaderToken), cfg.RetentionDays, ssh.ShellQuote(cfg.Image),
 	)
-	if _, err := client.Run(ctx, run); err != nil {
-		rollback(ctx, client, hadOld, rollbackName)
-		return fmt.Errorf("start monitoring agent: %w", err)
-	}
-	if err := waitHealthy(ctx, client); err != nil {
-		rollback(ctx, client, hadOld, rollbackName)
-		return err
-	}
+}
 
-	routeID := routeID(serverID)
-	if cfg.FQDN == "" {
-		if err := proxy.RemoveRoute(client, routeID); err != nil {
-			rollback(ctx, client, hadOld, rollbackName)
+func syncRoute(client *ssh.Client, serverID, fqdn string) error {
+	id := routeID(serverID)
+	if fqdn == "" {
+		if err := proxy.RemoveRoute(client, id); err != nil {
 			return fmt.Errorf("remove monitoring public route: %w", err)
 		}
-	} else if err := proxy.SetMonitoringRoute(client, routeID, []string{cfg.FQDN}, ContainerName, AgentPort); err != nil {
-		rollback(ctx, client, hadOld, rollbackName)
-		return fmt.Errorf("publish monitoring route: %w", err)
+		return nil
 	}
-	if hadOld {
-		_, _ = client.Run(ctx, docker+" rm -f "+rollbackName+" >/dev/null 2>&1 || true")
+	if err := proxy.SetMonitoringRoute(client, id, []string{fqdn}, ContainerName, AgentPort); err != nil {
+		return fmt.Errorf("publish monitoring public route: %w", err)
 	}
 	return nil
+}
+
+type enableState struct {
+	hadOld        bool
+	oldStopped    bool
+	oldMoved      bool
+	oldWasRunning bool
+	newStarted    bool
+	rollbackName  string
+}
+
+func (s *enableState) prepareOld(ctx context.Context, client dockerapi.CommandRunner) error {
+	if !s.hadOld {
+		return nil
+	}
+	running, err := dockerapi.ContainerRunning(ctx, client, ContainerName)
+	if err != nil {
+		return fmt.Errorf("inspect existing monitoring state: %w", err)
+	}
+	s.oldWasRunning = running
+	docker := client.DockerBin()
+	if running {
+		if _, err := client.Run(ctx, docker+" stop "+ContainerName); err != nil {
+			return fmt.Errorf("stop existing monitoring agent: %w", err)
+		}
+		s.oldStopped = true
+	}
+	if _, err := client.Run(ctx, docker+" rename "+ContainerName+" "+s.rollbackName); err != nil {
+		return fmt.Errorf("rename existing monitoring agent: %w", err)
+	}
+	s.oldMoved = true
+	return nil
+}
+
+func (s *enableState) cleanup(parent context.Context, client dockerapi.CommandRunner, committed bool) error {
+	if !s.oldMoved && !s.oldStopped && !s.newStarted {
+		return nil
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(parent), enableCleanupTimeout)
+	defer cancel()
+	docker := client.DockerBin()
+
+	var cleanupErr error
+	if committed {
+		if s.oldMoved {
+			cleanupErr = errors.Join(cleanupErr, removeContainerIfPresent(cleanupCtx, client, s.rollbackName))
+		}
+		return cleanupErr
+	}
+
+	if s.newStarted || s.oldMoved {
+		cleanupErr = errors.Join(cleanupErr, removeContainerIfPresent(cleanupCtx, client, ContainerName))
+	}
+	if s.oldMoved {
+		restore := docker + " rename " + s.rollbackName + " " + ContainerName
+		if s.oldWasRunning {
+			restore += " && " + docker + " start " + ContainerName
+		}
+		_, err := client.Run(cleanupCtx, restore)
+		cleanupErr = errors.Join(cleanupErr, err)
+	} else if s.oldStopped {
+		_, err := client.Run(cleanupCtx, docker+" start "+ContainerName)
+		cleanupErr = errors.Join(cleanupErr, err)
+	}
+	return cleanupErr
+}
+
+func removeContainerIfPresent(ctx context.Context, client dockerapi.CommandRunner, name string) error {
+	exists, err := dockerapi.ContainerExists(ctx, client, name)
+	if err != nil || !exists {
+		return err
+	}
+	_, err = client.Run(ctx, client.DockerBin()+" rm -f "+ssh.ShellQuote(name))
+	return err
 }
 
 func ValidateConfig(cfg Config) error {
@@ -287,13 +385,5 @@ func waitHealthy(ctx context.Context, client *ssh.Client) error {
 			return errors.New("monitoring agent failed its health check")
 		case <-time.After(500 * time.Millisecond):
 		}
-	}
-}
-
-func rollback(ctx context.Context, client *ssh.Client, hadOld bool, rollbackName string) {
-	docker := client.DockerBin()
-	_, _ = client.Run(ctx, docker+" rm -f "+ContainerName+" >/dev/null 2>&1 || true")
-	if hadOld {
-		_, _ = client.Run(ctx, docker+" rename "+rollbackName+" "+ContainerName+" && "+docker+" start "+ContainerName)
 	}
 }
