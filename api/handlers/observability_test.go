@@ -55,9 +55,3 @@ func TestParseDockerBytes(t *testing.T) {
 		}
 	}
 }
-
-func TestShellQuote(t *testing.T) {
-	if got, want := shellQuote("app's service"), `'app'"'"'s service'`; got != want {
-		t.Fatalf("shellQuote() = %q; want %q", got, want)
-	}
-}

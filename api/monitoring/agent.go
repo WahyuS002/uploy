@@ -72,7 +72,7 @@ func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config
 		}
 	}
 	docker := client.DockerBin()
-	if _, err := client.Run(ctx, docker+" pull "+shellQuote(cfg.Image)); err != nil {
+	if _, err := client.Run(ctx, docker+" pull "+ssh.ShellQuote(cfg.Image)); err != nil {
 		return fmt.Errorf("pull monitoring image: %w", err)
 	}
 	if _, err := client.Run(ctx, elevated(client, "mkdir -p "+dataDir)); err != nil {
@@ -95,7 +95,7 @@ func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config
 			"-e UPLOY_MONITOR_CONTROL_TOKEN=%s -e UPLOY_MONITOR_READER_TOKEN=%s "+
 			"-e UPLOY_MONITOR_RETENTION_DAYS=%d %s",
 		docker, ContainerName, publishedAddress, AgentPort, dataDir,
-		shellQuote(cfg.ControlToken), shellQuote(cfg.ReaderToken), cfg.RetentionDays, shellQuote(cfg.Image),
+		ssh.ShellQuote(cfg.ControlToken), ssh.ShellQuote(cfg.ReaderToken), cfg.RetentionDays, ssh.ShellQuote(cfg.Image),
 	)
 	if _, err := client.Run(ctx, run); err != nil {
 		rollback(ctx, client, hadOld, rollbackName)
@@ -304,8 +304,4 @@ func elevated(client *ssh.Client, command string) string {
 		return command
 	}
 	return "sudo -n " + command
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }

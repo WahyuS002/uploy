@@ -447,13 +447,11 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 	// kills every deployed service until someone redeploys by hand.
 	args += " --restart unless-stopped"
 	if cfg.HealthcheckCommand != "" {
-		escaped := strings.ReplaceAll(cfg.HealthcheckCommand, "'", "'\\''")
-		args += fmt.Sprintf(" --health-cmd '%s' --health-interval 5s --health-timeout 5s --health-retries 10 --health-start-period 5s", escaped)
+		args += fmt.Sprintf(" --health-cmd %s --health-interval 5s --health-timeout 5s --health-retries 10 --health-start-period 5s", ssh.ShellQuote(cfg.HealthcheckCommand))
 	}
 
 	for _, env := range cfg.EnvVars {
-		escaped := strings.ReplaceAll(env.Value, "'", "'\\''")
-		args += fmt.Sprintf(" --env '%s=%s'", env.Key, escaped)
+		args += fmt.Sprintf(" --env %s", ssh.ShellQuote(env.Key+"="+env.Value))
 	}
 
 	args += " " + cfg.Image

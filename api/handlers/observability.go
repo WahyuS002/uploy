@@ -457,13 +457,9 @@ func dockerStatsCommand(dockerBin string, containers []string) string {
 func shellQuoteAll(values []string) string {
 	quoted := make([]string, len(values))
 	for index, value := range values {
-		quoted[index] = shellQuote(value)
+		quoted[index] = ssh.ShellQuote(value)
 	}
 	return strings.Join(quoted, " ")
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func parseDockerInspect(output string) (map[string]containerInspect, error) {
