@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	dockerapi "github.com/WahyuS002/uploy/docker"
 	"github.com/WahyuS002/uploy/ssh"
 )
 
@@ -160,8 +161,11 @@ type LegacyRoute struct {
 }
 
 func LegacyRouteForContainer(ctx context.Context, client *ssh.Client, containerName string) (LegacyRoute, error) {
-	running, err := client.Run(ctx, fmt.Sprintf("%s inspect --format '{{.State.Running}}' %s", client.DockerBin(), containerName))
-	if err != nil || running != "true" {
+	running, err := dockerapi.ContainerRunning(ctx, client, containerName)
+	if err != nil {
+		return LegacyRoute{}, fmt.Errorf("inspect legacy container state: %w", err)
+	}
+	if !running {
 		return LegacyRoute{}, ErrLegacyRouteNotFound
 	}
 	labelsJSON, err := client.Run(ctx, fmt.Sprintf("%s inspect --format '{{json .Config.Labels}}' %s", client.DockerBin(), containerName))

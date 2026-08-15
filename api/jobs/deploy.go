@@ -12,6 +12,7 @@ import (
 
 	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
+	dockerapi "github.com/WahyuS002/uploy/docker"
 	"github.com/WahyuS002/uploy/proxy"
 	"github.com/WahyuS002/uploy/ssh"
 	"github.com/jackc/pgx/v5"
@@ -219,7 +220,7 @@ func runRollingDeploy(ctx context.Context, client *ssh.Client, docker string, cf
 	}
 
 	appendLog(ctx, cfg.DeploymentID, "waiting for candidate healthcheck...", "stdout", "health_check")
-	if err := waitForHealthy(ctx, client, docker, candidateName); err != nil {
+	if err := waitForHealthy(ctx, client, candidateName); err != nil {
 		_ = stopAndRemoveContainer(ctx, client, cfg.DeploymentID, candidateName)
 		failDeploy(cfg.DeploymentID, "Candidate did not become healthy: "+err.Error())
 		return false
@@ -248,7 +249,7 @@ func runRollingDeploy(ctx context.Context, client *ssh.Client, docker string, cf
 	}
 
 	appendLog(ctx, cfg.DeploymentID, "draining previous container for 30 seconds...", "stdout", "drain")
-	if err := monitorHealthy(ctx, client, docker, candidateName, drainPeriod); err != nil {
+	if err := monitorHealthy(ctx, client, candidateName, drainPeriod); err != nil {
 		if restoreErr := restorePreviousRoute(ctx, client, cfg.ServiceID, oldConfig, oldContainer, true); restoreErr != nil {
 			failDeploy(cfg.DeploymentID, "Candidate failed during drain and rollback could not be confirmed; both containers left running: "+errors.Join(err, restoreErr).Error())
 			return false
@@ -329,13 +330,9 @@ func fallbackHealthcheckCommand(port int) string {
 	return fmt.Sprintf("curl -fsS http://127.0.0.1:%d/ >/dev/null || wget -q -O /dev/null http://127.0.0.1:%d/ || exit 1", port, port)
 }
 
-func containerHealth(ctx context.Context, client *ssh.Client, docker, containerName string) (string, error) {
-	return client.Run(ctx, fmt.Sprintf("%s inspect --format '{{.State.Health.Status}}' %s", docker, containerName))
-}
-
-func waitForHealthy(ctx context.Context, client *ssh.Client, docker, containerName string) error {
+func waitForHealthy(ctx context.Context, client *ssh.Client, containerName string) error {
 	for {
-		status, err := containerHealth(ctx, client, docker, containerName)
+		status, err := dockerapi.ContainerHealth(ctx, client, containerName)
 		if err != nil {
 			return err
 		}
@@ -353,7 +350,7 @@ func waitForHealthy(ctx context.Context, client *ssh.Client, docker, containerNa
 	}
 }
 
-func monitorHealthy(ctx context.Context, client *ssh.Client, docker, containerName string, duration time.Duration) error {
+func monitorHealthy(ctx context.Context, client *ssh.Client, containerName string, duration time.Duration) error {
 	deadline := time.NewTimer(duration)
 	defer deadline.Stop()
 	for {
@@ -363,7 +360,7 @@ func monitorHealthy(ctx context.Context, client *ssh.Client, docker, containerNa
 		case <-deadline.C:
 			return nil
 		case <-time.After(healthPollInterval):
-			status, err := containerHealth(ctx, client, docker, containerName)
+			status, err := dockerapi.ContainerHealth(ctx, client, containerName)
 			if err != nil {
 				return err
 			}

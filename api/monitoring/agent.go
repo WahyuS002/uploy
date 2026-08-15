@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	dockerapi "github.com/WahyuS002/uploy/docker"
 	"github.com/WahyuS002/uploy/proxy"
 	"github.com/WahyuS002/uploy/ssh"
 )
@@ -81,7 +82,10 @@ func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config
 
 	rollbackName := ContainerName + "-rollback"
 	_, _ = client.Run(ctx, docker+" rm -f "+rollbackName+" >/dev/null 2>&1 || true")
-	hadOld := containerExists(ctx, client, ContainerName)
+	hadOld, err := dockerapi.ContainerExists(ctx, client, ContainerName)
+	if err != nil {
+		return fmt.Errorf("inspect existing monitoring container: %w", err)
+	}
 	if hadOld {
 		if _, err := client.Run(ctx, docker+" stop "+ContainerName+" && "+docker+" rename "+ContainerName+" "+rollbackName); err != nil {
 			return fmt.Errorf("prepare monitoring rollback: %w", err)
@@ -274,7 +278,7 @@ func waitHealthy(ctx context.Context, client *ssh.Client) error {
 	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	for {
-		status, err := client.Run(deadline, fmt.Sprintf("%s inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' %s", client.DockerBin(), ContainerName))
+		status, err := dockerapi.ContainerHealth(deadline, client, ContainerName)
 		if err == nil && status == "healthy" {
 			return nil
 		}
@@ -292,9 +296,4 @@ func rollback(ctx context.Context, client *ssh.Client, hadOld bool, rollbackName
 	if hadOld {
 		_, _ = client.Run(ctx, docker+" rename "+rollbackName+" "+ContainerName+" && "+docker+" start "+ContainerName)
 	}
-}
-
-func containerExists(ctx context.Context, client *ssh.Client, name string) bool {
-	_, err := client.Run(ctx, client.DockerBin()+" inspect "+name)
-	return err == nil
 }

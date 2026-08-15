@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/WahyuS002/uploy/db"
+	dockerapi "github.com/WahyuS002/uploy/docker"
 	"github.com/WahyuS002/uploy/proxy"
 	"github.com/WahyuS002/uploy/ssh"
 )
@@ -86,7 +87,10 @@ func reconcileDeploymentOnce(ctx context.Context, deploymentID string) (bool, er
 	if err != nil {
 		return false, err
 	}
-	candidateHealthy := isHealthyOrRunning(ctx, client, candidateName)
+	candidateHealthy, err := isHealthyOrRunning(ctx, client, candidateName)
+	if err != nil {
+		return false, fmt.Errorf("inspect candidate container %s: %w", candidateName, err)
+	}
 	oldDeployment, oldCfg, hasOld, oldErr := previousDeployment(ctx, client, dep.ServiceID, cfg.ContainerName)
 	if oldErr != nil {
 		return false, oldErr
@@ -95,12 +99,15 @@ func reconcileDeploymentOnce(ctx context.Context, deploymentID string) (bool, er
 	oldHealthy := false
 	if hasOld {
 		oldName = ContainerNameForDeployment(oldCfg, oldDeployment.ID)
-		oldHealthy = isHealthyOrRunning(ctx, client, oldName)
+		oldHealthy, err = isHealthyOrRunning(ctx, client, oldName)
+		if err != nil {
+			return false, fmt.Errorf("inspect previous container %s: %w", oldName, err)
+		}
 	}
 
 	if routedContainer == candidateName && candidateHealthy {
 		if hasOld && oldHealthy {
-			if err := monitorHealthy(ctx, client, client.DockerBin(), candidateName, drainPeriod); err != nil {
+			if err := monitorHealthy(ctx, client, candidateName, drainPeriod); err != nil {
 				if restoreErr := restorePreviousRoute(ctx, client, dep.ServiceID, oldCfg, oldName, true); restoreErr != nil {
 					return false, errors.Join(err, restoreErr)
 				}
@@ -127,13 +134,15 @@ func reconcileDeploymentOnce(ctx context.Context, deploymentID string) (bool, er
 	return true, nil
 }
 
-func isHealthyOrRunning(ctx context.Context, client *ssh.Client, containerName string) bool {
-	status, err := containerHealth(ctx, client, client.DockerBin(), containerName)
-	if err == nil {
-		return status == "healthy"
+func isHealthyOrRunning(ctx context.Context, client dockerapi.CommandRunner, containerName string) (bool, error) {
+	status, err := dockerapi.ContainerHealth(ctx, client, containerName)
+	if err != nil {
+		return false, err
 	}
-	running, runErr := client.Run(ctx, fmt.Sprintf("%s inspect --format '{{.State.Running}}' %s", client.DockerBin(), containerName))
-	return runErr == nil && running == "true"
+	if status != "" {
+		return status == "healthy", nil
+	}
+	return dockerapi.ContainerRunning(ctx, client, containerName)
 }
 
 func removeContainer(ctx context.Context, client *ssh.Client, containerName string) error {

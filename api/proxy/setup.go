@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	dockerapi "github.com/WahyuS002/uploy/docker"
 	"github.com/WahyuS002/uploy/ssh"
 )
 
@@ -146,7 +147,7 @@ networks:
 
 	// 6. Verify proxy container is running
 	progress("verifying Traefik container...")
-	running, err := isContainerRunning(client, proxyContainerName)
+	running, err := dockerapi.ContainerRunning(context.Background(), client, proxyContainerName)
 	if err != nil {
 		return fmt.Errorf("check proxy: %w", err)
 	}
@@ -214,34 +215,6 @@ func traefikAPIRequest(ctx context.Context, client *ssh.Client, path string) (in
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	return resp.StatusCode, body, err
-}
-
-func isContainerRunning(client *ssh.Client, name string) (bool, error) {
-	stdoutCh, stderrCh, done := client.StreamCommand(
-		fmt.Sprintf("%s inspect -f '{{.State.Running}}' %s", client.DockerBin(), name),
-	)
-
-	var output string
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for line := range stdoutCh {
-			output = line
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for range stderrCh {
-		}
-	}()
-	wg.Wait()
-
-	if err := <-done; err != nil {
-		return false, fmt.Errorf("inspect container %s: %w", name, err)
-	}
-
-	return output == "true", nil
 }
 
 // runElevated tries cmd directly; for non-root users, retries with sudo -n on failure.
