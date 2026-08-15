@@ -75,7 +75,7 @@ func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config
 	if _, err := client.Run(ctx, docker+" pull "+ssh.ShellQuote(cfg.Image)); err != nil {
 		return fmt.Errorf("pull monitoring image: %w", err)
 	}
-	if _, err := client.Run(ctx, elevated(client, "mkdir -p "+dataDir)); err != nil {
+	if _, err := client.RunElevated(ctx, "mkdir -p "+dataDir); err != nil {
 		return fmt.Errorf("prepare monitoring data: %w", err)
 	}
 
@@ -151,7 +151,7 @@ func Disable(ctx context.Context, client *ssh.Client, serverID string) error {
 }
 
 func DeleteLocalData(ctx context.Context, client *ssh.Client) error {
-	_, err := client.Run(ctx, elevated(client, "rm -rf "+dataDir))
+	_, err := client.RunElevated(ctx, "rm -rf "+dataDir)
 	return err
 }
 
@@ -297,11 +297,4 @@ func rollback(ctx context.Context, client *ssh.Client, hadOld bool, rollbackName
 func containerExists(ctx context.Context, client *ssh.Client, name string) bool {
 	_, err := client.Run(ctx, client.DockerBin()+" inspect "+name)
 	return err == nil
-}
-
-func elevated(client *ssh.Client, command string) string {
-	if client.IsRoot() {
-		return command
-	}
-	return "sudo -n " + command
 }

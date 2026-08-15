@@ -140,6 +140,15 @@ func (c *Client) Run(ctx context.Context, command string) (string, error) {
 	}
 }
 
+// RunElevated runs command directly for root clients and through non-interactive
+// sudo for other users.
+func (c *Client) RunElevated(ctx context.Context, command string) (string, error) {
+	if !c.IsRoot() {
+		command = "sudo -n " + command
+	}
+	return c.Run(ctx, command)
+}
+
 // TestSession opens an SSH session and runs "echo ok" to verify the server
 // can actually execute commands, not just accept the TCP+auth handshake.
 // A 10-second deadline covers session open + command execution, so a stalled
