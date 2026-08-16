@@ -1,10 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="32 52 448 408">
-	<!-- Same mark as logo.svg, cropped tighter so it fills the tab icon. -->
-	<path
-		d="M256 150 382 362H130Z"
-		fill="#72e3ad"
-		stroke="#72e3ad"
-		stroke-width="180"
-		stroke-linejoin="round"
-	/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<!-- Favicon carries an obsidian tile the logo does not: mint-on-transparent
+	     vanished against the light chrome of a browser tab. -->
+	<rect width="512" height="512" rx="112" fill="#030303" />
+	<!-- Same mark as logo.svg, scaled into the tile. Nudged 12 up because a
+	     triangle's mass sits low, so bounding-box centring reads bottom-heavy. -->
+	<g transform="translate(76.8 66) scale(0.7)">
+		<path
+			d="M256 150 382 362H130Z"
+			fill="#72e3ad"
+			stroke="#72e3ad"
+			stroke-width="180"
+			stroke-linejoin="round"
+		/>
+	</g>
 </svg>
