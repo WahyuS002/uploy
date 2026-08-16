@@ -41,7 +41,7 @@
 			<!-- The mark is transparent inside and out, so it sits on either theme as-is.
 			     h-8 because the artwork carries its own margin — it reads at the same
 			     weight the 28px lockup did. -->
-			<img src="/logo.png" alt="Uploy" class="h-8 w-8" />
+			<img src="/logo.svg" alt="Uploy" class="h-8 w-8" />
 		</a>
 		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 		<span class="ml-2 hidden h-4 w-px bg-border sm:block"></span>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="32 52 448 408">
+	<!-- Same mark as logo.svg, cropped tighter so it fills the tab icon. -->
+	<path
+		d="M256 150 382 362H130Z"
+		fill="#72e3ad"
+		stroke="#72e3ad"
+		stroke-width="180"
+		stroke-linejoin="round"
+	/>
+</svg>

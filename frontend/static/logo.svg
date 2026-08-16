@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Uploy">
+	<!-- Rounded triangle. The path is the triangle inset by the corner radius; the
+	     round-joined stroke (width = 2r) grows it back out, which gives all three
+	     corners an identical, true-circular arc. Visible bounds: 40,60 -> 472,452. -->
+	<path
+		d="M256 150 382 362H130Z"
+		fill="#72e3ad"
+		stroke="#72e3ad"
+		stroke-width="180"
+		stroke-linejoin="round"
+	/>
+</svg>
