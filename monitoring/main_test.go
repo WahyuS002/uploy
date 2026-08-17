@@ -21,6 +21,28 @@ func TestParseBytes(t *testing.T) {
 	}
 }
 
+func TestIsSQLiteFull(t *testing.T) {
+	database, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	if _, err := database.Exec("PRAGMA max_page_count = 2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec("CREATE TABLE full_test (payload BLOB)"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = database.Exec("INSERT INTO full_test VALUES (zeroblob(1048576))")
+	if err == nil {
+		t.Fatal("expected SQLITE_FULL")
+	}
+	if !isSQLiteFull(err) {
+		t.Fatalf("isSQLiteFull(%T: %v) = false", err, err)
+	}
+}
+
 func TestRequireTokenAcceptsBothScopes(t *testing.T) {
 	handler := requireToken(config{controlToken: "control", readerToken: "reader"}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

@@ -19,7 +19,8 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 const (
@@ -240,13 +241,18 @@ func (c *collector) persist(samples []sample) error {
 	}
 	if err := write(); err == nil {
 		return nil
-	} else if !strings.Contains(strings.ToLower(err.Error()), "full") {
+	} else if !isSQLiteFull(err) {
 		return err
 	}
 	if err := c.pruneOldest(); err != nil {
 		return err
 	}
 	return write()
+}
+
+func isSQLiteFull(err error) bool {
+	var sqliteErr *sqlite.Error
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqlite3.SQLITE_FULL
 }
 
 func (c *collector) deleteExpired() error {
