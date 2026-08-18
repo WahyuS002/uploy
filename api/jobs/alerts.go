@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"strconv"
 	"strings"
 	"time"
@@ -35,19 +35,19 @@ func StartAlertEvaluator(ctx context.Context) {
 func evaluateAlerts(ctx context.Context, tracker *alerts.Tracker) {
 	rules, err := db.ListEnabledAlertRules(ctx)
 	if err != nil {
-		log.Printf("alert evaluator: list rules: %v", err)
+		telemetry.Printf("alert evaluator: list rules: %v", err)
 		return
 	}
 	for _, rule := range rules {
 		observation, err := observeRuleTarget(ctx, rule)
 		if err != nil {
-			log.Printf("alert evaluator: rule=%s: %v", rule.ID, err)
+			telemetry.Printf("alert evaluator: rule=%s: %v", rule.ID, err)
 			continue
 		}
 		active, activeErr := db.FindActiveAlertEvent(ctx, rule.ID, observation.TargetID)
 		activeFound := activeErr == nil
 		if activeErr != nil && !errors.Is(activeErr, pgx.ErrNoRows) {
-			log.Printf("alert evaluator: active event rule=%s target=%s: %v", rule.ID, observation.TargetID, activeErr)
+			telemetry.Printf("alert evaluator: active event rule=%s target=%s: %v", rule.ID, observation.TargetID, activeErr)
 			continue
 		}
 		transition := tracker.Evaluate(alerts.Rule{
@@ -58,7 +58,7 @@ func evaluateAlerts(ctx context.Context, tracker *alerts.Tracker) {
 		case alerts.TransitionStarted:
 			event, err := db.CreateAlertEvent(ctx, rule.WorkspaceID, rule.ID, observation.TargetID, observation.TargetName, transition.Since, transition.Value)
 			if err != nil {
-				log.Printf("alert evaluator: create event rule=%s target=%s: %v", rule.ID, observation.TargetID, err)
+				telemetry.Printf("alert evaluator: create event rule=%s target=%s: %v", rule.ID, observation.TargetID, err)
 				continue
 			}
 			sendRuleNotifications(ctx, rule, alerts.Message{
@@ -70,7 +70,7 @@ func evaluateAlerts(ctx context.Context, tracker *alerts.Tracker) {
 			resolvedAt := time.Now().UTC()
 			event, err := db.ResolveAlertEvent(ctx, active.ID, resolvedAt, transition.Value)
 			if err != nil {
-				log.Printf("alert evaluator: resolve event=%s: %v", active.ID, err)
+				telemetry.Printf("alert evaluator: resolve event=%s: %v", active.ID, err)
 				continue
 			}
 			duration := resolvedAt.Sub(event.StartedAt)
@@ -87,11 +87,11 @@ func sendRuleNotifications(ctx context.Context, rule db.AlertRule, message alert
 	for _, channelID := range rule.ChannelIDs {
 		channel, err := db.GetNotificationChannel(ctx, channelID)
 		if err != nil {
-			log.Printf("alert notification: channel=%s: %v", channelID, err)
+			telemetry.Printf("alert notification: channel=%s: %v", channelID, err)
 			continue
 		}
 		if err := alerts.Send(ctx, alerts.Channel{ID: channel.ID, Name: channel.Name, Type: channel.Type, Enabled: channel.Enabled, Config: channel.Config}, message); err != nil {
-			log.Printf("alert notification: channel=%s rule=%s: %v", channelID, rule.ID, err)
+			telemetry.Printf("alert notification: channel=%s rule=%s: %v", channelID, rule.ID, err)
 		}
 	}
 }

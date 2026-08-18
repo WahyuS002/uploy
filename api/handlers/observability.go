@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -65,13 +65,13 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 	ctx := r.Context()
 	services, err := db.ListServicesByProject(ctx, id)
 	if err != nil {
-		log.Printf("ListServicesByProject project=%s error: %v", id, err)
+		telemetry.Printf("ListServicesByProject project=%s error: %v", id, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list project services"})
 		return
 	}
 	environments, err := db.ListEnvironmentsByProject(ctx, id)
 	if err != nil {
-		log.Printf("ListEnvironmentsByProject project=%s error: %v", id, err)
+		telemetry.Printf("ListEnvironmentsByProject project=%s error: %v", id, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list project environments"})
 		return
 	}
@@ -105,7 +105,7 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 		deployment, config, configErr := db.GetActiveDeploymentConfig(ctx, service.ID)
 		if configErr != nil {
 			setObservabilityError(&response.Services[serviceIndex], "Active deployment is unavailable")
-			log.Printf("GetActiveDeploymentConfig service=%s error: %v", service.ID, configErr)
+			telemetry.Printf("GetActiveDeploymentConfig service=%s error: %v", service.ID, configErr)
 			continue
 		}
 		response.Services[serviceIndex].DeploymentId = stringPointer(deployment.ID)
@@ -150,7 +150,7 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 func (s *Server) collectServerObservability(ctx context.Context, serverID string, targets []serverObservationTarget, services []gen.ServiceObservability) {
 	server, err := db.GetServerWithKey(ctx, serverID)
 	if err != nil {
-		log.Printf("GetServerWithKey server=%s error: %v", serverID, err)
+		telemetry.Printf("GetServerWithKey server=%s error: %v", serverID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Deployment server is unavailable")
 		return
 	}
@@ -165,14 +165,14 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 		PrivateKey: server.PrivateKey,
 	})
 	if err != nil {
-		log.Printf("observability SSH connect server=%s error: %v", serverID, err)
+		telemetry.Printf("observability SSH connect server=%s error: %v", serverID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach deployment server")
 		return
 	}
 	defer client.Close()
 
 	if err := client.DetectDocker(); err != nil {
-		log.Printf("observability Docker access server=%s error: %v", serverID, err)
+		telemetry.Printf("observability Docker access server=%s error: %v", serverID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach Docker on deployment server")
 		return
 	}
@@ -183,13 +183,13 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 	}
 	inspectOutput, err := client.Run(ctx, dockerInspectCommand(client.DockerBin(), containerNames))
 	if err != nil {
-		log.Printf("observability inspect server=%s error: %v", serverID, err)
+		telemetry.Printf("observability inspect server=%s error: %v", serverID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Could not inspect deployment containers")
 		return
 	}
 	inspections, err := parseDockerInspect(inspectOutput)
 	if err != nil {
-		log.Printf("observability inspect parse server=%s error: %v", serverID, err)
+		telemetry.Printf("observability inspect parse server=%s error: %v", serverID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Could not read deployment container state")
 		return
 	}
@@ -215,13 +215,13 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 
 	statsOutput, err := client.Run(ctx, dockerStatsCommand(client.DockerBin(), runningNames))
 	if err != nil {
-		log.Printf("observability stats server=%s error: %v", serverID, err)
+		telemetry.Printf("observability stats server=%s error: %v", serverID, err)
 		setRunningStatsError(targets, services, "Could not read deployment container metrics")
 		return
 	}
 	stats, err := parseDockerStats(statsOutput)
 	if err != nil {
-		log.Printf("observability stats parse server=%s error: %v", serverID, err)
+		telemetry.Printf("observability stats parse server=%s error: %v", serverID, err)
 		setRunningStatsError(targets, services, "Could not read deployment container metrics")
 		return
 	}
@@ -247,7 +247,7 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 func (s *Server) collectAgentObservability(ctx context.Context, server db.ServerWithKey, targets []serverObservationTarget, services []gen.ServiceObservability) {
 	latest, err := monitoring.GetLatestAll(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken)
 	if err != nil {
-		log.Printf("observability agent server=%s error: %v", server.ID, err)
+		telemetry.Printf("observability agent server=%s error: %v", server.ID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach monitoring agent")
 		return
 	}
@@ -303,7 +303,7 @@ func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.R
 	}
 	services, err := db.ListServicesByProject(r.Context(), id)
 	if err != nil {
-		log.Printf("ListServicesByProject project=%s error: %v", id, err)
+		telemetry.Printf("ListServicesByProject project=%s error: %v", id, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list project services"})
 		return
 	}
@@ -317,7 +317,7 @@ func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.R
 		response.Services[serviceIndex] = gen.ServiceObservabilityHistory{ServiceId: service.ID, Name: service.Name, Deployments: []gen.DeploymentObservabilityHistory{}}
 		deployments, err := db.ListDeploymentsByService(r.Context(), service.ID, 100)
 		if err != nil {
-			log.Printf("ListDeploymentsByService service=%s error: %v", service.ID, err)
+			telemetry.Printf("ListDeploymentsByService service=%s error: %v", service.ID, err)
 			continue
 		}
 		for _, deployment := range deployments {
@@ -422,7 +422,7 @@ func (s *Server) collectServerHistory(ctx context.Context, serverID string, obse
 	}
 	histories, err := monitoring.GetHistories(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken, ids, from, to, pointsPerDeployment)
 	if err != nil {
-		log.Printf("observability history agent server=%s error: %v", server.ID, err)
+		telemetry.Printf("observability history agent server=%s error: %v", server.ID, err)
 		setHistoryUnavailable(observations, services, "Could not reach monitoring agent")
 		return
 	}

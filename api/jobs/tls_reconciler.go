@@ -2,7 +2,7 @@ package jobs
 
 import (
 	"context"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"sync/atomic"
 	"time"
 
@@ -60,7 +60,7 @@ func reconcilePendingDomains(parent context.Context) {
 
 	domains, err := db.ListDomainsToReconcile(ctx)
 	if err != nil {
-		log.Printf("Domain reconciler: list domains: %v", err)
+		telemetry.Printf("Domain reconciler: list domains: %v", err)
 		return
 	}
 
@@ -77,7 +77,7 @@ func reconcilePendingDomains(parent context.Context) {
 			// Only the ones with something left to prove are worth an SSH session.
 			if d.Status == "ready" {
 				if err := db.TouchDomainChecked(ctx, d.ID); err != nil {
-					log.Printf("Domain reconciler: touch domain %s: %v", d.ID, err)
+					telemetry.Printf("Domain reconciler: touch domain %s: %v", d.ID, err)
 				}
 				continue
 			}
@@ -89,9 +89,9 @@ func reconcilePendingDomains(parent context.Context) {
 		// still proves nothing, so the domain goes back to waiting rather than
 		// going on claiming HTTPS for a name that answers nowhere.
 		if d.Status == "ready" {
-			log.Printf("Domain reconciler: domain %s (%s) no longer resolves to %s", d.ID, d.Domain, d.Host)
+			telemetry.Printf("Domain reconciler: domain %s (%s) no longer resolves to %s", d.ID, d.Domain, d.Host)
 			if err := db.SetDomainPending(ctx, d.ID); err != nil {
-				log.Printf("Domain reconciler: demote domain %s: %v", d.ID, err)
+				telemetry.Printf("Domain reconciler: demote domain %s: %v", d.ID, err)
 			}
 			continue
 		}
@@ -100,7 +100,7 @@ func reconcilePendingDomains(parent context.Context) {
 		// domain someone added a minute ago. Nothing to say about it beyond that it
 		// was looked at.
 		if err := db.TouchDomainChecked(ctx, d.ID); err != nil {
-			log.Printf("Domain reconciler: touch domain %s: %v", d.ID, err)
+			telemetry.Printf("Domain reconciler: touch domain %s: %v", d.ID, err)
 		}
 	}
 	domains = needsCertificate
@@ -123,7 +123,7 @@ func reconcilePendingDomains(parent context.Context) {
 		if _, ok := serverConns[d.ServerID]; !ok {
 			pk, err := crypto.Decrypt(d.EncryptedKey)
 			if err != nil {
-				log.Printf("Domain reconciler: decrypt key for server %s: %v", d.ServerID, err)
+				telemetry.Printf("Domain reconciler: decrypt key for server %s: %v", d.ServerID, err)
 				continue
 			}
 			serverConns[d.ServerID] = serverKey{
@@ -152,7 +152,7 @@ func reconcilePendingDomains(parent context.Context) {
 			PrivateKey: sk.PrivateKey,
 		})
 		if err != nil {
-			log.Printf("Domain reconciler: SSH to server %s failed: %v", serverID, err)
+			telemetry.Printf("Domain reconciler: SSH to server %s failed: %v", serverID, err)
 			continue
 		}
 
@@ -160,9 +160,9 @@ func reconcilePendingDomains(parent context.Context) {
 			certPresent, err := promoteDomainIfCertificateReady(ctx, client, sk.Host, d.ID, d.Domain)
 			if certPresent {
 				if err != nil {
-					log.Printf("Domain reconciler: promote domain %s (%s) failed: %v", d.ID, d.Domain, err)
+					telemetry.Printf("Domain reconciler: promote domain %s (%s) failed: %v", d.ID, d.Domain, err)
 				} else {
-					log.Printf("Domain reconciler: domain %s (%s) is ready", d.ID, d.Domain)
+					telemetry.Printf("Domain reconciler: domain %s (%s) is ready", d.ID, d.Domain)
 				}
 			}
 		}

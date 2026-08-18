@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+	'/healthz': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Check whether the API process is alive */
+		get: operations['healthz'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/readyz': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Check whether the API is ready to serve traffic */
+		get: operations['readyz'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/metrics': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Export internal API metrics */
+		get: operations['metrics'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/auth/register': {
 		parameters: {
 			query?: never;
@@ -730,6 +781,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		HealthResponse: {
+			/** @enum {string} */
+			status: 'ok';
+		};
+		ReadinessResponse: {
+			/** @enum {string} */
+			status: 'ready' | 'not_ready';
+			/** @enum {string} */
+			database: 'ok' | 'unavailable';
+		};
 		NotificationChannelConfig: {
 			[key: string]: unknown;
 		};
@@ -1249,6 +1310,75 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+	healthz: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description API process is alive */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['HealthResponse'];
+				};
+			};
+		};
+	};
+	readyz: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description API and database are ready */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReadinessResponse'];
+				};
+			};
+			/** @description API dependencies are unavailable */
+			503: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ReadinessResponse'];
+				};
+			};
+		};
+	};
+	metrics: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Prometheus/OpenMetrics text exposition */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'text/plain': string;
+				};
+			};
+		};
+	};
 	register: {
 		parameters: {
 			query?: never;

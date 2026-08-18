@@ -5,6 +5,48 @@ info:
   description: Uploy deployment platform API
 
 paths:
+  /healthz:
+    get:
+      operationId: healthz
+      summary: Check whether the API process is alive
+      responses:
+        "200":
+          description: API process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /readyz:
+    get:
+      operationId: readyz
+      summary: Check whether the API is ready to serve traffic
+      responses:
+        "200":
+          description: API and database are ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          description: API dependencies are unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+
+  /metrics:
+    get:
+      operationId: metrics
+      summary: Export internal API metrics
+      responses:
+        "200":
+          description: Prometheus/OpenMetrics text exposition
+          content:
+            text/plain:
+              schema:
+                type: string
+
   /api/auth/register:
     post:
       operationId: register
@@ -2418,6 +2460,28 @@ components:
       name: session
 
   schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    ReadinessResponse:
+      type: object
+      required:
+        - status
+        - database
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+        database:
+          type: string
+          enum: [ok, unavailable]
+
     NotificationChannelConfig:
       type: object
       additionalProperties: true

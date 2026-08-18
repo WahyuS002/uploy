@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 	"regexp"
 	"strings"
@@ -174,7 +174,7 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := serviceResponse(r.Context(), svc)
 	if err != nil {
-		log.Printf("pending changes for new service %s: %v", svc.ID, err)
+		telemetry.Printf("pending changes for new service %s: %v", svc.ID, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
 		return
 	}
@@ -192,7 +192,7 @@ func (s *Server) ListServices(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := serviceResponses(r.Context(), services)
 	if err != nil {
-		log.Printf("pending changes for service list: %v", err)
+		telemetry.Printf("pending changes for service list: %v", err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
 		return
 	}
@@ -214,7 +214,7 @@ func (s *Server) ListProjectServices(w http.ResponseWriter, r *http.Request, id 
 
 	resp, err := serviceResponses(r.Context(), services)
 	if err != nil {
-		log.Printf("pending changes for service list: %v", err)
+		telemetry.Printf("pending changes for service list: %v", err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
 		return
 	}
@@ -242,7 +242,7 @@ func (s *Server) GetService(w http.ResponseWriter, r *http.Request, id string) {
 
 	resp, err := serviceResponse(r.Context(), svc)
 	if err != nil {
-		log.Printf("pending changes for service %s: %v", svc.ID, err)
+		telemetry.Printf("pending changes for service %s: %v", svc.ID, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
 		return
 	}
@@ -327,7 +327,7 @@ func (s *Server) UpdateService(w http.ResponseWriter, r *http.Request, id string
 
 	resp, err := serviceResponse(r.Context(), svc)
 	if err != nil {
-		log.Printf("pending changes for updated service %s: %v", svc.ID, err)
+		telemetry.Printf("pending changes for updated service %s: %v", svc.ID, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
 		return
 	}
@@ -381,7 +381,7 @@ func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, id string
 			User:       svc.SSHUser,
 			PrivateKey: svc.PrivateKey,
 		}, svc.ID, jobs.ContainerNameForDeployment(activeConfig, activeDeployment.ID)); err != nil {
-			log.Printf("RemoveContainer service=%s error: %v", id, err)
+			telemetry.Printf("RemoveContainer service=%s error: %v", id, err)
 			respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{
 				Error: "could not remove the container from the server, so the service was kept: " + err.Error(),
 			})

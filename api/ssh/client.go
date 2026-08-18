@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/WahyuS002/uploy/telemetry"
 	gossh "golang.org/x/crypto/ssh"
 )
 
@@ -79,8 +80,10 @@ type ServerConfig struct {
 }
 
 func NewClient(cfg ServerConfig) (*Client, error) {
+	started := time.Now()
 	signer, err := gossh.ParsePrivateKey([]byte(cfg.PrivateKey))
 	if err != nil {
+		telemetry.Default.RecordSSHConnection(false, time.Since(started))
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPrivateKey, err)
 	}
 
@@ -96,6 +99,7 @@ func NewClient(cfg ServerConfig) (*Client, error) {
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	client, err := gossh.Dial("tcp", addr, config)
+	telemetry.Default.RecordSSHConnection(err == nil, time.Since(started))
 	if err != nil {
 		return nil, fmt.Errorf("Cannot connect to %s: %w", addr, err)
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"sort"
 
 	"github.com/WahyuS002/uploy/crypto"
@@ -165,7 +165,7 @@ func DeployedConfigs(ctx context.Context, serviceIDs []string) (map[string]Servi
 			// A snapshot that cannot be read is the same as not having one: the
 			// service reads as pending, which is the safe direction. Skipping it
 			// beats failing the whole request over one unreadable row.
-			log.Printf("deployed config for service %s is unreadable: %v", r.ServiceID, err)
+			telemetry.Printf("deployed config for service %s is unreadable: %v", r.ServiceID, err)
 			continue
 		}
 		deployed[r.ServiceID] = cfg

@@ -3,8 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,12 +28,12 @@ func main() {
 	_ = godotenv.Load()
 
 	if err := config.Load(); err != nil {
-		log.Fatal("Config error: ", err)
+		telemetry.Fatal("Config error: ", err)
 	}
 
 	db.Init(config.C.DatabaseURL)
 	defer func() {
-		fmt.Println("DEFER: closing db...")
+		telemetry.Println("closing database")
 		db.Close()
 	}()
 
@@ -65,20 +64,20 @@ func main() {
 	go jobs.StartMonitoringCleanup(ctx)
 	go jobs.StartAlertEvaluator(ctx)
 
-	srv := &http.Server{Addr: ":8080", Handler: mux}
+	srv := &http.Server{Addr: ":8080", Handler: telemetry.Default.Middleware(mux)}
 
 	srvErr := make(chan error, 1)
 	go func() {
-		fmt.Println("Server running on localhost:8080")
+		telemetry.Println("server running address=:8080")
 		srvErr <- srv.ListenAndServe()
 	}()
 
 	select {
 	case <-ctx.Done():
-		fmt.Println("\nSignal received, shutting down...")
+		telemetry.Println("signal received, shutting down")
 	case err := <-srvErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Println("ListenAndServe error:", err)
+			telemetry.Println("ListenAndServe error:", err)
 			return // to trigger defer
 		}
 		return
@@ -88,7 +87,7 @@ func main() {
 	defer cancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Println("Shutdown error:", err)
+		telemetry.Println("Shutdown error:", err)
 	}
 }
 

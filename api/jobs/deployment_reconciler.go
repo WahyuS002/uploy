@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"time"
 
 	"github.com/WahyuS002/uploy/db"
@@ -16,7 +16,7 @@ import (
 func StartDeploymentReconciler(ctx context.Context) {
 	ids, err := db.ListInProgressDeploymentIDs(ctx)
 	if err != nil {
-		log.Printf("list interrupted deployments: %v", err)
+		telemetry.Printf("list interrupted deployments: %v", err)
 		return
 	}
 	for _, deploymentID := range ids {

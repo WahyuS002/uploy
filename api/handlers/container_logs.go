@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 
 	"github.com/WahyuS002/uploy/gen"
@@ -72,14 +72,14 @@ func streamContainerLogs(w http.ResponseWriter, r *http.Request, cfg ssh.ServerC
 
 	client, err := ssh.NewClient(cfg)
 	if err != nil {
-		log.Printf("%s: ssh connect: %v", logTag, err)
+		telemetry.Printf("%s: ssh connect: %v", logTag, err)
 		respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{Error: "could not connect to the server: " + err.Error()})
 		return
 	}
 	defer client.Close()
 
 	if err := client.DetectDocker(); err != nil {
-		log.Printf("%s: detect docker: %v", logTag, err)
+		telemetry.Printf("%s: detect docker: %v", logTag, err)
 		respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{Error: err.Error()})
 		return
 	}

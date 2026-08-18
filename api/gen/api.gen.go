@@ -187,6 +187,21 @@ func (e ErrorResponseCode) Valid() bool {
 	}
 }
 
+// Defines values for HealthResponseStatus.
+const (
+	HealthResponseStatusOk HealthResponseStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the HealthResponseStatus enum.
+func (e HealthResponseStatus) Valid() bool {
+	switch e {
+	case HealthResponseStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogEntryType.
 const (
 	Stderr LogEntryType = "stderr"
@@ -226,6 +241,42 @@ func (e NotificationChannelType) Valid() bool {
 	case Telegram:
 		return true
 	case Webhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReadinessResponseDatabase.
+const (
+	ReadinessResponseDatabaseOk          ReadinessResponseDatabase = "ok"
+	ReadinessResponseDatabaseUnavailable ReadinessResponseDatabase = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ReadinessResponseDatabase enum.
+func (e ReadinessResponseDatabase) Valid() bool {
+	switch e {
+	case ReadinessResponseDatabaseOk:
+		return true
+	case ReadinessResponseDatabaseUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReadinessResponseStatus.
+const (
+	ReadinessResponseStatusNotReady ReadinessResponseStatus = "not_ready"
+	ReadinessResponseStatusReady    ReadinessResponseStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ReadinessResponseStatus enum.
+func (e ReadinessResponseStatus) Valid() bool {
+	switch e {
+	case ReadinessResponseStatusNotReady:
+		return true
+	case ReadinessResponseStatusReady:
 		return true
 	default:
 		return false
@@ -282,19 +333,19 @@ func (e ServerResponseProxyStatus) Valid() bool {
 
 // Defines values for ServiceDomainResponseStatus.
 const (
-	Error   ServiceDomainResponseStatus = "error"
-	Pending ServiceDomainResponseStatus = "pending"
-	Ready   ServiceDomainResponseStatus = "ready"
+	ServiceDomainResponseStatusError   ServiceDomainResponseStatus = "error"
+	ServiceDomainResponseStatusPending ServiceDomainResponseStatus = "pending"
+	ServiceDomainResponseStatusReady   ServiceDomainResponseStatus = "ready"
 )
 
 // Valid indicates whether the value is a known member of the ServiceDomainResponseStatus enum.
 func (e ServiceDomainResponseStatus) Valid() bool {
 	switch e {
-	case Error:
+	case ServiceDomainResponseStatusError:
 		return true
-	case Pending:
+	case ServiceDomainResponseStatusPending:
 		return true
-	case Ready:
+	case ServiceDomainResponseStatusReady:
 		return true
 	default:
 		return false
@@ -734,6 +785,14 @@ type GenerateSSHKeyRequest struct {
 	Name string `json:"name"`
 }
 
+// HealthResponse defines model for HealthResponse.
+type HealthResponse struct {
+	Status HealthResponseStatus `json:"status"`
+}
+
+// HealthResponseStatus defines model for HealthResponse.Status.
+type HealthResponseStatus string
+
 // LogEntry defines model for LogEntry.
 type LogEntry struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -821,6 +880,18 @@ type ProjectResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	WorkspaceId string    `json:"workspace_id"`
 }
+
+// ReadinessResponse defines model for ReadinessResponse.
+type ReadinessResponse struct {
+	Database ReadinessResponseDatabase `json:"database"`
+	Status   ReadinessResponseStatus   `json:"status"`
+}
+
+// ReadinessResponseDatabase defines model for ReadinessResponse.Database.
+type ReadinessResponseDatabase string
+
+// ReadinessResponseStatus defines model for ReadinessResponse.Status.
+type ReadinessResponseStatus string
 
 // SSHKeyResponse defines model for SSHKeyResponse.
 type SSHKeyResponse struct {
@@ -1334,6 +1405,15 @@ type ServerInterface interface {
 	// Generate a new Ed25519 SSH keypair
 	// (POST /api/ssh-keys/generate)
 	GenerateSSHKey(w http.ResponseWriter, r *http.Request)
+	// Check whether the API process is alive
+	// (GET /healthz)
+	Healthz(w http.ResponseWriter, r *http.Request)
+	// Export internal API metrics
+	// (GET /metrics)
+	Metrics(w http.ResponseWriter, r *http.Request)
+	// Check whether the API is ready to serve traffic
+	// (GET /readyz)
+	Readyz(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -3046,6 +3126,48 @@ func (siw *ServerInterfaceWrapper) GenerateSSHKey(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// Healthz operation middleware
+func (siw *ServerInterfaceWrapper) Healthz(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Healthz(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Metrics operation middleware
+func (siw *ServerInterfaceWrapper) Metrics(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Metrics(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Readyz operation middleware
+func (siw *ServerInterfaceWrapper) Readyz(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Readyz(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -3224,6 +3346,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/ssh-keys", wrapper.ListSSHKeys)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys", wrapper.CreateSSHKey)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys/generate", wrapper.GenerateSSHKey)
+	m.HandleFunc("GET "+options.BaseURL+"/healthz", wrapper.Healthz)
+	m.HandleFunc("GET "+options.BaseURL+"/metrics", wrapper.Metrics)
+	m.HandleFunc("GET "+options.BaseURL+"/readyz", wrapper.Readyz)
 
 	return m
 }

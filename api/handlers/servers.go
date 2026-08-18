@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net"
 	"net/http"
 	"strings"
@@ -158,7 +158,7 @@ func (s *Server) CreateServer(w http.ResponseWriter, r *http.Request) {
 
 	srv, err := db.CreateServer(ctx, req.Name, req.Host, port, req.SshUser, req.SshKeyId, sc.WorkspaceID)
 	if err != nil {
-		log.Printf("CreateServer error: %v", err)
+		telemetry.Printf("CreateServer error: %v", err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to create server"})
 		return
 	}
@@ -195,7 +195,7 @@ func (s *Server) UpgradeServerProxy(w http.ResponseWriter, r *http.Request, id s
 		if errors.Is(err, pgx.ErrNoRows) {
 			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
 		} else {
-			log.Printf("GetServerWithKey id=%s error: %v", id, err)
+			telemetry.Printf("GetServerWithKey id=%s error: %v", id, err)
 			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up server"})
 		}
 		return
@@ -219,7 +219,7 @@ func (s *Server) UpgradeServerProxy(w http.ResponseWriter, r *http.Request, id s
 		return
 	}
 	if err := db.SetServerProxyReady(r.Context(), id, "ready"); err != nil {
-		log.Printf("SetServerProxyReady id=%s error: %v", id, err)
+		telemetry.Printf("SetServerProxyReady id=%s error: %v", id, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "proxy upgraded but status update failed"})
 		return
 	}

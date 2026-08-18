@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"os"
 
 	"github.com/WahyuS002/uploy/db"
@@ -13,7 +13,7 @@ func main() {
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
+		telemetry.Fatal("DATABASE_URL is required")
 	}
 
 	direction := "up"
@@ -24,15 +24,15 @@ func main() {
 	switch direction {
 	case "up":
 		if err := db.RunMigrations(databaseURL); err != nil {
-			log.Fatal("Migration failed: ", err)
+			telemetry.Fatal("Migration failed: ", err)
 		}
-		log.Println("Migrations applied successfully")
+		telemetry.Println("Migrations applied successfully")
 	case "down":
 		if err := db.RollbackMigration(databaseURL); err != nil {
-			log.Fatal("Rollback failed: ", err)
+			telemetry.Fatal("Rollback failed: ", err)
 		}
-		log.Println("Rolled back one migration")
+		telemetry.Println("Rolled back one migration")
 	default:
-		log.Fatalf("Unknown command: %s (use 'up' or 'down')", direction)
+		telemetry.Fatalf("Unknown command: %s (use 'up' or 'down')", direction)
 	}
 }

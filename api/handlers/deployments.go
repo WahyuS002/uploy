@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 	"strconv"
 
@@ -39,7 +39,7 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, pgx.ErrNoRows) {
 			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			log.Printf("GetServiceWithServer id=%s error: %v", req.ServiceId, err)
+			telemetry.Printf("GetServiceWithServer id=%s error: %v", req.ServiceId, err)
 			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up service"})
 		}
 		return
@@ -61,7 +61,7 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 	// one the moment they drifted.
 	cfg, err := db.ServiceConfigOf(r.Context(), svcWithServer.Service)
 	if err != nil {
-		log.Printf("ServiceConfigOf id=%s error: %v", svcWithServer.ID, err)
+		telemetry.Printf("ServiceConfigOf id=%s error: %v", svcWithServer.ID, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load service configuration"})
 		return
 	}

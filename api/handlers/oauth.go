@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 	"strings"
 	"time"
@@ -15,7 +15,7 @@ func GitHubLoginHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := auth.GitHubOAuthConfig()
 	state, err := auth.GenerateOAuthState()
 	if err != nil {
-		log.Printf("GitHub generate state error: %v", err)
+		telemetry.Printf("GitHub generate state error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -26,7 +26,7 @@ func GoogleLoginHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := auth.GoogleOAuthConfig()
 	state, err := auth.GenerateOAuthState()
 	if err != nil {
-		log.Printf("Google generate state error: %v", err)
+		telemetry.Printf("Google generate state error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -49,7 +49,7 @@ func GitHubCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	info, err := auth.FetchGitHubUser(r.Context(), auth.GitHubOAuthConfig(), code)
 	if err != nil {
-		log.Printf("GitHub OAuth error: %v", err)
+		telemetry.Printf("GitHub OAuth error: %v", err)
 		http.Redirect(w, r, "/login?error=oauth_failed", http.StatusFound)
 		return
 	}
@@ -73,7 +73,7 @@ func GoogleCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	info, err := auth.FetchGoogleUser(r.Context(), auth.GoogleOAuthConfig(), code)
 	if err != nil {
-		log.Printf("Google OAuth error: %v", err)
+		telemetry.Printf("Google OAuth error: %v", err)
 		http.Redirect(w, r, "/login?error=oauth_failed", http.StatusFound)
 		return
 	}
@@ -92,7 +92,7 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request, provider string, i
 		return
 	}
 	if err != pgx.ErrNoRows {
-		log.Printf("OAuth identity lookup error: %v", err)
+		telemetry.Printf("OAuth identity lookup error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -101,7 +101,7 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request, provider string, i
 	email := strings.ToLower(strings.TrimSpace(info.Email))
 	user, err := db.GetUserByEmail(ctx, email)
 	if err != nil && err != pgx.ErrNoRows {
-		log.Printf("User email lookup error: %v", err)
+		telemetry.Printf("User email lookup error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -109,19 +109,19 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request, provider string, i
 		// Link identity to existing user
 		tx, err := db.Pool.Begin(ctx)
 		if err != nil {
-			log.Printf("OAuth link identity begin tx error: %v", err)
+			telemetry.Printf("OAuth link identity begin tx error: %v", err)
 			http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 			return
 		}
 		defer tx.Rollback(ctx)
 
 		if _, err := db.CreateOAuthIdentityTx(ctx, tx, user.ID, provider, info.ID, email); err != nil {
-			log.Printf("OAuth create identity error (link): %v", err)
+			telemetry.Printf("OAuth create identity error (link): %v", err)
 			http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 			return
 		}
 		if err := tx.Commit(ctx); err != nil {
-			log.Printf("OAuth link identity commit error: %v", err)
+			telemetry.Printf("OAuth link identity commit error: %v", err)
 			http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 			return
 		}
@@ -133,7 +133,7 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request, provider string, i
 	// 3. No account — create user, workspace, membership, and identity
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		log.Printf("OAuth new account begin tx error: %v", err)
+		telemetry.Printf("OAuth new account begin tx error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -141,7 +141,7 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request, provider string, i
 
 	newUser, err := db.CreateUserTx(ctx, tx, email, "")
 	if err != nil {
-		log.Printf("OAuth create user error: %v", err)
+		telemetry.Printf("OAuth create user error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -149,25 +149,25 @@ func handleOAuthLogin(w http.ResponseWriter, r *http.Request, provider string, i
 	wsName := strings.Split(email, "@")[0]
 	workspace, err := db.CreateWorkspaceTx(ctx, tx, wsName, newUser.ID)
 	if err != nil {
-		log.Printf("OAuth create workspace error: %v", err)
+		telemetry.Printf("OAuth create workspace error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
 
 	if _, err := db.CreateMembershipTx(ctx, tx, workspace.ID, newUser.ID, "owner"); err != nil {
-		log.Printf("OAuth create membership error: %v", err)
+		telemetry.Printf("OAuth create membership error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
 
 	if _, err := db.CreateOAuthIdentityTx(ctx, tx, newUser.ID, provider, info.ID, email); err != nil {
-		log.Printf("OAuth create identity error (new account): %v", err)
+		telemetry.Printf("OAuth create identity error (new account): %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		log.Printf("OAuth new account commit error: %v", err)
+		telemetry.Printf("OAuth new account commit error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -180,7 +180,7 @@ func loginExistingUser(w http.ResponseWriter, r *http.Request, userID string) {
 
 	user, err := db.GetUserByID(ctx, userID)
 	if err != nil {
-		log.Printf("OAuth get user by ID error (userID=%s): %v", userID, err)
+		telemetry.Printf("OAuth get user by ID error (userID=%s): %v", userID, err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -197,7 +197,7 @@ func loginExistingUser(w http.ResponseWriter, r *http.Request, userID string) {
 			http.Redirect(w, r, "/login?error=no_workspace", http.StatusFound)
 			return
 		}
-		log.Printf("OAuth get first workspace error (userID=%s): %v", userID, err)
+		telemetry.Printf("OAuth get first workspace error (userID=%s): %v", userID, err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
@@ -208,14 +208,14 @@ func loginExistingUser(w http.ResponseWriter, r *http.Request, userID string) {
 func createSessionAndRedirect(w http.ResponseWriter, r *http.Request, userID, workspaceID string) {
 	token, err := auth.GenerateSessionToken()
 	if err != nil {
-		log.Printf("OAuth generate session token error: %v", err)
+		telemetry.Printf("OAuth generate session token error: %v", err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}
 
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	if err := db.CreateSession(r.Context(), token, userID, workspaceID, expiresAt); err != nil {
-		log.Printf("OAuth create session error (userID=%s, workspaceID=%s): %v", userID, workspaceID, err)
+		telemetry.Printf("OAuth create session error (userID=%s, workspaceID=%s): %v", userID, workspaceID, err)
 		http.Redirect(w, r, "/login?error=internal", http.StatusFound)
 		return
 	}

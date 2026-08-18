@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/WahyuS002/uploy/telemetry"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
@@ -117,7 +117,7 @@ func (s *Server) CreateProjectFromImage(w http.ResponseWriter, r *http.Request) 
 
 	svcResp, err := serviceResponse(r.Context(), svc)
 	if err != nil {
-		log.Printf("pending changes for new service %s: %v", svc.ID, err)
+		telemetry.Printf("pending changes for new service %s: %v", svc.ID, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to read service state"})
 		return
 	}

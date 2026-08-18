@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"errors"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 
 	"github.com/WahyuS002/uploy/auth"
@@ -36,7 +36,7 @@ func (s *Server) GetProxyLogs(w http.ResponseWriter, r *http.Request, id string,
 		if errors.Is(err, pgx.ErrNoRows) {
 			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "server not found"})
 		} else {
-			log.Printf("GetServerWithKey id=%s error: %v", id, err)
+			telemetry.Printf("GetServerWithKey id=%s error: %v", id, err)
 			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up server"})
 		}
 		return

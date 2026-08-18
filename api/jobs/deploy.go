@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -50,21 +50,22 @@ type DeployConfig struct {
 
 func appendLog(ctx context.Context, deploymentID, msg, logType, phase string) {
 	if err := db.AppendLog(ctx, deploymentID, msg, logType, phase); err != nil {
-		log.Printf("AppendLog deploymentID=%s error: %v", deploymentID, err)
+		telemetry.Printf("AppendLog deploymentID=%s error: %v", deploymentID, err)
 	}
 }
 
 func failDeploy(deploymentID, msg string) {
-	log.Println(msg)
+	telemetry.Println(msg)
 
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	appendLog(cleanupCtx, deploymentID, msg, "stderr", "")
 	if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, "failed"); err != nil {
-		log.Printf("SetDeploymentStatus deploymentID=%s error: %v", deploymentID, err)
+		telemetry.Printf("SetDeploymentStatus deploymentID=%s error: %v", deploymentID, err)
 		return
 	}
+	recordDeploymentDuration(cleanupCtx, deploymentID, "failed")
 
 	appendLog(cleanupCtx, deploymentID, "deployment failed", "stderr", "failed")
 	broker.PublishDone(deploymentID, "failed")
@@ -75,18 +76,28 @@ func finishDeploy(deploymentID, status string) {
 	defer cancel()
 
 	if err := db.SetDeploymentStatus(cleanupCtx, deploymentID, status); err != nil {
-		log.Printf("SetDeploymentStatus deploymentID=%s error: %v", deploymentID, err)
+		telemetry.Printf("SetDeploymentStatus deploymentID=%s error: %v", deploymentID, err)
 		return
 	}
+	recordDeploymentDuration(cleanupCtx, deploymentID, status)
 
 	appendLog(cleanupCtx, deploymentID, fmt.Sprintf("deployment %s", status), "stdout", "complete")
 	broker.PublishDone(deploymentID, status)
 }
 
+func recordDeploymentDuration(ctx context.Context, deploymentID, status string) {
+	deployment, err := db.GetDeployment(ctx, deploymentID)
+	if err != nil {
+		telemetry.Printf("GetDeployment deploymentID=%s error: %v", deploymentID, err)
+		return
+	}
+	telemetry.Default.RecordDeployment(status, time.Since(deployment.CreatedAt))
+}
+
 func RunDeploy(cfg DeployConfig) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered deploymentID=%s: %v\n%s", cfg.DeploymentID, r, debug.Stack())
+			telemetry.Printf("Recovered deploymentID=%s: %v\n%s", cfg.DeploymentID, r, debug.Stack())
 			failDeploy(cfg.DeploymentID, fmt.Sprintf("panic: %v", r))
 		}
 	}()
@@ -169,7 +180,7 @@ func runRollingDeploy(ctx context.Context, client *ssh.Client, docker string, cf
 	appendLog(ctx, cfg.DeploymentID, "checking rolling proxy capability...", "stdout", "proxy_setup")
 	if err := proxy.VerifyRollingReady(ctx, client); err != nil {
 		if dbErr := db.SetServerProxyError(ctx, cfg.ServerID, "degraded", err.Error()); dbErr != nil {
-			log.Printf("SetServerProxyError serverID=%s error: %v", cfg.ServerID, dbErr)
+			telemetry.Printf("SetServerProxyError serverID=%s error: %v", cfg.ServerID, dbErr)
 		}
 		failDeploy(cfg.DeploymentID, "Rolling proxy is not ready; upgrade it from the Servers page: "+err.Error())
 		return false
@@ -377,11 +388,11 @@ func reconcileDomainCertificates(ctx context.Context, client *ssh.Client, cfg De
 	}
 
 	if err := db.SetServerProxyReady(ctx, cfg.ServerID, "ready"); err != nil {
-		log.Printf("SetServerProxyReady error: %v", err)
+		telemetry.Printf("SetServerProxyReady error: %v", err)
 	}
 	domainList, err := db.ListDomainsByService(ctx, cfg.ServiceID)
 	if err != nil {
-		log.Printf("ListDomainsByService error: %v", err)
+		telemetry.Printf("ListDomainsByService error: %v", err)
 		return
 	}
 	unresolvedDomains := make(map[string]string)

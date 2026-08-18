@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 
 	"github.com/WahyuS002/uploy/auth"
@@ -32,7 +32,7 @@ func (s *Server) GetServicePendingChanges(w http.ResponseWriter, r *http.Request
 
 	changes, hasBaseline, err := db.PendingChanges(r.Context(), svc)
 	if err != nil {
-		log.Printf("PendingChanges service=%s error: %v", id, err)
+		telemetry.Printf("PendingChanges service=%s error: %v", id, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to compare the service against its last deployment"})
 		return
 	}

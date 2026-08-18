@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"errors"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
 
 	"github.com/WahyuS002/uploy/auth"
@@ -32,7 +32,7 @@ func (s *Server) GetServiceLogs(w http.ResponseWriter, r *http.Request, id strin
 		if errors.Is(err, pgx.ErrNoRows) {
 			respond.JSON(w, http.StatusNotFound, gen.ErrorResponse{Error: "service not found"})
 		} else {
-			log.Printf("GetServiceWithServer id=%s error: %v", id, err)
+			telemetry.Printf("GetServiceWithServer id=%s error: %v", id, err)
 			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to look up service"})
 		}
 		return
@@ -51,7 +51,7 @@ func (s *Server) GetServiceLogs(w http.ResponseWriter, r *http.Request, id strin
 	}
 	activeDeployment, activeConfig, err := db.GetActiveDeploymentConfig(r.Context(), svc.ID)
 	if err != nil {
-		log.Printf("GetActiveDeploymentConfig service=%s error: %v", id, err)
+		telemetry.Printf("GetActiveDeploymentConfig service=%s error: %v", id, err)
 		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "service has no active deployment"})
 		return
 	}

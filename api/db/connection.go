@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"log"
+	"github.com/WahyuS002/uploy/telemetry"
 	"time"
 
 	"github.com/WahyuS002/uploy/db/sqlcgen"
@@ -16,7 +16,7 @@ func Init(databaseURL string) {
 	// 1) Parse config  for tuning
 	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
-		log.Fatal("Invalid DATABASE_URL: ", err)
+		telemetry.Fatal("Invalid DATABASE_URL: ", err)
 	}
 
 	// 2) Simple tuning, but useful
@@ -28,12 +28,12 @@ func Init(databaseURL string) {
 	// 3) Create pool
 	Pool, err = pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
-		log.Fatal("Unable to create pool: ", err)
+		telemetry.Fatal("Unable to create pool: ", err)
 	}
 
 	// 4) Fail-fast check
 	if err := Pool.Ping(context.Background()); err != nil {
-		log.Fatal("DB ping failed: ", err)
+		telemetry.Fatal("DB ping failed: ", err)
 	}
 
 	// 5) Init sqlc queries
