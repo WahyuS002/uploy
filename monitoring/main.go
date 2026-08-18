@@ -12,7 +12,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -113,6 +112,8 @@ type historyQuery struct {
 type collector struct {
 	db        *sql.DB
 	retention time.Duration
+	docker    dockerAPI
+	tracker   *dockerMetricTracker
 
 	mu          sync.RWMutex
 	latest      []sample
@@ -132,7 +133,12 @@ func main() {
 	}
 	defer db.Close()
 
-	collector := &collector{db: db, retention: time.Duration(cfg.retention) * 24 * time.Hour}
+	collector := &collector{
+		db:        db,
+		retention: time.Duration(cfg.retention) * 24 * time.Hour,
+		docker:    newDockerClient("/var/run/docker.sock"),
+		tracker:   newDockerMetricTracker(),
+	}
 	collector.collect(context.Background(), true)
 	go collector.run()
 
@@ -288,7 +294,7 @@ func (c *collector) collect(ctx context.Context, forcePersist bool) {
 	if serverErr != nil {
 		log.Printf("collect server metrics: %v", serverErr)
 	}
-	samples, err := readDockerSamples(ctx)
+	samples, err := c.readDockerSamples(ctx)
 	if err != nil {
 		log.Printf("collect metrics: %v", err)
 	}
@@ -612,92 +618,6 @@ WHERE source.sampled_at < ? AND source.sampled_at >= ?%s
 	return err
 }
 
-func readDockerSamples(ctx context.Context) ([]sample, error) {
-	psOutput, err := dockerOutput(ctx, "ps", "-a", "--no-trunc", "--filter", "label=uploy.deployment_id", "--format", "{{.ID}}|{{.Names}}|{{.Label \"uploy.deployment_id\"}}|{{.State}}")
-	if err != nil {
-		return nil, err
-	}
-	if psOutput == "" {
-		return []sample{}, nil
-	}
-	byID := make(map[string]sample)
-	var ids []string
-	for _, line := range strings.Split(psOutput, "\n") {
-		parts := strings.Split(line, "|")
-		if len(parts) != 4 || parts[0] == "" || parts[2] == "" {
-			continue
-		}
-		byID[parts[0]] = sample{
-			DeploymentID:  parts[2],
-			ContainerID:   parts[0],
-			ContainerName: parts[1],
-			State:         parts[3],
-			SampledAt:     time.Now().UTC().UnixMilli(),
-		}
-		if parts[3] == "running" {
-			ids = append(ids, parts[0])
-		}
-	}
-	if len(byID) == 0 {
-		return []sample{}, nil
-	}
-	if len(ids) == 0 {
-		return sortedSamples(byID), nil
-	}
-	statsOutput, err := dockerOutput(ctx, append([]string{"stats", "--no-stream", "--no-trunc", "--format", "{{.ID}}|{{.CPUPerc}}|{{.MemUsage}}|{{.NetIO}}"}, ids...)...)
-	if err != nil {
-		return nil, err
-	}
-	startedOutput, err := dockerOutput(ctx, append([]string{"inspect", "--format", "{{.Id}}|{{.State.StartedAt}}"}, ids...)...)
-	if err != nil {
-		return nil, err
-	}
-	startedAt := make(map[string]time.Time)
-	for _, line := range strings.Split(startedOutput, "\n") {
-		parts := strings.SplitN(line, "|", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		if parsed, err := time.Parse(time.RFC3339Nano, parts[1]); err == nil {
-			startedAt[parts[0]] = parsed
-		}
-	}
-	now := time.Now().UTC()
-	for _, line := range strings.Split(statsOutput, "\n") {
-		parts := strings.Split(line, "|")
-		if len(parts) != 4 {
-			continue
-		}
-		metric, found := byID[parts[0]]
-		if !found {
-			continue
-		}
-		cpu, err := parsePercent(parts[1])
-		if err != nil {
-			continue
-		}
-		used, limit, err := parsePair(parts[2])
-		if err != nil {
-			continue
-		}
-		networkIn, networkOut, err := parsePair(parts[3])
-		if err != nil {
-			continue
-		}
-		metric.SampledAt = now.UnixMilli()
-		metric.CPUPercent = cpu
-		metric.MemoryUsedBytes = used
-		metric.MemoryLimitBytes = limit
-		metric.NetworkInBytesTotal = networkIn
-		metric.NetworkOutBytesTotal = networkOut
-		if started, ok := startedAt[metric.ContainerID]; ok {
-			metric.UptimeSeconds = max(0, int64(now.Sub(started).Seconds()))
-		}
-		byID[metric.ContainerID] = metric
-	}
-	return sortedSamples(byID), nil
-}
-
 func readServerSample(ctx context.Context) (serverSample, error) {
 	partitions, err := disk.PartitionsWithContext(ctx, false)
 	if err != nil {
@@ -803,53 +723,6 @@ func sortedSamples(byID map[string]sample) []sample {
 		return metrics[left].DeploymentID < metrics[right].DeploymentID
 	})
 	return metrics
-}
-
-func dockerOutput(ctx context.Context, args ...string) (string, error) {
-	output, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("docker %s: %w: %s", strings.Join(args[:min(len(args), 2)], " "), err, strings.TrimSpace(string(output)))
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-func parsePercent(value string) (float64, error) {
-	return strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(value), "%"), 64)
-}
-
-func parsePair(value string) (int64, int64, error) {
-	parts := strings.Split(value, " / ")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid metric pair %q", value)
-	}
-	first, err := parseBytes(parts[0])
-	if err != nil {
-		return 0, 0, err
-	}
-	second, err := parseBytes(parts[1])
-	return first, second, err
-}
-
-func parseBytes(value string) (int64, error) {
-	value = strings.TrimSpace(value)
-	multipliers := []struct {
-		suffix string
-		value  float64
-	}{
-		{"TiB", 1 << 40}, {"GiB", 1 << 30}, {"MiB", 1 << 20}, {"KiB", 1 << 10},
-		{"TB", 1e12}, {"GB", 1e9}, {"MB", 1e6}, {"kB", 1e3}, {"B", 1},
-	}
-	for _, unit := range multipliers {
-		if strings.HasSuffix(value, unit.suffix) {
-			number := strings.TrimSpace(strings.TrimSuffix(value, unit.suffix))
-			parsed, err := strconv.ParseFloat(number, 64)
-			if err != nil {
-				return 0, err
-			}
-			return int64(math.Round(parsed * unit.value)), nil
-		}
-	}
-	return 0, fmt.Errorf("unknown byte unit %q", value)
 }
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {

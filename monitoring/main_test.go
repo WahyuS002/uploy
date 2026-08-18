@@ -11,16 +11,6 @@ import (
 	"time"
 )
 
-func TestParseBytes(t *testing.T) {
-	tests := map[string]int64{"1.5kB": 1500, "2MiB": 2 << 20, "3GB": 3_000_000_000}
-	for input, want := range tests {
-		got, err := parseBytes(input)
-		if err != nil || got != want {
-			t.Fatalf("parseBytes(%q) = %d, %v; want %d", input, got, err, want)
-		}
-	}
-}
-
 func TestIsSQLiteFull(t *testing.T) {
 	database, err := sql.Open("sqlite", ":memory:")
 	if err != nil {

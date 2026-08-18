@@ -7,7 +7,7 @@ COPY monitoring/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /uploy-monitor .
 
 FROM alpine:3.22
-RUN apk add --no-cache docker-cli ca-certificates
+RUN apk add --no-cache ca-certificates
 COPY --from=build /uploy-monitor /usr/local/bin/uploy-monitor
 VOLUME ["/data"]
 EXPOSE 9184
