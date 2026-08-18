@@ -164,3 +164,204 @@ func TestHistoriesHandlerCapsBatchPoints(t *testing.T) {
 		t.Fatalf("status = %d; body = %s", response.Code, response.Body.String())
 	}
 }
+
+func TestCompactAndExpireRollsUpExistingMetrics(t *testing.T) {
+	database, err := openDatabase(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	now := time.Date(2026, time.August, 18, 18, 20, 0, 0, time.UTC)
+	start := time.Date(2026, time.August, 18, 8, 0, 0, 0, time.UTC)
+	for index := 0; index < 10; index++ {
+		metric := sample{
+			DeploymentID:         "deployment-a",
+			ContainerID:          "container-a",
+			ContainerName:        "app",
+			State:                "running",
+			SampledAt:            start.Add(time.Duration(index) * time.Minute).UnixMilli(),
+			CPUPercent:           float64(index),
+			MemoryUsedBytes:      int64(100 + index),
+			MemoryLimitBytes:     200,
+			NetworkInBytesTotal:  int64(1_000 + index),
+			NetworkOutBytesTotal: int64(2_000 + index),
+			UptimeSeconds:        int64(3_000 + index),
+		}
+		insertMetric(t, database, "deployment_metrics", 0, metric)
+	}
+
+	collector := &collector{db: database, retention: 30 * 24 * time.Hour}
+	if err := collector.compactAndExpire(now); err != nil {
+		t.Fatal(err)
+	}
+
+	var cpu float64
+	var networkIn int64
+	if err := database.QueryRow(`SELECT cpu_percent, network_in_bytes_total
+		FROM deployment_metric_rollups
+		WHERE deployment_id = ? AND resolution_minutes = 480 AND sampled_at = ?`, "deployment-a", start.UnixMilli()).Scan(&cpu, &networkIn); err != nil {
+		t.Fatal(err)
+	}
+	if cpu != 4.5 {
+		t.Fatalf("480m cpu = %v, want 4.5", cpu)
+	}
+	if networkIn != 1_009 {
+		t.Fatalf("480m network_in = %d, want 1009", networkIn)
+	}
+
+	var rawCount int
+	if err := database.QueryRow("SELECT COUNT(*) FROM deployment_metrics").Scan(&rawCount); err != nil {
+		t.Fatal(err)
+	}
+	if rawCount != 0 {
+		t.Fatalf("raw metrics after compaction = %d, want 0", rawCount)
+	}
+
+	points, err := collector.queryHistoryAt("deployment-a", now.Add(-12*time.Hour).UnixMilli(), now.UnixMilli(), 100, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 1 || points[0].CPUPercent != 4.5 {
+		t.Fatalf("history after compaction = %+v, want the 480m rollup", points)
+	}
+}
+
+func TestQueryHistoryUsesEachRetentionTier(t *testing.T) {
+	database, err := openDatabase(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	now := time.Date(2026, time.August, 18, 18, 20, 0, 0, time.UTC)
+	collector := &collector{db: database, retention: 30 * 24 * time.Hour}
+	insertMetric(t, database, "deployment_metrics", 0, testMetric(now.Add(-30*time.Minute), 1))
+	insertMetric(t, database, "deployment_metric_rollups", 10, testMetric(now.Add(-3*time.Hour), 2))
+	insertMetric(t, database, "deployment_metric_rollups", 20, testMetric(now.Add(-18*time.Hour), 3))
+	insertMetric(t, database, "deployment_metric_rollups", 120, testMetric(now.Add(-2*24*time.Hour), 4))
+	insertMetric(t, database, "deployment_metric_rollups", 480, testMetric(now.Add(-10*24*time.Hour), 5))
+
+	points, err := collector.queryHistoryAt("deployment-a", now.Add(-20*24*time.Hour).UnixMilli(), now.UnixMilli(), 100, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 5 {
+		t.Fatalf("history points = %d, want 5: %+v", len(points), points)
+	}
+	for index, want := range []float64{5, 4, 3, 2, 1} {
+		if points[index].CPUPercent != want {
+			t.Fatalf("point %d cpu = %v, want %v", index, points[index].CPUPercent, want)
+		}
+	}
+}
+
+func TestQueryHistoryFallsBackToExistingRawData(t *testing.T) {
+	database, err := openDatabase(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	now := time.Date(2026, time.August, 18, 18, 20, 0, 0, time.UTC)
+	collector := &collector{db: database, retention: 30 * 24 * time.Hour}
+	insertMetric(t, database, "deployment_metrics", 0, testMetric(now.Add(-10*24*time.Hour), 7))
+
+	points, err := collector.queryHistoryAt("deployment-a", now.Add(-11*24*time.Hour).UnixMilli(), now.UnixMilli(), 100, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 1 || points[0].CPUPercent != 7 {
+		t.Fatalf("raw fallback history = %+v, want the existing raw point", points)
+	}
+}
+
+func TestCompactAndExpireHonorsRetentionLimit(t *testing.T) {
+	database, err := openDatabase(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	now := time.Date(2026, time.August, 18, 18, 20, 0, 0, time.UTC)
+	insertMetric(t, database, "deployment_metric_rollups", 480, testMetric(now.Add(-8*24*time.Hour), 1))
+	insertMetric(t, database, "deployment_metric_rollups", 480, testMetric(now.Add(-6*24*time.Hour), 2))
+	collector := &collector{db: database, retention: 7 * 24 * time.Hour}
+	if err := collector.compactAndExpire(now); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	if err := database.QueryRow("SELECT COUNT(*) FROM deployment_metric_rollups WHERE resolution_minutes = 480").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("480m rollups after 7d retention = %d, want 1", count)
+	}
+}
+
+func TestDeleteHistoryHandlerRemovesRollups(t *testing.T) {
+	database, err := openDatabase(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	now := time.Now().UTC()
+	insertMetric(t, database, "deployment_metrics", 0, testMetric(now, 1))
+	insertMetric(t, database, "deployment_metric_rollups", 10, testMetric(now.Add(-time.Hour), 2))
+	collector := &collector{db: database}
+	response := httptest.NewRecorder()
+	collector.deleteHistoryHandler(response, httptest.NewRequest(http.MethodDelete, "/v1/history", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d; body = %s", response.Code, response.Body.String())
+	}
+	for _, table := range []string{"deployment_metrics", "deployment_metric_rollups"} {
+		var count int
+		if err := database.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("%s count = %d, want 0", table, count)
+		}
+	}
+}
+
+func testMetric(sampledAt time.Time, cpu float64) sample {
+	return sample{
+		DeploymentID:         "deployment-a",
+		ContainerID:          "container-a",
+		ContainerName:        "app",
+		State:                "running",
+		SampledAt:            sampledAt.UnixMilli(),
+		CPUPercent:           cpu,
+		MemoryUsedBytes:      100,
+		MemoryLimitBytes:     200,
+		NetworkInBytesTotal:  300,
+		NetworkOutBytesTotal: 400,
+		UptimeSeconds:        500,
+	}
+}
+
+func insertMetric(t *testing.T, database *sql.DB, table string, resolutionMinutes int, metric sample) {
+	t.Helper()
+	if table == "deployment_metrics" {
+		if _, err := database.Exec(`INSERT INTO deployment_metrics (
+			deployment_id, sampled_at, container_id, container_name, state, cpu_percent, memory_used_bytes,
+			memory_limit_bytes, network_in_bytes_total, network_out_bytes_total, uptime_seconds
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, metric.DeploymentID, metric.SampledAt, metric.ContainerID,
+			metric.ContainerName, metric.State, metric.CPUPercent, metric.MemoryUsedBytes, metric.MemoryLimitBytes,
+			metric.NetworkInBytesTotal, metric.NetworkOutBytesTotal, metric.UptimeSeconds); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if _, err := database.Exec(`INSERT INTO deployment_metric_rollups (
+		deployment_id, resolution_minutes, sampled_at, container_id, container_name, state, cpu_percent,
+		memory_used_bytes, memory_limit_bytes, network_in_bytes_total, network_out_bytes_total, uptime_seconds
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, metric.DeploymentID, resolutionMinutes, metric.SampledAt,
+		metric.ContainerID, metric.ContainerName, metric.State, metric.CPUPercent, metric.MemoryUsedBytes,
+		metric.MemoryLimitBytes, metric.NetworkInBytesTotal, metric.NetworkOutBytesTotal, metric.UptimeSeconds); err != nil {
+		t.Fatal(err)
+	}
+}
