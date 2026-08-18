@@ -1,13 +1,10 @@
 package handlers
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,15 +14,11 @@ import (
 	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/monitoring"
 	"github.com/WahyuS002/uploy/respond"
-	"github.com/WahyuS002/uploy/ssh"
 )
 
 const observabilityRefreshSeconds = 15
 const observabilityServerConcurrency = 64
 const observabilitySampleMaxAge = 45 * time.Second
-const dockerFieldSeparator = "|"
-
-var dockerSizePattern = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*([[:alpha:]]*)$`)
 
 type serverObservationTarget struct {
 	serviceIndex int
@@ -37,23 +30,6 @@ type observedHistory struct {
 	serviceIndex    int
 	deploymentIndex int
 	deploymentID    string
-}
-
-type containerInspect struct {
-	id        string
-	name      string
-	state     string
-	startedAt time.Time
-}
-
-type containerStats struct {
-	id               string
-	name             string
-	cpuPercent       float64
-	memoryUsedBytes  int64
-	memoryLimitBytes int64
-	networkInBytes   int64
-	networkOutBytes  int64
 }
 
 // GetProjectObservability samples active deployment containers across every project environment.
@@ -139,7 +115,10 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 			response.Summary.NetworkOutBytesTotal += service.Container.NetworkOutBytesTotal
 			continue
 		}
-		if service.Status != gen.ServiceObservabilityStatusNotDeployed {
+		// A server without an agent is unconfigured, not degraded: counting it here
+		// would light up "needs attention" for a project that is perfectly healthy.
+		if service.Status != gen.ServiceObservabilityStatusNotDeployed &&
+			service.Status != gen.ServiceObservabilityStatusMonitoringDisabled {
 			response.Summary.DegradedServices++
 		}
 	}
@@ -154,94 +133,16 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Deployment server is unavailable")
 		return
 	}
-	if server.Monitoring.Enabled {
-		s.collectAgentObservability(ctx, server, targets, services)
-		return
-	}
-	client, err := ssh.NewClient(ssh.ServerConfig{
-		Host:       server.Host,
-		Port:       int(server.Port),
-		User:       server.SSHUser,
-		PrivateKey: server.PrivateKey,
-	})
-	if err != nil {
-		telemetry.Printf("observability SSH connect server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach deployment server")
-		return
-	}
-	defer client.Close()
-
-	if err := client.DetectDocker(); err != nil {
-		telemetry.Printf("observability Docker access server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach Docker on deployment server")
-		return
-	}
-
-	containerNames := make([]string, len(targets))
-	for index, target := range targets {
-		containerNames[index] = target.container
-	}
-	inspectOutput, err := client.Run(ctx, dockerInspectCommand(client.DockerBin(), containerNames))
-	if err != nil {
-		telemetry.Printf("observability inspect server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Could not inspect deployment containers")
-		return
-	}
-	inspections, err := parseDockerInspect(inspectOutput)
-	if err != nil {
-		telemetry.Printf("observability inspect parse server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Could not read deployment container state")
-		return
-	}
-
-	runningNames := make([]string, 0, len(targets))
-	for _, target := range targets {
-		inspection, found := inspections[target.container]
-		if !found || inspection.state == "missing" {
-			services[target.serviceIndex].Status = gen.ServiceObservabilityStatusStopped
-			continue
+	// No agent, no metrics. Reaching for docker stats over SSH here used to fill the
+	// live cards while the retained charts stayed empty, which read as a broken page
+	// rather than an unconfigured one.
+	if !server.Monitoring.Enabled {
+		for _, target := range targets {
+			services[target.serviceIndex].Status = gen.ServiceObservabilityStatusMonitoringDisabled
 		}
-		container := containerFromInspect(inspection)
-		services[target.serviceIndex].Container = &container
-		if inspection.state != "running" {
-			services[target.serviceIndex].Status = gen.ServiceObservabilityStatusStopped
-			continue
-		}
-		runningNames = append(runningNames, target.container)
-	}
-	if len(runningNames) == 0 {
 		return
 	}
-
-	statsOutput, err := client.Run(ctx, dockerStatsCommand(client.DockerBin(), runningNames))
-	if err != nil {
-		telemetry.Printf("observability stats server=%s error: %v", serverID, err)
-		setRunningStatsError(targets, services, "Could not read deployment container metrics")
-		return
-	}
-	stats, err := parseDockerStats(statsOutput)
-	if err != nil {
-		telemetry.Printf("observability stats parse server=%s error: %v", serverID, err)
-		setRunningStatsError(targets, services, "Could not read deployment container metrics")
-		return
-	}
-	for _, target := range targets {
-		service := &services[target.serviceIndex]
-		if service.Container == nil || service.Container.State != "running" {
-			continue
-		}
-		stat, found := stats[target.container]
-		if !found {
-			setObservabilityError(service, "Container metrics are unavailable")
-			continue
-		}
-		service.Status = gen.ServiceObservabilityStatusRunning
-		service.Container.CpuPercent = stat.cpuPercent
-		service.Container.MemoryUsedBytes = stat.memoryUsedBytes
-		service.Container.MemoryLimitBytes = stat.memoryLimitBytes
-		service.Container.NetworkInBytesTotal = stat.networkInBytes
-		service.Container.NetworkOutBytesTotal = stat.networkOutBytes
-	}
+	s.collectAgentObservability(ctx, server, targets, services)
 }
 
 func (s *Server) collectAgentObservability(ctx context.Context, server db.ServerWithKey, targets []serverObservationTarget, services []gen.ServiceObservability) {
@@ -330,17 +231,13 @@ func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.R
 				image = deploymentConfig.Image
 			}
 			response.DeploymentMarkers = append(response.DeploymentMarkers, deploymentMarker(service, deployment, image, to))
-			if deployment.Status != "success" {
+			if deployment.Status != "success" || configErr != nil {
 				continue
 			}
 			deploymentIndex := len(response.Services[serviceIndex].Deployments)
 			response.Services[serviceIndex].Deployments = append(response.Services[serviceIndex].Deployments, gen.DeploymentObservabilityHistory{
 				DeploymentId: deployment.ID, Points: []gen.ContainerObservabilitySample{},
 			})
-			if configErr != nil {
-				response.Services[serviceIndex].Deployments[deploymentIndex].UnavailableReason = stringPointer("Deployment configuration is unavailable")
-				continue
-			}
 			byServer[deploymentConfig.ServerID] = append(byServer[deploymentConfig.ServerID], observedHistory{
 				serviceIndex: serviceIndex, deploymentIndex: deploymentIndex, deploymentID: deployment.ID,
 			})
@@ -405,11 +302,12 @@ func imageCommit(image string) string {
 func (s *Server) collectServerHistory(ctx context.Context, serverID string, observations []observedHistory, services []gen.ServiceObservabilityHistory, from, to time.Time, maxPoints int) {
 	server, err := db.GetServerWithKey(ctx, serverID)
 	if err != nil {
-		setHistoryUnavailable(observations, services, "Deployment server is unavailable")
+		telemetry.Printf("observability history server=%s error: %v", serverID, err)
 		return
 	}
+	// The live snapshot already reports monitoring_disabled for these services, so the
+	// chart simply has nothing to draw.
 	if !server.Monitoring.Enabled {
-		setHistoryUnavailable(observations, services, "Retained monitoring is not enabled on this server")
 		return
 	}
 	ids := make([]string, len(observations))
@@ -423,7 +321,6 @@ func (s *Server) collectServerHistory(ctx context.Context, serverID string, obse
 	histories, err := monitoring.GetHistories(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken, ids, from, to, pointsPerDeployment)
 	if err != nil {
 		telemetry.Printf("observability history agent server=%s error: %v", server.ID, err)
-		setHistoryUnavailable(observations, services, "Could not reach monitoring agent")
 		return
 	}
 	for _, observation := range observations {
@@ -439,12 +336,6 @@ func (s *Server) collectServerHistory(ctx context.Context, serverID string, obse
 			}
 		}
 		services[observation.serviceIndex].Deployments[observation.deploymentIndex].Points = mapped
-	}
-}
-
-func setHistoryUnavailable(observations []observedHistory, services []gen.ServiceObservabilityHistory, reason string) {
-	for _, observation := range observations {
-		services[observation.serviceIndex].Deployments[observation.deploymentIndex].UnavailableReason = stringPointer(reason)
 	}
 }
 
@@ -476,181 +367,9 @@ func setServerObservabilityStatus(targets []serverObservationTarget, services []
 	}
 }
 
-func setRunningStatsError(targets []serverObservationTarget, services []gen.ServiceObservability, message string) {
-	for _, target := range targets {
-		service := &services[target.serviceIndex]
-		if service.Container != nil && service.Container.State == "running" {
-			setObservabilityError(service, message)
-		}
-	}
-}
-
 func setObservabilityError(service *gen.ServiceObservability, message string) {
 	service.Status = gen.ServiceObservabilityStatusError
 	service.Error = stringPointer(message)
-}
-
-func containerFromInspect(inspect containerInspect) gen.ContainerObservability {
-	uptime := int64(0)
-	if !inspect.startedAt.IsZero() {
-		uptime = int64(time.Since(inspect.startedAt).Seconds())
-		if uptime < 0 {
-			uptime = 0
-		}
-	}
-	return gen.ContainerObservability{
-		Id:            inspect.id,
-		Name:          inspect.name,
-		State:         inspect.state,
-		UptimeSeconds: uptime,
-	}
-}
-
-func dockerInspectCommand(dockerBin string, containers []string) string {
-	quotedContainers := shellQuoteAll(containers)
-	return fmt.Sprintf(`for container in %s; do %s inspect --format '{{.ID}}|{{.Name}}|{{.State.Status}}|{{.State.StartedAt}}' "$container" 2>/dev/null || printf '|%%s|missing|\n' "$container"; done`, quotedContainers, dockerBin)
-}
-
-func dockerStatsCommand(dockerBin string, containers []string) string {
-	return fmt.Sprintf(`%s stats --no-stream --format '{{.ID}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.NetIO}}' %s`, dockerBin, shellQuoteAll(containers))
-}
-
-func shellQuoteAll(values []string) string {
-	quoted := make([]string, len(values))
-	for index, value := range values {
-		quoted[index] = ssh.ShellQuote(value)
-	}
-	return strings.Join(quoted, " ")
-}
-
-func parseDockerInspect(output string) (map[string]containerInspect, error) {
-	inspections := make(map[string]containerInspect)
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), dockerFieldSeparator)
-		if len(fields) != 4 {
-			return nil, fmt.Errorf("invalid docker inspect row %q", scanner.Text())
-		}
-		name := normalizeContainerName(fields[1])
-		if name == "" {
-			return nil, fmt.Errorf("docker inspect row has no container name")
-		}
-		startedAt := time.Time{}
-		if fields[3] != "" && fields[3] != "0001-01-01T00:00:00Z" {
-			parsedStartedAt, err := time.Parse(time.RFC3339Nano, fields[3])
-			if err != nil {
-				return nil, fmt.Errorf("parse started at for %s: %w", name, err)
-			}
-			startedAt = parsedStartedAt
-		}
-		inspections[name] = containerInspect{
-			id:        fields[0],
-			name:      name,
-			state:     fields[2],
-			startedAt: startedAt,
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return inspections, nil
-}
-
-func parseDockerStats(output string) (map[string]containerStats, error) {
-	stats := make(map[string]containerStats)
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), dockerFieldSeparator)
-		if len(fields) != 5 {
-			return nil, fmt.Errorf("invalid docker stats row %q", scanner.Text())
-		}
-		cpuPercent, err := parseDockerPercent(fields[2])
-		if err != nil {
-			return nil, err
-		}
-		memoryUsedBytes, memoryLimitBytes, err := parseDockerBytePair(fields[3])
-		if err != nil {
-			return nil, err
-		}
-		networkInBytes, networkOutBytes, err := parseDockerBytePair(fields[4])
-		if err != nil {
-			return nil, err
-		}
-		name := normalizeContainerName(fields[1])
-		if name == "" {
-			return nil, fmt.Errorf("docker stats row has no container name")
-		}
-		stats[name] = containerStats{
-			id:               fields[0],
-			name:             name,
-			cpuPercent:       cpuPercent,
-			memoryUsedBytes:  memoryUsedBytes,
-			memoryLimitBytes: memoryLimitBytes,
-			networkInBytes:   networkInBytes,
-			networkOutBytes:  networkOutBytes,
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return stats, nil
-}
-
-func parseDockerPercent(value string) (float64, error) {
-	percent, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(value), "%"), 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse Docker CPU percent %q: %w", value, err)
-	}
-	return percent, nil
-}
-
-func parseDockerBytePair(value string) (int64, int64, error) {
-	parts := strings.Split(value, "/")
-	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid Docker byte pair %q", value)
-	}
-	first, err := parseDockerBytes(parts[0])
-	if err != nil {
-		return 0, 0, err
-	}
-	second, err := parseDockerBytes(parts[1])
-	if err != nil {
-		return 0, 0, err
-	}
-	return first, second, nil
-}
-
-func parseDockerBytes(value string) (int64, error) {
-	matches := dockerSizePattern.FindStringSubmatch(strings.TrimSpace(value))
-	if matches == nil {
-		return 0, fmt.Errorf("invalid Docker byte value %q", value)
-	}
-	amount, err := strconv.ParseFloat(matches[1], 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse Docker byte value %q: %w", value, err)
-	}
-	multiplier, ok := dockerByteMultiplier[strings.ToLower(matches[2])]
-	if !ok {
-		return 0, fmt.Errorf("unknown Docker byte unit %q", matches[2])
-	}
-	return int64(amount * multiplier), nil
-}
-
-var dockerByteMultiplier = map[string]float64{
-	"":    1,
-	"b":   1,
-	"kb":  1_000,
-	"kib": 1 << 10,
-	"mb":  1_000_000,
-	"mib": 1 << 20,
-	"gb":  1_000_000_000,
-	"gib": 1 << 30,
-	"tb":  1_000_000_000_000,
-	"tib": 1 << 40,
-}
-
-func normalizeContainerName(name string) string {
-	return strings.TrimPrefix(strings.TrimSpace(name), "/")
 }
 
 func stringPointer(value string) *string {

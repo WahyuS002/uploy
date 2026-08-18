@@ -378,13 +378,15 @@
 			running: 'Running',
 			stopped: 'Stopped',
 			unreachable: 'Unreachable',
-			error: 'Failed'
+			error: 'Failed',
+			monitoring_disabled: 'Monitoring off'
 		}[status];
 	}
 
 	function statusTone(status: Status): 'neutral' | 'success' | 'warning' | 'danger' {
 		if (status === 'running') return 'success';
-		if (status === 'not_deployed') return 'neutral';
+		// Neutral, not danger: the server simply has no agent yet.
+		if (status === 'not_deployed' || status === 'monitoring_disabled') return 'neutral';
 		if (status === 'stopped') return 'warning';
 		return 'danger';
 	}

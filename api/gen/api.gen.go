@@ -354,17 +354,20 @@ func (e ServiceDomainResponseStatus) Valid() bool {
 
 // Defines values for ServiceObservabilityStatus.
 const (
-	ServiceObservabilityStatusError       ServiceObservabilityStatus = "error"
-	ServiceObservabilityStatusNotDeployed ServiceObservabilityStatus = "not_deployed"
-	ServiceObservabilityStatusRunning     ServiceObservabilityStatus = "running"
-	ServiceObservabilityStatusStopped     ServiceObservabilityStatus = "stopped"
-	ServiceObservabilityStatusUnreachable ServiceObservabilityStatus = "unreachable"
+	ServiceObservabilityStatusError              ServiceObservabilityStatus = "error"
+	ServiceObservabilityStatusMonitoringDisabled ServiceObservabilityStatus = "monitoring_disabled"
+	ServiceObservabilityStatusNotDeployed        ServiceObservabilityStatus = "not_deployed"
+	ServiceObservabilityStatusRunning            ServiceObservabilityStatus = "running"
+	ServiceObservabilityStatusStopped            ServiceObservabilityStatus = "stopped"
+	ServiceObservabilityStatusUnreachable        ServiceObservabilityStatus = "unreachable"
 )
 
 // Valid indicates whether the value is a known member of the ServiceObservabilityStatus enum.
 func (e ServiceObservabilityStatus) Valid() bool {
 	switch e {
 	case ServiceObservabilityStatusError:
+		return true
+	case ServiceObservabilityStatusMonitoringDisabled:
 		return true
 	case ServiceObservabilityStatusNotDeployed:
 		return true
@@ -741,9 +744,8 @@ type DeploymentMarkerStatus string
 
 // DeploymentObservabilityHistory defines model for DeploymentObservabilityHistory.
 type DeploymentObservabilityHistory struct {
-	DeploymentId      string                         `json:"deployment_id"`
-	Points            []ContainerObservabilitySample `json:"points"`
-	UnavailableReason *string                        `json:"unavailable_reason,omitempty"`
+	DeploymentId string                         `json:"deployment_id"`
+	Points       []ContainerObservabilitySample `json:"points"`
 }
 
 // DeploymentResponse defines model for DeploymentResponse.
@@ -996,16 +998,18 @@ type ServiceEnvResponse struct {
 
 // ServiceObservability defines model for ServiceObservability.
 type ServiceObservability struct {
-	Container       *ContainerObservability    `json:"container,omitempty"`
-	DeploymentId    *string                    `json:"deployment_id,omitempty"`
-	EnvironmentName string                     `json:"environment_name"`
-	Error           *string                    `json:"error,omitempty"`
-	Name            string                     `json:"name"`
-	ServiceId       string                     `json:"service_id"`
-	Status          ServiceObservabilityStatus `json:"status"`
+	Container       *ContainerObservability `json:"container,omitempty"`
+	DeploymentId    *string                 `json:"deployment_id,omitempty"`
+	EnvironmentName string                  `json:"environment_name"`
+	Error           *string                 `json:"error,omitempty"`
+	Name            string                  `json:"name"`
+	ServiceId       string                  `json:"service_id"`
+
+	// Status monitoring_disabled means the deployment server runs no monitoring agent, so Uploy has no metrics for it. It is a setup state, not a failure.
+	Status ServiceObservabilityStatus `json:"status"`
 }
 
-// ServiceObservabilityStatus defines model for ServiceObservability.Status.
+// ServiceObservabilityStatus monitoring_disabled means the deployment server runs no monitoring agent, so Uploy has no metrics for it. It is a setup state, not a failure.
 type ServiceObservabilityStatus string
 
 // ServiceObservabilityHistory defines model for ServiceObservabilityHistory.

@@ -1179,7 +1179,6 @@ export interface components {
 		};
 		DeploymentObservabilityHistory: {
 			deployment_id: string;
-			unavailable_reason?: string;
 			points: components['schemas']['ContainerObservabilitySample'][];
 		};
 		ContainerObservabilitySample: {
@@ -1220,8 +1219,17 @@ export interface components {
 			service_id: string;
 			name: string;
 			environment_name: string;
-			/** @enum {string} */
-			status: 'not_deployed' | 'running' | 'stopped' | 'unreachable' | 'error';
+			/**
+			 * @description monitoring_disabled means the deployment server runs no monitoring agent, so Uploy has no metrics for it. It is a setup state, not a failure.
+			 * @enum {string}
+			 */
+			status:
+				| 'not_deployed'
+				| 'running'
+				| 'stopped'
+				| 'unreachable'
+				| 'error'
+				| 'monitoring_disabled';
 			deployment_id?: string;
 			error?: string;
 			container?: components['schemas']['ContainerObservability'];
