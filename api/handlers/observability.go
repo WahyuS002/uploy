@@ -27,7 +27,7 @@ const dockerFieldSeparator = "|"
 
 var dockerSizePattern = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)\s*([[:alpha:]]*)$`)
 
-type observedService struct {
+type serverObservationTarget struct {
 	serviceIndex int
 	deploymentID string
 	container    string
@@ -89,7 +89,7 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 			TotalServices: len(services),
 		},
 	}
-	byServer := make(map[string][]observedService)
+	targetsByServer := make(map[string][]serverObservationTarget)
 
 	for serviceIndex, service := range services {
 		response.Services[serviceIndex] = gen.ServiceObservability{
@@ -109,7 +109,7 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 			continue
 		}
 		response.Services[serviceIndex].DeploymentId = stringPointer(deployment.ID)
-		byServer[config.ServerID] = append(byServer[config.ServerID], observedService{
+		targetsByServer[config.ServerID] = append(targetsByServer[config.ServerID], serverObservationTarget{
 			serviceIndex: serviceIndex,
 			deploymentID: deployment.ID,
 			container:    jobs.ContainerNameForDeployment(config, deployment.ID),
@@ -118,13 +118,13 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 
 	var waitGroup sync.WaitGroup
 	semaphore := make(chan struct{}, observabilityServerConcurrency)
-	for serverID, observedServices := range byServer {
+	for serverID, targets := range targetsByServer {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-			s.collectServerObservability(ctx, serverID, observedServices, response.Services)
+			s.collectServerObservability(ctx, serverID, targets, response.Services)
 		}()
 	}
 	waitGroup.Wait()
@@ -147,15 +147,15 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 	respond.JSON(w, http.StatusOK, response)
 }
 
-func (s *Server) collectServerObservability(ctx context.Context, serverID string, observedServices []observedService, services []gen.ServiceObservability) {
+func (s *Server) collectServerObservability(ctx context.Context, serverID string, targets []serverObservationTarget, services []gen.ServiceObservability) {
 	server, err := db.GetServerWithKey(ctx, serverID)
 	if err != nil {
 		log.Printf("GetServerWithKey server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusError, "Deployment server is unavailable")
+		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Deployment server is unavailable")
 		return
 	}
 	if server.Monitoring.Enabled {
-		s.collectAgentObservability(ctx, server, observedServices, services)
+		s.collectAgentObservability(ctx, server, targets, services)
 		return
 	}
 	client, err := ssh.NewClient(ssh.ServerConfig{
@@ -166,48 +166,48 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 	})
 	if err != nil {
 		log.Printf("observability SSH connect server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach deployment server")
+		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach deployment server")
 		return
 	}
 	defer client.Close()
 
 	if err := client.DetectDocker(); err != nil {
 		log.Printf("observability Docker access server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach Docker on deployment server")
+		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach Docker on deployment server")
 		return
 	}
 
-	containerNames := make([]string, len(observedServices))
-	for index, observedService := range observedServices {
-		containerNames[index] = observedService.container
+	containerNames := make([]string, len(targets))
+	for index, target := range targets {
+		containerNames[index] = target.container
 	}
 	inspectOutput, err := client.Run(ctx, dockerInspectCommand(client.DockerBin(), containerNames))
 	if err != nil {
 		log.Printf("observability inspect server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusError, "Could not inspect deployment containers")
+		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Could not inspect deployment containers")
 		return
 	}
 	inspections, err := parseDockerInspect(inspectOutput)
 	if err != nil {
 		log.Printf("observability inspect parse server=%s error: %v", serverID, err)
-		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusError, "Could not read deployment container state")
+		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Could not read deployment container state")
 		return
 	}
 
-	runningNames := make([]string, 0, len(observedServices))
-	for _, observedService := range observedServices {
-		inspection, found := inspections[observedService.container]
+	runningNames := make([]string, 0, len(targets))
+	for _, target := range targets {
+		inspection, found := inspections[target.container]
 		if !found || inspection.state == "missing" {
-			services[observedService.serviceIndex].Status = gen.ServiceObservabilityStatusStopped
+			services[target.serviceIndex].Status = gen.ServiceObservabilityStatusStopped
 			continue
 		}
 		container := containerFromInspect(inspection)
-		services[observedService.serviceIndex].Container = &container
+		services[target.serviceIndex].Container = &container
 		if inspection.state != "running" {
-			services[observedService.serviceIndex].Status = gen.ServiceObservabilityStatusStopped
+			services[target.serviceIndex].Status = gen.ServiceObservabilityStatusStopped
 			continue
 		}
-		runningNames = append(runningNames, observedService.container)
+		runningNames = append(runningNames, target.container)
 	}
 	if len(runningNames) == 0 {
 		return
@@ -216,21 +216,21 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 	statsOutput, err := client.Run(ctx, dockerStatsCommand(client.DockerBin(), runningNames))
 	if err != nil {
 		log.Printf("observability stats server=%s error: %v", serverID, err)
-		setRunningStatsError(observedServices, services, "Could not read deployment container metrics")
+		setRunningStatsError(targets, services, "Could not read deployment container metrics")
 		return
 	}
 	stats, err := parseDockerStats(statsOutput)
 	if err != nil {
 		log.Printf("observability stats parse server=%s error: %v", serverID, err)
-		setRunningStatsError(observedServices, services, "Could not read deployment container metrics")
+		setRunningStatsError(targets, services, "Could not read deployment container metrics")
 		return
 	}
-	for _, observedService := range observedServices {
-		service := &services[observedService.serviceIndex]
+	for _, target := range targets {
+		service := &services[target.serviceIndex]
 		if service.Container == nil || service.Container.State != "running" {
 			continue
 		}
-		stat, found := stats[observedService.container]
+		stat, found := stats[target.container]
 		if !found {
 			setObservabilityError(service, "Container metrics are unavailable")
 			continue
@@ -244,20 +244,20 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 	}
 }
 
-func (s *Server) collectAgentObservability(ctx context.Context, server db.ServerWithKey, observedServices []observedService, services []gen.ServiceObservability) {
+func (s *Server) collectAgentObservability(ctx context.Context, server db.ServerWithKey, targets []serverObservationTarget, services []gen.ServiceObservability) {
 	latest, err := monitoring.GetLatestAll(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken)
 	if err != nil {
 		log.Printf("observability agent server=%s error: %v", server.ID, err)
-		setServerObservabilityStatus(observedServices, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach monitoring agent")
+		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach monitoring agent")
 		return
 	}
 	metrics := make(map[string]monitoring.HistoryPoint, len(latest.Points))
 	for _, metric := range latest.Points {
 		metrics[metric.DeploymentID] = metric
 	}
-	for _, observedService := range observedServices {
-		service := &services[observedService.serviceIndex]
-		metric, found := metrics[observedService.deploymentID]
+	for _, target := range targets {
+		service := &services[target.serviceIndex]
+		metric, found := metrics[target.deploymentID]
 		if !found {
 			service.Status = gen.ServiceObservabilityStatusStopped
 			continue
@@ -408,16 +408,16 @@ func observabilityHistorySince(value *gen.GetProjectObservabilityHistoryParamsSi
 	return time.Now().UTC().Add(-duration), nil
 }
 
-func setServerObservabilityStatus(observedServices []observedService, services []gen.ServiceObservability, status gen.ServiceObservabilityStatus, message string) {
-	for _, observedService := range observedServices {
-		services[observedService.serviceIndex].Status = status
-		services[observedService.serviceIndex].Error = stringPointer(message)
+func setServerObservabilityStatus(targets []serverObservationTarget, services []gen.ServiceObservability, status gen.ServiceObservabilityStatus, message string) {
+	for _, target := range targets {
+		services[target.serviceIndex].Status = status
+		services[target.serviceIndex].Error = stringPointer(message)
 	}
 }
 
-func setRunningStatsError(observedServices []observedService, services []gen.ServiceObservability, message string) {
-	for _, observedService := range observedServices {
-		service := &services[observedService.serviceIndex]
+func setRunningStatsError(targets []serverObservationTarget, services []gen.ServiceObservability, message string) {
+	for _, target := range targets {
+		service := &services[target.serviceIndex]
 		if service.Container != nil && service.Container.State == "running" {
 			setObservabilityError(service, message)
 		}
