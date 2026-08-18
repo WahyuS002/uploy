@@ -6,6 +6,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
+	import MonitoringDialog from '$lib/components/app/MonitoringDialog.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import {
 		ChartBar,
@@ -93,13 +94,7 @@
 
 	let isOwner = $derived(page.data.workspace?.role === 'owner');
 	let unmonitoredServers = $derived(snapshot?.unmonitored_servers ?? []);
-	// One call to action per server, not per affected service: the deep link carries
-	// the dialog straight to the machine when there is only one to fix.
-	let enableMonitoringHref = $derived(
-		unmonitoredServers.length === 1
-			? `/servers?monitoring=${encodeURIComponent(unmonitoredServers[0].id)}`
-			: '/servers'
-	);
+	let monitoringServerId = $state<string | null>(null);
 	let unmonitoredNames = $derived(serverList.format(unmonitoredServers.map((s) => s.name)));
 	let unmonitoredServiceCount = $derived(
 		unmonitoredServers.reduce((total, server) => total + server.service_count, 0)
@@ -513,7 +508,11 @@
 </script>
 
 {#snippet enableMonitoring()}
-	<Button size="sm" href={enableMonitoringHref}>Enable monitoring</Button>
+	{#each unmonitoredServers as server (server.id)}
+		<Button size="sm" onclick={() => (monitoringServerId = server.id)}>
+			{unmonitoredServers.length === 1 ? 'Enable monitoring' : `Enable on ${server.name}`}
+		</Button>
+	{/each}
 {/snippet}
 
 <svelte:head>
@@ -880,9 +879,19 @@
 				>
 					<span>{unmonitoredBanner}</span>
 					{#if isOwner}
-						<Button size="sm" variant="secondary" href={enableMonitoringHref}>
-							Enable monitoring
-						</Button>
+						<div class="flex flex-wrap gap-2">
+							{#each unmonitoredServers as server (server.id)}
+								<Button
+									size="sm"
+									variant="secondary"
+									onclick={() => (monitoringServerId = server.id)}
+								>
+									{unmonitoredServers.length === 1
+										? 'Enable monitoring'
+										: `Enable on ${server.name}`}
+								</Button>
+							{/each}
+						</div>
 					{/if}
 				</div>
 			{/if}
@@ -1016,6 +1025,14 @@
 				</div>
 			</section>
 		{/if}
+
+		<MonitoringDialog
+			serverId={monitoringServerId}
+			onClose={() => (monitoringServerId = null)}
+			onSaved={() => {
+				retryVersion++;
+			}}
+		/>
 
 		{#if refreshError && snapshot}
 			<div

@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { invalidateAll, replaceState } from '$app/navigation';
-	import { page } from '$app/state';
+	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
@@ -9,9 +8,10 @@
 	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
 	import ServerMetricTrend from '$lib/components/app/ServerMetricTrend.svelte';
 	import LogStream from '$lib/components/app/LogStream.svelte';
+	import MonitoringDialog from '$lib/components/app/MonitoringDialog.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
-	import { Button, Collapsible, EmptyState, Input, Tooltip, toast } from '$lib/components/ui';
+	import { Button, EmptyState, Tooltip, toast } from '$lib/components/ui';
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { ChevronRight, InformationCircle, Key, Plus, Server } from '@steeze-ui/heroicons';
@@ -28,13 +28,7 @@
 	let expandedHealthId = $state<string | null>(null);
 	let upgradingProxyId = $state<string | null>(null);
 	let monitoringActionId = $state<string | null>(null);
-	let monitoringServer = $state<(typeof servers)[number] | null>(null);
-	let monitoringPrivateAddress = $state('');
-	let monitoringPort = $state('9184');
-	let monitoringRetentionDays = $state('7');
-	let monitoringFQDN = $state('');
-	let monitoringReaderToken = $state('');
-	let monitoringAdvancedOpen = $state(false);
+	let monitoringServerId = $state<string | null>(null);
 
 	// The server whose proxy log is open, or null. Held whole rather than by id so
 	// the dialog can name the machine without looking it back up.
@@ -85,126 +79,6 @@
 				(current.disk_write_bytes_total - previous.disk_write_bytes_total) / elapsed
 			)
 		};
-	}
-
-	// Arrived from a call to action elsewhere in the app: /servers?monitoring=<id>
-	// opens this page with the dialog already on the right machine, so the prompt to
-	// enable monitoring does not have to duplicate the form to act on it.
-	let openedFromLink = false;
-	$effect(() => {
-		const requested = page.url.searchParams.get('monitoring');
-		if (!requested || openedFromLink) return;
-		openedFromLink = true;
-		const target = servers.find((server) => server.id === requested);
-		if (target && isOwner) openMonitoring(target);
-		// Dropped once consumed, so closing the dialog and reloading does not reopen it.
-		const url = new URL(page.url);
-		url.searchParams.delete('monitoring');
-		// This is the route we are already on with one parameter removed, not a
-		// destination to resolve.
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		replaceState(url, page.state);
-	});
-
-	function openMonitoring(server: (typeof servers)[number]) {
-		monitoringServer = server;
-		monitoringAdvancedOpen = false;
-		// A server being set up for the first time has no recorded private address. The
-		// host Uploy already reaches it on is right for the usual single-network box,
-		// and wrong in a way the user can see and correct.
-		monitoringPrivateAddress = server.monitoring.private_address || server.host;
-		monitoringPort = String(server.monitoring.port || 9184);
-		monitoringRetentionDays = String(server.monitoring.retention_days || 7);
-		monitoringFQDN = server.monitoring.fqdn ?? '';
-		// Generated, not invented. Asking someone to compose 32 random characters before
-		// they can see a single metric is the step that stalls this dialog.
-		monitoringReaderToken = isFirstSetup(server) ? generateReaderToken() : '';
-	}
-
-	function isFirstSetup(server: (typeof servers)[number]) {
-		return !server.monitoring.enabled && !server.monitoring.cleanup_at;
-	}
-
-	function generateReaderToken() {
-		const bytes = crypto.getRandomValues(new Uint8Array(32));
-		return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-	}
-
-	async function saveMonitoring() {
-		if (!monitoringServer || monitoringActionId) return;
-		const privateAddress = monitoringPrivateAddress.trim();
-		const port = Number(monitoringPort);
-		const retentionDays = Number(monitoringRetentionDays);
-		const readerToken = monitoringReaderToken.trim();
-		if (!privateAddress) {
-			toast.error({
-				title: 'Private address required',
-				description: 'Use the address reachable from Uploy.'
-			});
-			return;
-		}
-		// Required on first setup, and validated whenever it is being replaced.
-		const tokenSubmitted = isFirstSetup(monitoringServer) || readerToken.length > 0;
-		if (tokenSubmitted && (readerToken.length < 32 || readerToken.length > 512)) {
-			toast.error({
-				title: 'Invalid reader token',
-				description: 'Use 32 to 512 characters, or select Regenerate.'
-			});
-			return;
-		}
-		if (!Number.isInteger(port) || port < 1 || port > 65535) {
-			toast.error({ title: 'Invalid port', description: 'Use a port from 1 to 65535.' });
-			return;
-		}
-		if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 30) {
-			toast.error({ title: 'Invalid retention', description: 'Use 1 to 30 days.' });
-			return;
-		}
-
-		monitoringActionId = monitoringServer.id;
-		const toastId = `monitoring-save-${monitoringServer.id}`;
-		toast.neutral({
-			id: toastId,
-			title: 'Provisioning monitoring',
-			description: 'Installing the edge agent on the server.',
-			icon: { kind: 'spinner' },
-			dismissible: false
-		});
-		try {
-			const { error } = await api.POST('/api/servers/{id}/monitoring', {
-				params: { path: { id: monitoringServer.id } },
-				body: {
-					private_address: privateAddress,
-					port,
-					retention_days: retentionDays,
-					fqdn: monitoringFQDN.trim(),
-					...(readerToken ? { reader_token: readerToken } : {})
-				}
-			});
-			if (error) {
-				toast.error({
-					id: toastId,
-					title: 'Monitoring setup failed',
-					description: (error as components['schemas']['ErrorResponse']).error
-				});
-				return;
-			}
-			monitoringServer = null;
-			await invalidateAll();
-			toast.success({
-				id: toastId,
-				title: 'Monitoring ready',
-				description: 'Uploy now reads live and retained metrics through the edge agent.'
-			});
-		} catch {
-			toast.error({
-				id: toastId,
-				title: 'Monitoring setup failed',
-				description: 'Network error. Check the server connection, then retry.'
-			});
-		} finally {
-			monitoringActionId = null;
-		}
 	}
 
 	async function disableMonitoring(server: (typeof servers)[number]) {
@@ -507,9 +381,8 @@
 											<Button
 												variant="secondary"
 												size="xs"
-												loading={monitoringActionId === server.id}
 												disabled={monitoringActionId !== null}
-												onclick={() => openMonitoring(server)}
+												onclick={() => (monitoringServerId = server.id)}
 											>
 												{server.monitoring.enabled ? 'Configure' : 'Enable'}
 											</Button>
@@ -632,122 +505,11 @@
 	</DialogContent>
 </Dialog>
 
-<Dialog
-	open={monitoringServer !== null}
-	onOpenChange={(open) => !open && (monitoringServer = null)}
->
-	<DialogContent class="w-[min(92vw,34rem)] max-w-none overflow-hidden">
-		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
-			<DialogTitle class="flex min-w-0 items-center gap-2 text-sm">
-				<span class="flex-none font-medium text-muted-foreground">Monitoring</span>
-				<Icon
-					src={ChevronRight}
-					theme="outline"
-					class="h-3.5 w-3.5 flex-none text-muted-foreground"
-				/>
-				<span class="truncate">{monitoringServer?.name}</span>
-			</DialogTitle>
-		</DialogHeader>
-		<form
-			class="space-y-4 px-5 py-4"
-			onsubmit={(event) => {
-				event.preventDefault();
-				void saveMonitoring();
-			}}
-		>
-			<p class="text-sm leading-6 text-muted-foreground">
-				Stores container metrics locally on this server. Uploy reads the private HTTP API; a public
-				FQDN is optional for external scrapers.
-			</p>
-			<label class="flex flex-col gap-1.5">
-				<span class="text-sm font-medium text-foreground">Private address</span>
-				<Input bind:value={monitoringPrivateAddress} placeholder="10.0.0.4" autocomplete="off" />
-				<p class="text-xs leading-5 text-muted-foreground">
-					The address Uploy reaches this server on. Change it if the agent should listen on a
-					private interface instead.
-				</p>
-			</label>
-			<div class="flex flex-col gap-1.5">
-				<div class="flex items-center justify-between gap-2">
-					<label for="monitoring-reader-token" class="text-sm font-medium text-foreground">
-						Reader token
-					</label>
-					<button
-						type="button"
-						class="cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-						onclick={() => (monitoringReaderToken = generateReaderToken())}
-					>
-						Regenerate
-					</button>
-				</div>
-				<Input
-					id="monitoring-reader-token"
-					bind:value={monitoringReaderToken}
-					class="font-mono text-xs"
-					minlength={32}
-					maxlength={512}
-					autocomplete="off"
-					spellcheck="false"
-					placeholder={monitoringServer && isFirstSetup(monitoringServer)
-						? ''
-						: 'Leave blank to keep the current token'}
-				/>
-				<p class="text-xs leading-5 text-muted-foreground">
-					Authorizes `/metrics` and the read-only JSON endpoints. Copy it now if an external scraper
-					needs it — Uploy does not show it again.
-				</p>
-			</div>
-			<!-- Collapsed by default. The generated token and the server's own address are
-			     right for almost every setup, so the dialog opens on nothing to decide. -->
-			<Collapsible bind:open={monitoringAdvancedOpen} class="rounded-md border border-border">
-				{#snippet trigger()}
-					<span
-						class="flex w-full cursor-pointer items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-					>
-						<Icon
-							src={ChevronRight}
-							theme="outline"
-							class="h-3.5 w-3.5 transition-transform duration-150 {monitoringAdvancedOpen
-								? 'rotate-90'
-								: ''}"
-						/>
-						Advanced
-					</span>
-				{/snippet}
-				<div class="space-y-4 border-t border-border px-3 py-3">
-					<div class="grid grid-cols-2 gap-3">
-						<label class="flex flex-col gap-1.5">
-							<span class="text-sm font-medium text-foreground">Port</span>
-							<Input bind:value={monitoringPort} inputmode="numeric" />
-						</label>
-						<label class="flex flex-col gap-1.5">
-							<span class="text-sm font-medium text-foreground">Retention days</span>
-							<Input bind:value={monitoringRetentionDays} inputmode="numeric" />
-						</label>
-					</div>
-					<label class="flex flex-col gap-1.5">
-						<span class="text-sm font-medium text-foreground"
-							>Public FQDN <span class="font-normal text-muted-foreground">(optional)</span></span
-						>
-						<Input
-							bind:value={monitoringFQDN}
-							placeholder="metrics.example.com"
-							autocomplete="off"
-						/>
-					</label>
-				</div>
-			</Collapsible>
-			<div class="flex justify-end gap-2 border-t border-border pt-4">
-				<Button type="button" variant="ghost" size="sm" onclick={() => (monitoringServer = null)}
-					>Cancel</Button
-				>
-				<Button type="submit" size="sm" loading={monitoringActionId === monitoringServer?.id}
-					>Save monitoring</Button
-				>
-			</div>
-		</form>
-	</DialogContent>
-</Dialog>
+<MonitoringDialog
+	serverId={monitoringServerId}
+	onClose={() => (monitoringServerId = null)}
+	onSaved={invalidateAll}
+/>
 
 <!-- A dialog rather than a page of its own: there is no server detail view to
      hang it off, and the log is something you glance at from the row you were
