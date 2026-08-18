@@ -1152,6 +1152,14 @@ export interface components {
 			refresh_after_seconds: number;
 			summary: components['schemas']['ProjectObservabilitySummary'];
 			services: components['schemas']['ServiceObservability'][];
+			/** @description Servers that host an active deployment in this project but run no monitoring agent, deduplicated and sorted by name so a client can render one call to action per server rather than one per affected service. */
+			unmonitored_servers: components['schemas']['UnmonitoredServer'][];
+		};
+		UnmonitoredServer: {
+			id: string;
+			name: string;
+			/** @description Services in this project whose active deployment runs on this server. */
+			service_count: number;
 		};
 		ProjectObservabilityHistoryResponse: {
 			services: components['schemas']['ServiceObservabilityHistory'][];
@@ -1231,6 +1239,9 @@ export interface components {
 				| 'error'
 				| 'monitoring_disabled';
 			deployment_id?: string;
+			/** @description Server running the active deployment; absent when nothing is deployed. */
+			server_id?: string;
+			server_name?: string;
 			error?: string;
 			container?: components['schemas']['ContainerObservability'];
 		};

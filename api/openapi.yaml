@@ -3378,6 +3378,7 @@ components:
         - refresh_after_seconds
         - summary
         - services
+        - unmonitored_servers
       properties:
         sampled_at:
           type: string
@@ -3391,6 +3392,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServiceObservability"
+        unmonitored_servers:
+          type: array
+          description: >-
+            Servers that host an active deployment in this project but run no monitoring
+            agent, deduplicated and sorted by name so a client can render one call to
+            action per server rather than one per affected service.
+          items:
+            $ref: "#/components/schemas/UnmonitoredServer"
+
+    UnmonitoredServer:
+      type: object
+      required:
+        - id
+        - name
+        - service_count
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        service_count:
+          type: integer
+          description: Services in this project whose active deployment runs on this server.
 
     ProjectObservabilityHistoryResponse:
       type: object
@@ -3574,6 +3598,11 @@ components:
             - error
             - monitoring_disabled
         deployment_id:
+          type: string
+        server_id:
+          type: string
+          description: Server running the active deployment; absent when nothing is deployed.
+        server_name:
           type: string
         error:
           type: string

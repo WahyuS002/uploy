@@ -860,6 +860,9 @@ type ProjectObservabilityResponse struct {
 	SampledAt           time.Time                   `json:"sampled_at"`
 	Services            []ServiceObservability      `json:"services"`
 	Summary             ProjectObservabilitySummary `json:"summary"`
+
+	// UnmonitoredServers Servers that host an active deployment in this project but run no monitoring agent, deduplicated and sorted by name so a client can render one call to action per server rather than one per affected service.
+	UnmonitoredServers []UnmonitoredServer `json:"unmonitored_servers"`
 }
 
 // ProjectObservabilitySummary defines model for ProjectObservabilitySummary.
@@ -1003,7 +1006,11 @@ type ServiceObservability struct {
 	EnvironmentName string                  `json:"environment_name"`
 	Error           *string                 `json:"error,omitempty"`
 	Name            string                  `json:"name"`
-	ServiceId       string                  `json:"service_id"`
+
+	// ServerId Server running the active deployment; absent when nothing is deployed.
+	ServerId   *string `json:"server_id,omitempty"`
+	ServerName *string `json:"server_name,omitempty"`
+	ServiceId  string  `json:"service_id"`
 
 	// Status monitoring_disabled means the deployment server runs no monitoring agent, so Uploy has no metrics for it. It is a setup state, not a failure.
 	Status ServiceObservabilityStatus `json:"status"`
@@ -1049,6 +1056,15 @@ type ServiceResponse struct {
 
 // ServiceResponseKind defines model for ServiceResponse.Kind.
 type ServiceResponseKind string
+
+// UnmonitoredServer defines model for UnmonitoredServer.
+type UnmonitoredServer struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+
+	// ServiceCount Services in this project whose active deployment runs on this server.
+	ServiceCount int `json:"service_count"`
+}
 
 // UpdateAlertRuleRequest defines model for UpdateAlertRuleRequest.
 type UpdateAlertRuleRequest struct {

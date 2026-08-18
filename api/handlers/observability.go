@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/WahyuS002/uploy/telemetry"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -92,18 +93,35 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 		})
 	}
 
+	// Indexed rather than appended under a lock: each goroutine owns one slot, and
+	// the map's iteration order would make the response order jitter between polls.
+	serverIDs := make([]string, 0, len(targetsByServer))
+	for serverID := range targetsByServer {
+		serverIDs = append(serverIDs, serverID)
+	}
+	unmonitored := make([]*gen.UnmonitoredServer, len(serverIDs))
 	var waitGroup sync.WaitGroup
 	semaphore := make(chan struct{}, observabilityServerConcurrency)
-	for serverID, targets := range targetsByServer {
+	for index, serverID := range serverIDs {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
-			s.collectServerObservability(ctx, serverID, targets, response.Services)
+			unmonitored[index] = s.collectServerObservability(ctx, serverID, targetsByServer[serverID], response.Services)
 		}()
 	}
 	waitGroup.Wait()
+
+	response.UnmonitoredServers = []gen.UnmonitoredServer{}
+	for _, server := range unmonitored {
+		if server != nil {
+			response.UnmonitoredServers = append(response.UnmonitoredServers, *server)
+		}
+	}
+	sort.Slice(response.UnmonitoredServers, func(left, right int) bool {
+		return response.UnmonitoredServers[left].Name < response.UnmonitoredServers[right].Name
+	})
 
 	for _, service := range response.Services {
 		if service.Status == gen.ServiceObservabilityStatusRunning && service.Container != nil {
@@ -126,12 +144,18 @@ func (s *Server) GetProjectObservability(w http.ResponseWriter, r *http.Request,
 	respond.JSON(w, http.StatusOK, response)
 }
 
-func (s *Server) collectServerObservability(ctx context.Context, serverID string, targets []serverObservationTarget, services []gen.ServiceObservability) {
+// collectServerObservability returns the server when it carries no agent, so the
+// caller can offer one call to action per server instead of one per service.
+func (s *Server) collectServerObservability(ctx context.Context, serverID string, targets []serverObservationTarget, services []gen.ServiceObservability) *gen.UnmonitoredServer {
 	server, err := db.GetServerWithKey(ctx, serverID)
 	if err != nil {
 		telemetry.Printf("GetServerWithKey server=%s error: %v", serverID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusError, "Deployment server is unavailable")
-		return
+		return nil
+	}
+	for _, target := range targets {
+		services[target.serviceIndex].ServerId = stringPointer(server.ID)
+		services[target.serviceIndex].ServerName = stringPointer(server.Name)
 	}
 	// No agent, no metrics. Reaching for docker stats over SSH here used to fill the
 	// live cards while the retained charts stayed empty, which read as a broken page
@@ -140,9 +164,11 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 		for _, target := range targets {
 			services[target.serviceIndex].Status = gen.ServiceObservabilityStatusMonitoringDisabled
 		}
-		return
+		// One target per service, so the target count is the affected service count.
+		return &gen.UnmonitoredServer{Id: server.ID, Name: server.Name, ServiceCount: len(targets)}
 	}
 	s.collectAgentObservability(ctx, server, targets, services)
+	return nil
 }
 
 func (s *Server) collectAgentObservability(ctx context.Context, server db.ServerWithKey, targets []serverObservationTarget, services []gen.ServiceObservability) {
