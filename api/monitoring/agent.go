@@ -60,6 +60,11 @@ type LatestResponse struct {
 	Points []HistoryPoint `json:"points"`
 }
 
+type ServerLatestResponse struct {
+	SampledAt       int64   `json:"sampled_at"`
+	DiskUsedPercent float64 `json:"disk_used_percent"`
+}
+
 func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config) (err error) {
 	if err := ValidateConfig(cfg); err != nil {
 		return err
@@ -337,6 +342,27 @@ func GetLatestAll(ctx context.Context, baseURL, controlToken string) (LatestResp
 	}
 	if latest.Points == nil {
 		latest.Points = []HistoryPoint{}
+	}
+	return latest, nil
+}
+
+func GetServerLatest(ctx context.Context, baseURL, controlToken string) (ServerLatestResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/v1/server/latest", nil)
+	if err != nil {
+		return ServerLatestResponse{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+controlToken)
+	response, err := liveHTTPClient.Do(req)
+	if err != nil {
+		return ServerLatestResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return ServerLatestResponse{}, fmt.Errorf("monitoring agent HTTP %d", response.StatusCode)
+	}
+	var latest ServerLatestResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&latest); err != nil {
+		return ServerLatestResponse{}, err
 	}
 	return latest, nil
 }

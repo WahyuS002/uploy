@@ -19,6 +19,69 @@ const (
 	CookieAuthScopes = "cookieAuth.Scopes"
 )
 
+// Defines values for AlertCondition.
+const (
+	CpuHigh           AlertCondition = "cpu_high"
+	DiskLow           AlertCondition = "disk_low"
+	MemoryHigh        AlertCondition = "memory_high"
+	ServerUnreachable AlertCondition = "server_unreachable"
+	ServiceDown       AlertCondition = "service_down"
+)
+
+// Valid indicates whether the value is a known member of the AlertCondition enum.
+func (e AlertCondition) Valid() bool {
+	switch e {
+	case CpuHigh:
+		return true
+	case DiskLow:
+		return true
+	case MemoryHigh:
+		return true
+	case ServerUnreachable:
+		return true
+	case ServiceDown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AlertEventResponseStatus.
+const (
+	Firing   AlertEventResponseStatus = "firing"
+	Resolved AlertEventResponseStatus = "resolved"
+)
+
+// Valid indicates whether the value is a known member of the AlertEventResponseStatus enum.
+func (e AlertEventResponseStatus) Valid() bool {
+	switch e {
+	case Firing:
+		return true
+	case Resolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AlertScopeType.
+const (
+	Server  AlertScopeType = "server"
+	Service AlertScopeType = "service"
+)
+
+// Valid indicates whether the value is a known member of the AlertScopeType enum.
+func (e AlertScopeType) Valid() bool {
+	switch e {
+	case Server:
+		return true
+	case Service:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConfigChangeType.
 const (
 	Added   ConfigChangeType = "added"
@@ -115,6 +178,33 @@ func (e LogEntryType) Valid() bool {
 	case Stderr:
 		return true
 	case Stdout:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationChannelType.
+const (
+	Discord  NotificationChannelType = "discord"
+	Email    NotificationChannelType = "email"
+	Slack    NotificationChannelType = "slack"
+	Telegram NotificationChannelType = "telegram"
+	Webhook  NotificationChannelType = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the NotificationChannelType enum.
+func (e NotificationChannelType) Valid() bool {
+	switch e {
+	case Discord:
+		return true
+	case Email:
+		return true
+	case Slack:
+		return true
+	case Telegram:
+		return true
+	case Webhook:
 		return true
 	default:
 		return false
@@ -313,6 +403,45 @@ func (e GetServiceLogsParamsSince) Valid() bool {
 	}
 }
 
+// AlertCondition defines model for AlertCondition.
+type AlertCondition string
+
+// AlertEventResponse defines model for AlertEventResponse.
+type AlertEventResponse struct {
+	DurationSeconds *int                     `json:"duration_seconds,omitempty"`
+	Id              string                   `json:"id"`
+	ResolvedAt      *time.Time               `json:"resolved_at,omitempty"`
+	ResolvedValue   *float64                 `json:"resolved_value,omitempty"`
+	RuleId          string                   `json:"rule_id"`
+	StartedAt       time.Time                `json:"started_at"`
+	Status          AlertEventResponseStatus `json:"status"`
+	TargetId        string                   `json:"target_id"`
+	TargetName      string                   `json:"target_name"`
+	TriggerValue    float64                  `json:"trigger_value"`
+}
+
+// AlertEventResponseStatus defines model for AlertEventResponse.Status.
+type AlertEventResponseStatus string
+
+// AlertRuleResponse defines model for AlertRuleResponse.
+type AlertRuleResponse struct {
+	ChannelIds      []string       `json:"channel_ids"`
+	Condition       AlertCondition `json:"condition"`
+	CreatedAt       time.Time      `json:"created_at"`
+	DurationSeconds int            `json:"duration_seconds"`
+	Enabled         bool           `json:"enabled"`
+	Id              string         `json:"id"`
+	Name            string         `json:"name"`
+	ScopeType       AlertScopeType `json:"scope_type"`
+	ServerId        *string        `json:"server_id,omitempty"`
+	ServiceId       *string        `json:"service_id,omitempty"`
+	Threshold       float64        `json:"threshold"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+}
+
+// AlertScopeType defines model for AlertScopeType.
+type AlertScopeType string
+
 // AuthResponse defines model for AuthResponse.
 type AuthResponse struct {
 	User      User      `json:"user"`
@@ -392,6 +521,18 @@ type ContainerObservabilitySample struct {
 	UptimeSeconds        int64     `json:"uptime_seconds"`
 }
 
+// CreateAlertRuleRequest defines model for CreateAlertRuleRequest.
+type CreateAlertRuleRequest struct {
+	ChannelIds      []string       `json:"channel_ids"`
+	Condition       AlertCondition `json:"condition"`
+	DurationSeconds int            `json:"duration_seconds"`
+	Name            string         `json:"name"`
+	ScopeType       AlertScopeType `json:"scope_type"`
+	ServerId        *string        `json:"server_id,omitempty"`
+	ServiceId       *string        `json:"service_id,omitempty"`
+	Threshold       float64        `json:"threshold"`
+}
+
 // CreateDomainRequest defines model for CreateDomainRequest.
 type CreateDomainRequest struct {
 	Domain string `json:"domain"`
@@ -400,6 +541,13 @@ type CreateDomainRequest struct {
 // CreateEnvironmentRequest defines model for CreateEnvironmentRequest.
 type CreateEnvironmentRequest struct {
 	Name string `json:"name"`
+}
+
+// CreateNotificationChannelRequest defines model for CreateNotificationChannelRequest.
+type CreateNotificationChannelRequest struct {
+	Config NotificationChannelConfig `json:"config"`
+	Name   string                    `json:"name"`
+	Type   NotificationChannelType   `json:"type"`
 }
 
 // CreateProjectFromImageRequest defines model for CreateProjectFromImageRequest.
@@ -544,6 +692,23 @@ type LoginRequest struct {
 type LogoutResponse struct {
 	Ok bool `json:"ok"`
 }
+
+// NotificationChannelConfig defines model for NotificationChannelConfig.
+type NotificationChannelConfig map[string]interface{}
+
+// NotificationChannelResponse defines model for NotificationChannelResponse.
+type NotificationChannelResponse struct {
+	Config    NotificationChannelConfig `json:"config"`
+	CreatedAt time.Time                 `json:"created_at"`
+	Enabled   bool                      `json:"enabled"`
+	Id        string                    `json:"id"`
+	Name      string                    `json:"name"`
+	Type      NotificationChannelType   `json:"type"`
+	UpdatedAt time.Time                 `json:"updated_at"`
+}
+
+// NotificationChannelType defines model for NotificationChannelType.
+type NotificationChannelType string
 
 // PendingChangesResponse defines model for PendingChangesResponse.
 type PendingChangesResponse struct {
@@ -712,6 +877,19 @@ type ServiceResponse struct {
 // ServiceResponseKind defines model for ServiceResponse.Kind.
 type ServiceResponseKind string
 
+// UpdateAlertRuleRequest defines model for UpdateAlertRuleRequest.
+type UpdateAlertRuleRequest struct {
+	ChannelIds      []string       `json:"channel_ids"`
+	Condition       AlertCondition `json:"condition"`
+	DurationSeconds int            `json:"duration_seconds"`
+	Enabled         *bool          `json:"enabled,omitempty"`
+	Name            string         `json:"name"`
+	ScopeType       AlertScopeType `json:"scope_type"`
+	ServerId        *string        `json:"server_id,omitempty"`
+	ServiceId       *string        `json:"service_id,omitempty"`
+	Threshold       float64        `json:"threshold"`
+}
+
 // UpdateDomainRequest defines model for UpdateDomainRequest.
 type UpdateDomainRequest struct {
 	IsPrimary bool `json:"is_primary"`
@@ -720,6 +898,14 @@ type UpdateDomainRequest struct {
 // UpdateEnvironmentRequest defines model for UpdateEnvironmentRequest.
 type UpdateEnvironmentRequest struct {
 	Name string `json:"name"`
+}
+
+// UpdateNotificationChannelRequest defines model for UpdateNotificationChannelRequest.
+type UpdateNotificationChannelRequest struct {
+	Config  NotificationChannelConfig `json:"config"`
+	Enabled *bool                     `json:"enabled,omitempty"`
+	Name    string                    `json:"name"`
+	Type    NotificationChannelType   `json:"type"`
 }
 
 // UpdateProjectRequest defines model for UpdateProjectRequest.
@@ -761,6 +947,12 @@ type Workspace struct {
 	Role *string `json:"role,omitempty"`
 }
 
+// ListAlertHistoryParams defines parameters for ListAlertHistory.
+type ListAlertHistoryParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // GetProjectObservabilityHistoryParams defines parameters for GetProjectObservabilityHistory.
 type GetProjectObservabilityHistoryParams struct {
 	Since     *GetProjectObservabilityHistoryParamsSince `form:"since,omitempty" json:"since,omitempty"`
@@ -793,6 +985,12 @@ type GetServiceLogsParams struct {
 // GetServiceLogsParamsSince defines parameters for GetServiceLogs.
 type GetServiceLogsParamsSince string
 
+// CreateAlertRuleJSONRequestBody defines body for CreateAlertRule for application/json ContentType.
+type CreateAlertRuleJSONRequestBody = CreateAlertRuleRequest
+
+// UpdateAlertRuleJSONRequestBody defines body for UpdateAlertRule for application/json ContentType.
+type UpdateAlertRuleJSONRequestBody = UpdateAlertRuleRequest
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -801,6 +999,12 @@ type RegisterJSONRequestBody = LoginRequest
 
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = DeployRequest
+
+// CreateNotificationChannelJSONRequestBody defines body for CreateNotificationChannel for application/json ContentType.
+type CreateNotificationChannelJSONRequestBody = CreateNotificationChannelRequest
+
+// UpdateNotificationChannelJSONRequestBody defines body for UpdateNotificationChannel for application/json ContentType.
+type UpdateNotificationChannelJSONRequestBody = UpdateNotificationChannelRequest
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
@@ -849,6 +1053,21 @@ type GenerateSSHKeyJSONRequestBody = GenerateSSHKeyRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List alert rules
+	// (GET /api/alert-rules)
+	ListAlertRules(w http.ResponseWriter, r *http.Request)
+	// Create an alert rule
+	// (POST /api/alert-rules)
+	CreateAlertRule(w http.ResponseWriter, r *http.Request)
+	// Delete an alert rule
+	// (DELETE /api/alert-rules/{id})
+	DeleteAlertRule(w http.ResponseWriter, r *http.Request, id string)
+	// Update an alert rule
+	// (PUT /api/alert-rules/{id})
+	UpdateAlertRule(w http.ResponseWriter, r *http.Request, id string)
+	// List alert incidents
+	// (GET /api/alerts/history)
+	ListAlertHistory(w http.ResponseWriter, r *http.Request, params ListAlertHistoryParams)
 	// Login with email and password
 	// (POST /api/auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -867,6 +1086,21 @@ type ServerInterface interface {
 	// Stream deployment logs via SSE
 	// (GET /api/deployments/{id}/logs)
 	GetDeploymentLogs(w http.ResponseWriter, r *http.Request, id string)
+	// List notification channels
+	// (GET /api/notification-channels)
+	ListNotificationChannels(w http.ResponseWriter, r *http.Request)
+	// Create a notification channel
+	// (POST /api/notification-channels)
+	CreateNotificationChannel(w http.ResponseWriter, r *http.Request)
+	// Delete a notification channel
+	// (DELETE /api/notification-channels/{id})
+	DeleteNotificationChannel(w http.ResponseWriter, r *http.Request, id string)
+	// Update a notification channel
+	// (PUT /api/notification-channels/{id})
+	UpdateNotificationChannel(w http.ResponseWriter, r *http.Request, id string)
+	// Send a test notification
+	// (POST /api/notification-channels/{id}/test)
+	TestNotificationChannel(w http.ResponseWriter, r *http.Request, id string)
 	// List projects in workspace
 	// (GET /api/projects)
 	ListProjects(w http.ResponseWriter, r *http.Request)
@@ -998,6 +1232,149 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// ListAlertRules operation middleware
+func (siw *ServerInterfaceWrapper) ListAlertRules(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAlertRules(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAlertRule operation middleware
+func (siw *ServerInterfaceWrapper) CreateAlertRule(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAlertRule(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAlertRule operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAlertRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAlertRule(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAlertRule operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAlertRule(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAlertRule(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAlertHistory operation middleware
+func (siw *ServerInterfaceWrapper) ListAlertHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAlertHistoryParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAlertHistory(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
 
@@ -1108,6 +1485,139 @@ func (siw *ServerInterfaceWrapper) GetDeploymentLogs(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetDeploymentLogs(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationChannels operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationChannels(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationChannels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) CreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNotificationChannel(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) DeleteNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteNotificationChannel(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) UpdateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateNotificationChannel(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) TestNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestNotificationChannel(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2462,12 +2972,22 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/api/alert-rules", wrapper.ListAlertRules)
+	m.HandleFunc("POST "+options.BaseURL+"/api/alert-rules", wrapper.CreateAlertRule)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/alert-rules/{id}", wrapper.DeleteAlertRule)
+	m.HandleFunc("PUT "+options.BaseURL+"/api/alert-rules/{id}", wrapper.UpdateAlertRule)
+	m.HandleFunc("GET "+options.BaseURL+"/api/alerts/history", wrapper.ListAlertHistory)
 	m.HandleFunc("POST "+options.BaseURL+"/api/auth/login", wrapper.Login)
 	m.HandleFunc("POST "+options.BaseURL+"/api/auth/logout", wrapper.Logout)
 	m.HandleFunc("GET "+options.BaseURL+"/api/auth/me", wrapper.GetMe)
 	m.HandleFunc("POST "+options.BaseURL+"/api/auth/register", wrapper.Register)
 	m.HandleFunc("POST "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
 	m.HandleFunc("GET "+options.BaseURL+"/api/deployments/{id}/logs", wrapper.GetDeploymentLogs)
+	m.HandleFunc("GET "+options.BaseURL+"/api/notification-channels", wrapper.ListNotificationChannels)
+	m.HandleFunc("POST "+options.BaseURL+"/api/notification-channels", wrapper.CreateNotificationChannel)
+	m.HandleFunc("DELETE "+options.BaseURL+"/api/notification-channels/{id}", wrapper.DeleteNotificationChannel)
+	m.HandleFunc("PUT "+options.BaseURL+"/api/notification-channels/{id}", wrapper.UpdateNotificationChannel)
+	m.HandleFunc("POST "+options.BaseURL+"/api/notification-channels/{id}/test", wrapper.TestNotificationChannel)
 	m.HandleFunc("GET "+options.BaseURL+"/api/projects", wrapper.ListProjects)
 	m.HandleFunc("POST "+options.BaseURL+"/api/projects", wrapper.CreateProject)
 	m.HandleFunc("POST "+options.BaseURL+"/api/projects/from-image", wrapper.CreateProjectFromImage)

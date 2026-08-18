@@ -96,6 +96,10 @@ func ListInProgressDeploymentIDs(ctx context.Context) ([]string, error) {
 	return Queries.ListInProgressDeploymentIDs(ctx)
 }
 
+func ServiceHasInProgressDeployment(ctx context.Context, serviceID string) (bool, error) {
+	return Queries.ServiceHasInProgressDeployment(ctx, serviceID)
+}
+
 func GetLatestDeploymentPhase(ctx context.Context, deploymentID string) (string, error) {
 	return Queries.GetLatestDeploymentPhase(ctx, deploymentID)
 }

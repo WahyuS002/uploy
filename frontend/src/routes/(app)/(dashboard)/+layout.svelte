@@ -6,7 +6,8 @@
 
 	const tabs = [
 		{ href: '/projects', label: 'Projects' },
-		{ href: '/servers', label: 'Servers' }
+		{ href: '/servers', label: 'Servers' },
+		{ href: '/alerts', label: 'Alerts' }
 	];
 
 	let workspaceName = $derived(data.workspace?.name ?? 'Uploy');

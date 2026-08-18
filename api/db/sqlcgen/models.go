@@ -10,6 +10,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AlertEvent struct {
+	ID            string             `json:"id"`
+	WorkspaceID   string             `json:"workspace_id"`
+	RuleID        string             `json:"rule_id"`
+	TargetID      string             `json:"target_id"`
+	TargetName    string             `json:"target_name"`
+	Status        string             `json:"status"`
+	StartedAt     time.Time          `json:"started_at"`
+	ResolvedAt    pgtype.Timestamptz `json:"resolved_at"`
+	TriggerValue  float64            `json:"trigger_value"`
+	ResolvedValue pgtype.Float8      `json:"resolved_value"`
+	CreatedAt     time.Time          `json:"created_at"`
+}
+
+type AlertRule struct {
+	ID              string      `json:"id"`
+	WorkspaceID     string      `json:"workspace_id"`
+	Name            string      `json:"name"`
+	Condition       string      `json:"condition"`
+	Threshold       float64     `json:"threshold"`
+	DurationSeconds int32       `json:"duration_seconds"`
+	ScopeType       string      `json:"scope_type"`
+	ServerID        pgtype.Text `json:"server_id"`
+	ServiceID       pgtype.Text `json:"service_id"`
+	Enabled         bool        `json:"enabled"`
+	CreatedAt       time.Time   `json:"created_at"`
+	UpdatedAt       time.Time   `json:"updated_at"`
+}
+
+type AlertRuleChannel struct {
+	RuleID    string `json:"rule_id"`
+	ChannelID string `json:"channel_id"`
+}
+
 type Deployment struct {
 	ID                    string      `json:"id"`
 	Status                string      `json:"status"`
@@ -35,6 +69,17 @@ type Environment struct {
 	ProjectID string    `json:"project_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type NotificationChannel struct {
+	ID               string    `json:"id"`
+	WorkspaceID      string    `json:"workspace_id"`
+	Name             string    `json:"name"`
+	Type             string    `json:"type"`
+	ConfigCiphertext string    `json:"config_ciphertext"`
+	Enabled          bool      `json:"enabled"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type OauthIdentity struct {

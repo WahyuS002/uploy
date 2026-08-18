@@ -90,6 +90,11 @@ FROM deployments
 WHERE status = 'in_progress'
 ORDER BY created_at ASC;
 
+-- name: ServiceHasInProgressDeployment :one
+SELECT EXISTS (
+    SELECT 1 FROM deployments WHERE service_id = $1 AND status = 'in_progress'
+);
+
 -- name: GetLatestDeploymentPhase :one
 SELECT COALESCE((
     SELECT phase

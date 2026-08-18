@@ -298,6 +298,19 @@ func (q *Queries) ListLatestSuccessfulConfigs(ctx context.Context, serviceIds []
 	return items, nil
 }
 
+const serviceHasInProgressDeployment = `-- name: ServiceHasInProgressDeployment :one
+SELECT EXISTS (
+    SELECT 1 FROM deployments WHERE service_id = $1 AND status = 'in_progress'
+)
+`
+
+func (q *Queries) ServiceHasInProgressDeployment(ctx context.Context, serviceID string) (bool, error) {
+	row := q.db.QueryRow(ctx, serviceHasInProgressDeployment, serviceID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const setDeploymentStatus = `-- name: SetDeploymentStatus :exec
 UPDATE deployments SET status = $1 WHERE id = $2
 `

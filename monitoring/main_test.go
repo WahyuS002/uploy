@@ -71,6 +71,22 @@ func TestReaderCannotDeleteHistory(t *testing.T) {
 	}
 }
 
+func TestServerLatestHandler(t *testing.T) {
+	collector := &collector{server: serverSample{SampledAt: 123, DiskUsedPercent: 87.5}}
+	response := httptest.NewRecorder()
+	collector.serverLatestHandler(response, httptest.NewRequest(http.MethodGet, "/v1/server/latest", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.Code)
+	}
+	var got serverSample
+	if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.DiskUsedPercent != 87.5 {
+		t.Fatalf("disk_used_percent = %v, want 87.5", got.DiskUsedPercent)
+	}
+}
+
 func TestLoadConfigRejectsSharedTokens(t *testing.T) {
 	t.Setenv("UPLOY_MONITOR_CONTROL_TOKEN", strings.Repeat("a", 32))
 	t.Setenv("UPLOY_MONITOR_READER_TOKEN", strings.Repeat("a", 32))

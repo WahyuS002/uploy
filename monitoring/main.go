@@ -70,6 +70,11 @@ type sample struct {
 	UptimeSeconds        int64   `json:"uptime_seconds"`
 }
 
+type serverSample struct {
+	SampledAt       int64   `json:"sampled_at"`
+	DiskUsedPercent float64 `json:"disk_used_percent"`
+}
+
 type historyResponse struct {
 	Points []sample `json:"points"`
 }
@@ -87,6 +92,7 @@ type collector struct {
 
 	mu          sync.RWMutex
 	latest      []sample
+	server      serverSample
 	lastPersist time.Time
 	running     bool
 }
@@ -110,6 +116,7 @@ func main() {
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.Handle("GET /metrics", requireToken(cfg, http.HandlerFunc(collector.metricsHandler)))
 	mux.Handle("GET /v1/latest", requireToken(cfg, http.HandlerFunc(collector.latestAllHandler)))
+	mux.Handle("GET /v1/server/latest", requireToken(cfg, http.HandlerFunc(collector.serverLatestHandler)))
 	mux.Handle("GET /v1/history", requireToken(cfg, http.HandlerFunc(collector.historiesHandler)))
 	mux.Handle("POST /v1/history", requireToken(cfg, http.HandlerFunc(collector.historiesQueryHandler)))
 	mux.Handle("GET /v1/deployments/{id}/latest", requireToken(cfg, http.HandlerFunc(collector.latestHandler)))
@@ -221,13 +228,19 @@ func (c *collector) collect(ctx context.Context, forcePersist bool) {
 		c.mu.Unlock()
 	}()
 
+	server, serverErr := readServerSample(ctx)
+	if serverErr != nil {
+		log.Printf("collect server metrics: %v", serverErr)
+	}
 	samples, err := readDockerSamples(ctx)
 	if err != nil {
 		log.Printf("collect metrics: %v", err)
-		return
 	}
 	c.mu.Lock()
 	c.latest = samples
+	if serverErr == nil {
+		c.server = server
+	}
 	c.mu.Unlock()
 	if !persist {
 		return
@@ -509,6 +522,26 @@ func readDockerSamples(ctx context.Context) ([]sample, error) {
 	return sortedSamples(byID), nil
 }
 
+func readServerSample(ctx context.Context) (serverSample, error) {
+	output, err := exec.CommandContext(ctx, "df", "-Pk", "/").Output()
+	if err != nil {
+		return serverSample{}, err
+	}
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) < 2 {
+		return serverSample{}, errors.New("df returned no filesystem rows")
+	}
+	fields := strings.Fields(lines[len(lines)-1])
+	if len(fields) < 5 {
+		return serverSample{}, fmt.Errorf("invalid df output")
+	}
+	used, err := strconv.ParseFloat(strings.TrimSuffix(fields[4], "%"), 64)
+	if err != nil {
+		return serverSample{}, err
+	}
+	return serverSample{SampledAt: time.Now().UTC().UnixMilli(), DiskUsedPercent: used}, nil
+}
+
 func sortedSamples(byID map[string]sample) []sample {
 	metrics := make([]sample, 0, len(byID))
 	for _, metric := range byID {
@@ -609,8 +642,11 @@ func sameToken(left, right string) bool {
 func (c *collector) metricsHandler(w http.ResponseWriter, _ *http.Request) {
 	c.mu.RLock()
 	metrics := append([]sample(nil), c.latest...)
+	server := c.server
 	c.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/openmetrics-text; version=1.0.0; charset=utf-8")
+	fmt.Fprintf(w, "uploy_server_disk_used_percent %g\n", server.DiskUsedPercent)
+	fmt.Fprintf(w, "uploy_server_sample_timestamp_seconds %d\n", server.SampledAt/1000)
 	for _, metric := range metrics {
 		labels := fmt.Sprintf(`deployment_id=%q,container_id=%q,container_name=%q`, metric.DeploymentID, metric.ContainerID, metric.ContainerName)
 		fmt.Fprintf(w, "uploy_container_cpu_percent{%s} %g\n", labels, metric.CPUPercent)
@@ -651,6 +687,16 @@ func (c *collector) latestAllHandler(w http.ResponseWriter, _ *http.Request) {
 		log.Printf("write latest: %v", err)
 	}
 	_, _ = w.Write([]byte("}\n"))
+}
+
+func (c *collector) serverLatestHandler(w http.ResponseWriter, _ *http.Request) {
+	c.mu.RLock()
+	sample := c.server
+	c.mu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(sample); err != nil {
+		log.Printf("write server latest: %v", err)
+	}
 }
 
 func boolInt(value bool) int {

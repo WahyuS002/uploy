@@ -586,6 +586,322 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/notification-channels:
+    get:
+      operationId: listNotificationChannels
+      summary: List notification channels
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Notification channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationChannelResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createNotificationChannel
+      summary: Create a notification channel
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationChannelRequest"
+      responses:
+        "201":
+          description: Notification channel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationChannelResponse"
+        "400":
+          description: Invalid channel configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/notification-channels/{id}:
+    put:
+      operationId: updateNotificationChannel
+      summary: Update a notification channel
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationChannelRequest"
+      responses:
+        "200":
+          description: Notification channel updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationChannelResponse"
+        "400":
+          description: Invalid channel configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteNotificationChannel
+      summary: Delete a notification channel
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Notification channel deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/notification-channels/{id}/test:
+    post:
+      operationId: testNotificationChannel
+      summary: Send a test notification
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Test notification sent
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Notification provider rejected the test
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/alert-rules:
+    get:
+      operationId: listAlertRules
+      summary: List alert rules
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Alert rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlertRuleResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createAlertRule
+      summary: Create an alert rule
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlertRuleRequest"
+      responses:
+        "201":
+          description: Alert rule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRuleResponse"
+        "400":
+          description: Invalid alert rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/alert-rules/{id}:
+    put:
+      operationId: updateAlertRule
+      summary: Update an alert rule
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAlertRuleRequest"
+      responses:
+        "200":
+          description: Alert rule updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRuleResponse"
+        "400":
+          description: Invalid alert rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert rule not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAlertRule
+      summary: Delete an alert rule
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Alert rule deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert rule not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/alerts/history:
+    get:
+      operationId: listAlertHistory
+      summary: List alert incidents
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Alert incidents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlertEventResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/projects:
     post:
       operationId: createProject
@@ -1993,6 +2309,212 @@ components:
       name: session
 
   schemas:
+    NotificationChannelConfig:
+      type: object
+      additionalProperties: true
+
+    NotificationChannelType:
+      type: string
+      enum:
+        - discord
+        - slack
+        - telegram
+        - email
+        - webhook
+
+    CreateNotificationChannelRequest:
+      type: object
+      required:
+        - name
+        - type
+        - config
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        type:
+          $ref: "#/components/schemas/NotificationChannelType"
+        config:
+          $ref: "#/components/schemas/NotificationChannelConfig"
+
+    UpdateNotificationChannelRequest:
+      allOf:
+        - $ref: "#/components/schemas/CreateNotificationChannelRequest"
+        - type: object
+          properties:
+            enabled:
+              type: boolean
+
+    NotificationChannelResponse:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - enabled
+        - config
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/NotificationChannelType"
+        enabled:
+          type: boolean
+        config:
+          $ref: "#/components/schemas/NotificationChannelConfig"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AlertCondition:
+      type: string
+      enum:
+        - cpu_high
+        - memory_high
+        - disk_low
+        - service_down
+        - server_unreachable
+
+    AlertScopeType:
+      type: string
+      enum:
+        - server
+        - service
+
+    CreateAlertRuleRequest:
+      type: object
+      required:
+        - name
+        - condition
+        - threshold
+        - duration_seconds
+        - scope_type
+        - channel_ids
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        condition:
+          $ref: "#/components/schemas/AlertCondition"
+        threshold:
+          type: number
+          format: double
+          minimum: 0
+        duration_seconds:
+          type: integer
+          minimum: 60
+          maximum: 2592000
+        scope_type:
+          $ref: "#/components/schemas/AlertScopeType"
+        server_id:
+          type: string
+        service_id:
+          type: string
+        channel_ids:
+          type: array
+          items:
+            type: string
+
+    UpdateAlertRuleRequest:
+      allOf:
+        - $ref: "#/components/schemas/CreateAlertRuleRequest"
+        - type: object
+          properties:
+            enabled:
+              type: boolean
+
+    AlertRuleResponse:
+      type: object
+      required:
+        - id
+        - name
+        - condition
+        - threshold
+        - duration_seconds
+        - scope_type
+        - channel_ids
+        - enabled
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        condition:
+          $ref: "#/components/schemas/AlertCondition"
+        threshold:
+          type: number
+          format: double
+        duration_seconds:
+          type: integer
+        scope_type:
+          $ref: "#/components/schemas/AlertScopeType"
+        server_id:
+          type: string
+        service_id:
+          type: string
+        channel_ids:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AlertEventResponse:
+      type: object
+      required:
+        - id
+        - rule_id
+        - target_id
+        - target_name
+        - status
+        - started_at
+        - trigger_value
+      properties:
+        id:
+          type: string
+        rule_id:
+          type: string
+        target_id:
+          type: string
+        target_name:
+          type: string
+        status:
+          type: string
+          enum:
+            - firing
+            - resolved
+        started_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+        trigger_value:
+          type: number
+          format: double
+        resolved_value:
+          type: number
+          format: double
+        duration_seconds:
+          type: integer
+
     LoginRequest:
       type: object
       required:

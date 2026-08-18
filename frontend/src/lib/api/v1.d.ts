@@ -217,6 +217,112 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/notification-channels': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List notification channels */
+		get: operations['listNotificationChannels'];
+		put?: never;
+		/** Create a notification channel */
+		post: operations['createNotificationChannel'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/notification-channels/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Update a notification channel */
+		put: operations['updateNotificationChannel'];
+		post?: never;
+		/** Delete a notification channel */
+		delete: operations['deleteNotificationChannel'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/notification-channels/{id}/test': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Send a test notification */
+		post: operations['testNotificationChannel'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/alert-rules': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List alert rules */
+		get: operations['listAlertRules'];
+		put?: never;
+		/** Create an alert rule */
+		post: operations['createAlertRule'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/alert-rules/{id}': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		/** Update an alert rule */
+		put: operations['updateAlertRule'];
+		post?: never;
+		/** Delete an alert rule */
+		delete: operations['deleteAlertRule'];
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/alerts/history': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** List alert incidents */
+		get: operations['listAlertHistory'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/projects': {
 		parameters: {
 			query?: never;
@@ -590,6 +696,82 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		NotificationChannelConfig: {
+			[key: string]: unknown;
+		};
+		/** @enum {string} */
+		NotificationChannelType: 'discord' | 'slack' | 'telegram' | 'email' | 'webhook';
+		CreateNotificationChannelRequest: {
+			name: string;
+			type: components['schemas']['NotificationChannelType'];
+			config: components['schemas']['NotificationChannelConfig'];
+		};
+		UpdateNotificationChannelRequest: components['schemas']['CreateNotificationChannelRequest'] & {
+			enabled?: boolean;
+		};
+		NotificationChannelResponse: {
+			id: string;
+			name: string;
+			type: components['schemas']['NotificationChannelType'];
+			enabled: boolean;
+			config: components['schemas']['NotificationChannelConfig'];
+			/** Format: date-time */
+			created_at: string;
+			/** Format: date-time */
+			updated_at: string;
+		};
+		/** @enum {string} */
+		AlertCondition: 'cpu_high' | 'memory_high' | 'disk_low' | 'service_down' | 'server_unreachable';
+		/** @enum {string} */
+		AlertScopeType: 'server' | 'service';
+		CreateAlertRuleRequest: {
+			name: string;
+			condition: components['schemas']['AlertCondition'];
+			/** Format: double */
+			threshold: number;
+			duration_seconds: number;
+			scope_type: components['schemas']['AlertScopeType'];
+			server_id?: string;
+			service_id?: string;
+			channel_ids: string[];
+		};
+		UpdateAlertRuleRequest: components['schemas']['CreateAlertRuleRequest'] & {
+			enabled?: boolean;
+		};
+		AlertRuleResponse: {
+			id: string;
+			name: string;
+			condition: components['schemas']['AlertCondition'];
+			/** Format: double */
+			threshold: number;
+			duration_seconds: number;
+			scope_type: components['schemas']['AlertScopeType'];
+			server_id?: string;
+			service_id?: string;
+			channel_ids: string[];
+			enabled: boolean;
+			/** Format: date-time */
+			created_at: string;
+			/** Format: date-time */
+			updated_at: string;
+		};
+		AlertEventResponse: {
+			id: string;
+			rule_id: string;
+			target_id: string;
+			target_name: string;
+			/** @enum {string} */
+			status: 'firing' | 'resolved';
+			/** Format: date-time */
+			started_at: string;
+			/** Format: date-time */
+			resolved_at?: string;
+			/** Format: double */
+			trigger_value: number;
+			/** Format: double */
+			resolved_value?: number;
+			duration_seconds?: number;
+		};
 		LoginRequest: {
 			/** Format: email */
 			email: string;
@@ -1732,6 +1914,409 @@ export interface operations {
 			};
 			/** @description Monitoring history could not be deleted */
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	listNotificationChannels: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Notification channels */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['NotificationChannelResponse'][];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	createNotificationChannel: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateNotificationChannelRequest'];
+			};
+		};
+		responses: {
+			/** @description Notification channel created */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['NotificationChannelResponse'];
+				};
+			};
+			/** @description Invalid channel configuration */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	updateNotificationChannel: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateNotificationChannelRequest'];
+			};
+		};
+		responses: {
+			/** @description Notification channel updated */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['NotificationChannelResponse'];
+				};
+			};
+			/** @description Invalid channel configuration */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Channel not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	deleteNotificationChannel: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Notification channel deleted */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Channel not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	testNotificationChannel: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Test notification sent */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Channel not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Notification provider rejected the test */
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	listAlertRules: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Alert rules */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AlertRuleResponse'][];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	createAlertRule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateAlertRuleRequest'];
+			};
+		};
+		responses: {
+			/** @description Alert rule created */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AlertRuleResponse'];
+				};
+			};
+			/** @description Invalid alert rule */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	updateAlertRule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['UpdateAlertRuleRequest'];
+			};
+		};
+		responses: {
+			/** @description Alert rule updated */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AlertRuleResponse'];
+				};
+			};
+			/** @description Invalid alert rule */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Alert rule not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	deleteAlertRule: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Alert rule deleted */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Alert rule not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	listAlertHistory: {
+		parameters: {
+			query?: {
+				limit?: number;
+				offset?: number;
+			};
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Alert incidents */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AlertEventResponse'][];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
 				headers: {
 					[name: string]: unknown;
 				};
