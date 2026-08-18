@@ -38,6 +38,7 @@
 		minute: '2-digit',
 		second: '2-digit'
 	});
+	const serverList = new Intl.ListFormat('en-GB', { style: 'long', type: 'conjunction' });
 
 	let projectId = $derived(page.params.id as string);
 	let snapshot = $state<ObservabilityResponse | null>(null);
@@ -72,6 +73,36 @@
 		history.some((point) => point.networkIn > 0 || point.networkOut > 0)
 	);
 	let markerGroups = $derived.by(() => groupMarkers(markers));
+
+	let isOwner = $derived(page.data.workspace?.role === 'owner');
+	let unmonitoredServers = $derived(snapshot?.unmonitored_servers ?? []);
+	// One call to action per server, not per affected service: the deep link carries
+	// the dialog straight to the machine when there is only one to fix.
+	let enableMonitoringHref = $derived(
+		unmonitoredServers.length === 1
+			? `/servers?monitoring=${encodeURIComponent(unmonitoredServers[0].id)}`
+			: '/servers'
+	);
+	let unmonitoredNames = $derived(serverList.format(unmonitoredServers.map((s) => s.name)));
+	let unmonitoredServiceCount = $derived(
+		unmonitoredServers.reduce((total, server) => total + server.service_count, 0)
+	);
+	let unmonitoredExplanation = $derived(
+		`Uploy reads container metrics from the uploy-monitor agent. ${unmonitoredNames} ${
+			unmonitoredServers.length === 1 ? 'does' : 'do'
+		} not run it yet, so there are no metrics for the ${countServices(
+			unmonitoredServiceCount
+		)} deployed there.${isOwner ? '' : ' Ask a workspace owner to enable it.'}`
+	);
+	let unmonitoredBanner = $derived(
+		`${unmonitoredNames} ${unmonitoredServers.length === 1 ? 'is' : 'are'} not running the monitoring agent. The ${countServices(
+			unmonitoredServiceCount
+		)} deployed there ${unmonitoredServiceCount === 1 ? 'is' : 'are'} missing from the readings above.`
+	);
+
+	function countServices(count: number): string {
+		return count === 1 ? '1 service' : `${count} services`;
+	}
 
 	/**
 	 * One state for the whole page, so a project can never show live numbers in one
@@ -463,6 +494,10 @@
 	}
 </script>
 
+{#snippet enableMonitoring()}
+	<Button size="sm" href={enableMonitoringHref}>Enable monitoring</Button>
+{/snippet}
+
 <svelte:head>
 	<title>Project observability · Uploy</title>
 </svelte:head>
@@ -479,15 +514,24 @@
 				</p>
 			</div>
 			<div class="flex flex-wrap items-center gap-2">
-				<Badge tone={snapshot ? 'success' : 'neutral'}>
-					<span class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"></span>
-					{snapshot ? 'Live' : 'Connecting'}
-				</Badge>
-				<span class="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
-					{refreshing
-						? 'Refreshing…'
-						: `Updates every ${snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS}s`}
-				</span>
+				{#if pageState === 'ready'}
+					<Badge tone="success">
+						<span class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"></span>
+						Live
+					</Badge>
+					<span class="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
+						{refreshing
+							? 'Refreshing…'
+							: `Updates every ${snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS}s`}
+					</span>
+				{:else if pageState === 'monitoring_off'}
+					<Badge tone="neutral">Not monitored</Badge>
+				{:else if pageState === 'loading'}
+					<Badge tone="neutral">
+						<span class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-current"></span>
+						Connecting
+					</Badge>
+				{/if}
 			</div>
 		</header>
 
@@ -513,6 +557,21 @@
 				icon={ChartBar}
 				title="No services in this project"
 				description="Add a service to see container health and resource usage here."
+			/>
+		{:else if pageState === 'not_deployed'}
+			<EmptyState
+				icon={ChartBar}
+				title="Nothing deployed yet"
+				description="Deploy a service to start collecting container health and resource usage."
+			/>
+		{:else if pageState === 'monitoring_off'}
+			<!-- One state for the whole page. Showing the cards here with every reading
+			     dashed out would say the same thing three times without saying why. -->
+			<EmptyState
+				icon={Signal}
+				title="Monitoring is not enabled"
+				description={unmonitoredExplanation}
+				actions={isOwner ? enableMonitoring : undefined}
 			/>
 		{:else if snapshot}
 			<section
@@ -791,6 +850,20 @@
 					{/if}
 				</div>
 			</section>
+
+			{#if unmonitoredServers.length > 0}
+				<div
+					class="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+					role="status"
+				>
+					<span>{unmonitoredBanner}</span>
+					{#if isOwner}
+						<Button size="sm" variant="secondary" href={enableMonitoringHref}>
+							Enable monitoring
+						</Button>
+					{/if}
+				</div>
+			{/if}
 
 			<section
 				class="mt-5 overflow-hidden rounded-xl border border-border"
