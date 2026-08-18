@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { api } from '$lib/api/client';
-	import type { components } from '$lib/api/v1';
+	import type { components, paths } from '$lib/api/v1';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import {
 		ChartBar,
@@ -19,6 +20,11 @@
 	type ServiceObservability = components['schemas']['ServiceObservability'];
 	type DeploymentMarker = components['schemas']['DeploymentMarker'];
 	type Status = ServiceObservability['status'];
+	type HistoryRange = NonNullable<
+		NonNullable<
+			paths['/api/projects/{id}/observability/history']['get']['parameters']['query']
+		>['since']
+	>;
 	type HistoryPoint = {
 		at: string;
 		cpu: number;
@@ -39,11 +45,22 @@
 		second: '2-digit'
 	});
 	const serverList = new Intl.ListFormat('en-GB', { style: 'long', type: 'conjunction' });
+	// The agent serves each range at its own resolution — a minute per point over an
+	// hour, eight hours per point over a month — so a wider window is not a heavier
+	// response, only a coarser one.
+	const HISTORY_RANGES: { value: HistoryRange; label: string }[] = [
+		{ value: '1h', label: 'Last hour' },
+		{ value: '6h', label: 'Last 6 hours' },
+		{ value: '24h', label: 'Last 24 hours' },
+		{ value: '7d', label: 'Last 7 days' },
+		{ value: '30d', label: 'Last 30 days' }
+	];
 
 	let projectId = $derived(page.params.id as string);
 	let snapshot = $state<ObservabilityResponse | null>(null);
 	let history = $state<HistoryPoint[]>([]);
 	let markers = $state<DeploymentMarker[]>([]);
+	let historyRange = $state<HistoryRange>('7d');
 	let serviceRates = $state<Record<string, number>>({});
 	let liveNetworkRate = $state({ in: 0, out: 0 });
 	let loading = $state(true);
@@ -123,6 +140,7 @@
 
 	$effect(() => {
 		const id = projectId;
+		const range = historyRange;
 		retryVersion;
 		let cancelled = false;
 
@@ -161,7 +179,7 @@
 		async function fetchHistory() {
 			try {
 				const { data } = await api.GET('/api/projects/{id}/observability/history', {
-					params: { path: { id }, query: { since: '7d', max_points: MAX_HISTORY_POINTS } }
+					params: { path: { id }, query: { since: range, max_points: MAX_HISTORY_POINTS } }
 				});
 				if (cancelled || !data) return;
 				history = retainedTimeline(data);
@@ -667,11 +685,9 @@
 						<h2 id="history-title" class="text-[15px] font-semibold text-foreground">
 							Retained history
 						</h2>
-						<p class="mt-0.5 text-xs text-muted-foreground">
-							Up to seven days from servers with monitoring enabled
-						</p>
+						<p class="mt-0.5 text-xs text-muted-foreground">From servers with monitoring enabled</p>
 					</div>
-					<div class="flex flex-wrap gap-3 text-xs text-muted-foreground">
+					<div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
 						<span class="flex items-center gap-1.5"
 							><span class="h-1.5 w-1.5 rounded-full bg-info"></span>CPU</span
 						>
@@ -681,6 +697,14 @@
 						<span class="flex items-center gap-1.5"
 							><span class="h-1.5 w-1.5 rounded-full bg-primary-deep"></span>Network</span
 						>
+						<Select
+							items={HISTORY_RANGES}
+							value={historyRange}
+							onValueChange={(value) => (historyRange = value as HistoryRange)}
+							size="sm"
+							class="w-36"
+							aria-label="History range"
+						/>
 					</div>
 				</header>
 				<div class="border-t border-border px-5 py-5">
@@ -766,12 +790,10 @@
 									theme="outline"
 									class="mx-auto h-5 w-5 text-muted-foreground"
 								/>
-								<p class="mt-3 text-sm font-medium text-foreground">
-									Waiting for container metrics
-								</p>
+								<p class="mt-3 text-sm font-medium text-foreground">No samples in this range</p>
 								<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
 									{snapshot.summary.running_services
-										? 'Enable server monitoring to retain this timeline across page visits.'
+										? 'Pick a wider range, or wait for the agent to persist its next sample.'
 										: 'Start or restore an active deployment to populate this chart.'}
 								</p>
 							</div>
