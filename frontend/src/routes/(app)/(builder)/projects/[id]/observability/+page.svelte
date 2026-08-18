@@ -28,6 +28,9 @@
 	};
 
 	const DEFAULT_REFRESH_SECONDS = 15;
+	// The agent persists a sample once a minute and serves the trailing hour at that
+	// raw resolution, so polling history faster only re-reads points we already have.
+	const HISTORY_REFRESH_SECONDS = 60;
 	const MAX_HISTORY_POINTS = 300;
 	const MAX_VISIBLE_MARKERS = 24;
 	const timeFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -41,31 +44,51 @@
 	let history = $state<HistoryPoint[]>([]);
 	let markers = $state<DeploymentMarker[]>([]);
 	let serviceRates = $state<Record<string, number>>({});
+	let liveNetworkRate = $state({ in: 0, out: 0 });
 	let loading = $state(true);
 	let refreshing = $state(false);
 	let loadError = $state('');
 	let refreshError = $state('');
 	let retryVersion = $state(0);
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	let historyTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let memoryPercent = $derived(
 		snapshot?.summary.memory_limit_bytes
 			? (snapshot.summary.memory_used_bytes / snapshot.summary.memory_limit_bytes) * 100
 			: 0
 	);
-	let networkRate = $derived({
+	let retainedNetworkRate = $derived({
 		in: history.at(-1)?.networkIn ?? 0,
 		out: history.at(-1)?.networkOut ?? 0
 	});
 	let chartNetworkMax = $derived(
 		Math.max(1, ...history.flatMap((point) => [point.networkIn, point.networkOut]))
 	);
-	let hasMetricHistory = $derived(history.some((point) => point.cpu > 0 || point.memory > 0));
-	let hasNetworkSamples = $derived(history.length > 1);
+	// Two points is the minimum a line can be drawn between. Testing for a non-zero
+	// reading instead used to render a one-point path, which draws nothing at all.
+	let hasMetricHistory = $derived(history.length > 1);
 	let hasNetworkActivity = $derived(
 		history.some((point) => point.networkIn > 0 || point.networkOut > 0)
 	);
 	let markerGroups = $derived.by(() => groupMarkers(markers));
+
+	/**
+	 * One state for the whole page, so a project can never show live numbers in one
+	 * section and an explanation of why there are none in another.
+	 */
+	let pageState = $derived.by(() => {
+		if (loading && !snapshot) return 'loading' as const;
+		if (loadError && !snapshot) return 'error' as const;
+		if (!snapshot) return 'loading' as const;
+		if (snapshot.summary.total_services === 0) return 'no_services' as const;
+		const deployed = snapshot.services.filter((service) => service.status !== 'not_deployed');
+		if (deployed.length === 0) return 'not_deployed' as const;
+		if (deployed.every((service) => service.status === 'monitoring_disabled')) {
+			return 'monitoring_off' as const;
+		}
+		return 'ready' as const;
+	});
 
 	$effect(() => {
 		const id = projectId;
@@ -74,11 +97,14 @@
 
 		function clearRefresh() {
 			if (timer) clearTimeout(timer);
+			if (historyTimer) clearTimeout(historyTimer);
 			timer = null;
+			historyTimer = null;
 		}
 
 		function scheduleRefresh() {
-			clearRefresh();
+			if (timer) clearTimeout(timer);
+			timer = null;
 			if (cancelled || document.hidden) return;
 			timer = setTimeout(
 				async () => {
@@ -89,14 +115,26 @@
 			);
 		}
 
+		// The retained series keeps its own slower cadence. It used to advance on the
+		// live tick because live samples were written straight into it.
+		function scheduleHistoryRefresh() {
+			if (historyTimer) clearTimeout(historyTimer);
+			historyTimer = null;
+			if (cancelled || document.hidden) return;
+			historyTimer = setTimeout(async () => {
+				await fetchHistory();
+				scheduleHistoryRefresh();
+			}, HISTORY_REFRESH_SECONDS * 1000);
+		}
+
 		async function fetchHistory() {
 			try {
 				const { data } = await api.GET('/api/projects/{id}/observability/history', {
 					params: { path: { id }, query: { since: '7d', max_points: MAX_HISTORY_POINTS } }
 				});
 				if (cancelled || !data) return;
-				history = mergeHistory(history, retainedTimeline(data));
-				markers = mergeMarkers(markers, data.deployment_markers ?? []);
+				history = retainedTimeline(data);
+				markers = [...(data.deployment_markers ?? [])].sort(byTime);
 			} catch {
 				// Live metrics remain useful when retained history is unavailable.
 			}
@@ -144,17 +182,10 @@
 					: 0;
 				snapshot = data;
 				serviceRates = nextRates;
-				history = mergeHistory(history, [
-					{
-						at: data.sampled_at,
-						cpu: data.summary.cpu_percent,
-						memory: data.summary.memory_limit_bytes
-							? (data.summary.memory_used_bytes / data.summary.memory_limit_bytes) * 100
-							: 0,
-						networkIn: seconds ? Math.max(0, inDelta / seconds) : 0,
-						networkOut: seconds ? Math.max(0, outDelta / seconds) : 0
-					}
-				]);
+				liveNetworkRate = {
+					in: seconds ? Math.max(0, inDelta / seconds) : 0,
+					out: seconds ? Math.max(0, outDelta / seconds) : 0
+				};
 			} catch {
 				if (cancelled) return;
 				if (snapshot) refreshError = 'Network error while refreshing metrics';
@@ -170,12 +201,15 @@
 		function handleVisibility() {
 			clearRefresh();
 			if (!document.hidden) {
-				untrack(() => void fetchSnapshot().finally(scheduleRefresh));
+				untrack(() => {
+					void fetchSnapshot().finally(scheduleRefresh);
+					void fetchHistory().finally(scheduleHistoryRefresh);
+				});
 			}
 		}
 
 		document.addEventListener('visibilitychange', handleVisibility);
-		untrack(() => void fetchHistory());
+		untrack(() => void fetchHistory().finally(scheduleHistoryRefresh));
 		untrack(() => void fetchSnapshot().finally(scheduleRefresh));
 		return () => {
 			cancelled = true;
@@ -190,23 +224,8 @@
 		retryVersion++;
 	}
 
-	function mergeHistory(current: HistoryPoint[], incoming: HistoryPoint[]): HistoryPoint[] {
-		const points = new Map(current.map((point) => [point.at, point]));
-		for (const point of incoming) points.set(point.at, point);
-		return [...points.values()]
-			.sort((left, right) => new Date(left.at).getTime() - new Date(right.at).getTime())
-			.slice(-MAX_HISTORY_POINTS);
-	}
-
-	function mergeMarkers(
-		current: DeploymentMarker[],
-		incoming: DeploymentMarker[]
-	): DeploymentMarker[] {
-		const byId = new Map(current.map((marker) => [marker.deployment_id, marker]));
-		for (const marker of incoming) byId.set(marker.deployment_id, marker);
-		return [...byId.values()].sort(
-			(left, right) => new Date(left.at).getTime() - new Date(right.at).getTime()
-		);
+	function byTime(left: { at: string }, right: { at: string }): number {
+		return new Date(left.at).getTime() - new Date(right.at).getTime();
 	}
 
 	type MarkerGroup = {
@@ -292,7 +311,7 @@
 			networkIn: number;
 			networkOut: number;
 		};
-		const byTime = new Map<string, Aggregate>();
+		const buckets = new Map<string, Aggregate>();
 		for (const service of response.services) {
 			for (const deployment of service.deployments) {
 				const points = [...deployment.points].sort(
@@ -312,7 +331,7 @@
 					const bucketAt = new Date(
 						Math.floor(new Date(point.sampled_at).getTime() / 60_000) * 60_000
 					).toISOString();
-					const aggregate = byTime.get(bucketAt) ?? {
+					const aggregate = buckets.get(bucketAt) ?? {
 						at: bucketAt,
 						cpu: 0,
 						memoryUsed: 0,
@@ -333,17 +352,20 @@
 							(point.network_out_bytes_total - previous.network_out_bytes_total) / seconds
 						);
 					}
-					byTime.set(bucketAt, aggregate);
+					buckets.set(bucketAt, aggregate);
 				}
 			}
 		}
-		return [...byTime.values()].map((point) => ({
-			at: point.at,
-			cpu: point.cpu,
-			memory: point.memoryLimit ? (point.memoryUsed / point.memoryLimit) * 100 : 0,
-			networkIn: point.networkIn,
-			networkOut: point.networkOut
-		}));
+		return [...buckets.values()]
+			.map((point) => ({
+				at: point.at,
+				cpu: point.cpu,
+				memory: point.memoryLimit ? (point.memoryUsed / point.memoryLimit) * 100 : 0,
+				networkIn: point.networkIn,
+				networkOut: point.networkOut
+			}))
+			.sort(byTime)
+			.slice(-MAX_HISTORY_POINTS);
 	}
 
 	function formatBytes(bytes: number, perSecond = false): string {
@@ -469,7 +491,7 @@
 			</div>
 		</header>
 
-		{#if loading && !snapshot}
+		{#if pageState === 'loading'}
 			<div class="space-y-5" aria-label="Loading observability" aria-busy="true">
 				<div
 					class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3"
@@ -480,13 +502,13 @@
 				</div>
 				<div class="h-72 animate-pulse rounded-xl border border-border bg-muted/30"></div>
 			</div>
-		{:else if loadError && !snapshot}
+		{:else if pageState === 'error'}
 			<EmptyState icon={ExclamationTriangle} title="Metrics unavailable" description={loadError}>
 				{#snippet actions()}
 					<Button size="sm" variant="secondary" onclick={retry}>Try again</Button>
 				{/snippet}
 			</EmptyState>
-		{:else if snapshot && snapshot.summary.total_services === 0}
+		{:else if pageState === 'no_services'}
 			<EmptyState
 				icon={ChartBar}
 				title="No services in this project"
@@ -555,10 +577,13 @@
 						<p
 							class="mt-3 font-mono text-[1.75rem] leading-none font-semibold tracking-[-0.03em] text-foreground tabular-nums"
 						>
-							{formatBytes(networkRate.in + networkRate.out, true)}
+							{formatBytes(liveNetworkRate.in + liveNetworkRate.out, true)}
 						</p>
 						<p class="mt-2 text-xs text-muted-foreground">
-							{formatBytes(networkRate.in, true)} received · {formatBytes(networkRate.out, true)} sent
+							{formatBytes(liveNetworkRate.in, true)} received · {formatBytes(
+								liveNetworkRate.out,
+								true
+							)} sent
 						</p>
 					</div>
 				</div>
@@ -705,13 +730,13 @@
 						<div class="flex items-center gap-4 text-xs text-muted-foreground tabular-nums">
 							<span class="flex items-center gap-1.5"
 								><span class="h-1.5 w-1.5 rounded-full bg-primary-deep"></span>{formatBytes(
-									networkRate.in,
+									retainedNetworkRate.in,
 									true
 								)} in</span
 							>
 							<span class="flex items-center gap-1.5"
 								><span class="h-1.5 w-1.5 rounded-full bg-warning"></span>{formatBytes(
-									networkRate.out,
+									retainedNetworkRate.out,
 									true
 								)} out</span
 							>
@@ -759,9 +784,9 @@
 						<div
 							class="mt-5 flex min-h-40 items-center justify-center border border-dashed border-border bg-muted/20 px-6 text-center text-xs leading-relaxed text-muted-foreground"
 						>
-							{hasNetworkSamples
+							{history.length > 1
 								? 'No network traffic has been observed in retained samples.'
-								: `Waiting for the next ${snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS}-second sample to calculate throughput.`}
+								: `Waiting for the next retained sample, up to ${HISTORY_REFRESH_SECONDS} seconds away.`}
 						</div>
 					{/if}
 				</div>
