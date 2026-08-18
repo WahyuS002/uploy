@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, replaceState } from '$app/navigation';
+	import { page } from '$app/state';
 	import type { PageData } from './$types';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
@@ -84,6 +85,22 @@
 			)
 		};
 	}
+
+	// Arrived from a call to action elsewhere in the app: /servers?monitoring=<id>
+	// opens this page with the dialog already on the right machine, so the prompt to
+	// enable monitoring does not have to duplicate the form to act on it.
+	let openedFromLink = false;
+	$effect(() => {
+		const requested = page.url.searchParams.get('monitoring');
+		if (!requested || openedFromLink) return;
+		openedFromLink = true;
+		const target = servers.find((server) => server.id === requested);
+		if (target && isOwner) openMonitoring(target);
+		// Dropped once consumed, so closing the dialog and reloading does not reopen it.
+		const url = new URL(page.url);
+		url.searchParams.delete('monitoring');
+		replaceState(url, page.state);
+	});
 
 	function openMonitoring(server: (typeof servers)[number]) {
 		monitoringServer = server;
