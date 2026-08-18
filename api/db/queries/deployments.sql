@@ -39,7 +39,17 @@ WITH service_deployments AS (
                  AND l.phase <> 'recovery_pending'
                ORDER BY l."order" DESC
                LIMIT 1
-           ), '') AS phase
+           ), '') AS phase,
+           COALESCE((
+               SELECT MIN(l.created_at)
+               FROM deployment_logs l
+               WHERE l.deployment_id = d.id
+           ), d.created_at) AS started_at,
+           COALESCE((
+               SELECT MAX(l.created_at)::timestamptz
+               FROM deployment_logs l
+               WHERE l.deployment_id = d.id
+           ), d.created_at) AS completed_at
     FROM deployments d
     WHERE d.service_id = $1
 ), current_deployment AS (
@@ -62,6 +72,8 @@ SELECT d.id,
        d.created_at,
        d.configuration_snapshot,
        d.phase::text AS phase,
+       d.started_at,
+       d.completed_at,
        COALESCE((CASE
            WHEN current_deployment.status = 'in_progress' AND current_deployment.phase IN ('active', 'drain')
                THEN d.id = current_deployment.id
@@ -77,7 +89,7 @@ FROM service_deployments d
 LEFT JOIN current_deployment ON true
 LEFT JOIN latest_success ON true
 )
-SELECT id, status, workspace_id, service_id, created_at, configuration_snapshot, phase, is_active, is_draining
+SELECT id, status, workspace_id, service_id, created_at, configuration_snapshot, phase, started_at, completed_at, is_active, is_draining
 FROM marked
 WHERE id IN (SELECT id FROM marked ORDER BY created_at DESC LIMIT $2)
    OR is_active

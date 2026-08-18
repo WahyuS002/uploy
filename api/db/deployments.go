@@ -21,6 +21,8 @@ type Deployment struct {
 	WorkspaceID string
 	ServiceID   string
 	CreatedAt   time.Time
+	StartedAt   time.Time
+	CompletedAt *time.Time
 	Phase       string
 	IsActive    bool
 	IsDraining  bool
@@ -36,6 +38,7 @@ func newDeployment(id, status string, workspaceID pgtype.Text, serviceID string,
 		Status:    status,
 		ServiceID: serviceID,
 		CreatedAt: createdAt,
+		StartedAt: createdAt,
 	}
 	if workspaceID.Valid {
 		dep.WorkspaceID = workspaceID.String
@@ -80,6 +83,13 @@ func ListDeploymentsByService(ctx context.Context, serviceID string, limit int32
 	for i, r := range rows {
 		deps[i] = newDeployment(r.ID, r.Status, r.WorkspaceID, r.ServiceID, r.CreatedAt)
 		deps[i].Phase = r.Phase
+		if !r.StartedAt.IsZero() {
+			deps[i].StartedAt = r.StartedAt
+		}
+		if !r.CompletedAt.IsZero() {
+			completedAt := r.CompletedAt
+			deps[i].CompletedAt = &completedAt
+		}
 		deps[i].IsActive = r.IsActive
 		deps[i].IsDraining = r.IsDraining
 		if r.ConfigurationSnapshot.Valid {

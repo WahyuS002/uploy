@@ -1094,6 +1094,22 @@ export interface components {
 		};
 		ProjectObservabilityHistoryResponse: {
 			services: components['schemas']['ServiceObservabilityHistory'][];
+			/** @description Deployments created within the requested history window, including failed attempts. */
+			deployment_markers: components['schemas']['DeploymentMarker'][];
+		};
+		DeploymentMarker: {
+			deployment_id: string;
+			service_id: string;
+			service_name: string;
+			/** Format: date-time */
+			at: string;
+			/** @enum {string} */
+			status: 'in_progress' | 'success' | 'failed';
+			duration_seconds: number;
+			/** @description Image deployed by this run; used when source-control metadata is unavailable. */
+			image: string;
+			/** @description Commit-like image tag or digest when the image reference encodes one; empty otherwise. */
+			commit: string;
 		};
 		ServiceObservabilityHistory: {
 			service_id: string;

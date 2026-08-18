@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import type { PageData } from './$types';
 	import ServiceWorkspace from '$lib/components/app/ServiceWorkspace.svelte';
 	import DeploymentPanel from '$lib/components/app/DeploymentPanel.svelte';
@@ -14,6 +15,7 @@
 	let openDeployment = $state<DeploymentResponse | null>(null);
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
 	let isOwner = $derived(data.workspace?.role === 'owner');
+	let initialDeploymentId = $derived(page.url.searchParams.get('deployment'));
 
 	// This page *is* the service, so deleting it has to leave. The project canvas
 	// picks the flash up the same way project creation does.
@@ -42,6 +44,7 @@
 				service={data.service}
 				{canEdit}
 				{isOwner}
+				{initialDeploymentId}
 				bind:openDeployment
 				onDeleted={goToProject}
 				onUpdated={() => invalidateAll()}

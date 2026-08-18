@@ -3332,11 +3332,51 @@ components:
       type: object
       required:
         - services
+        - deployment_markers
       properties:
         services:
           type: array
           items:
             $ref: "#/components/schemas/ServiceObservabilityHistory"
+        deployment_markers:
+          type: array
+          description: Deployments created within the requested history window, including failed attempts.
+          items:
+            $ref: "#/components/schemas/DeploymentMarker"
+
+    DeploymentMarker:
+      type: object
+      required:
+        - deployment_id
+        - service_id
+        - service_name
+        - at
+        - status
+        - duration_seconds
+        - image
+        - commit
+      properties:
+        deployment_id:
+          type: string
+        service_id:
+          type: string
+        service_name:
+          type: string
+        at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [in_progress, success, failed]
+        duration_seconds:
+          type: integer
+          minimum: 0
+        image:
+          type: string
+          description: Image deployed by this run; used when source-control metadata is unavailable.
+        commit:
+          type: string
+          description: Commit-like image tag or digest when the image reference encodes one; empty otherwise.
 
     ServiceObservabilityHistory:
       type: object

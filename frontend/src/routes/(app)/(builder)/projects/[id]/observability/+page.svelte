@@ -17,6 +17,7 @@
 
 	type ObservabilityResponse = components['schemas']['ProjectObservabilityResponse'];
 	type ServiceObservability = components['schemas']['ServiceObservability'];
+	type DeploymentMarker = components['schemas']['DeploymentMarker'];
 	type Status = ServiceObservability['status'];
 	type HistoryPoint = {
 		at: string;
@@ -28,6 +29,7 @@
 
 	const DEFAULT_REFRESH_SECONDS = 15;
 	const MAX_HISTORY_POINTS = 300;
+	const MAX_VISIBLE_MARKERS = 24;
 	const timeFormatter = new Intl.DateTimeFormat('en-GB', {
 		hour: '2-digit',
 		minute: '2-digit',
@@ -37,6 +39,7 @@
 	let projectId = $derived(page.params.id as string);
 	let snapshot = $state<ObservabilityResponse | null>(null);
 	let history = $state<HistoryPoint[]>([]);
+	let markers = $state<DeploymentMarker[]>([]);
 	let serviceRates = $state<Record<string, number>>({});
 	let loading = $state(true);
 	let refreshing = $state(false);
@@ -62,6 +65,7 @@
 	let hasNetworkActivity = $derived(
 		history.some((point) => point.networkIn > 0 || point.networkOut > 0)
 	);
+	let markerGroups = $derived.by(() => groupMarkers(markers));
 
 	$effect(() => {
 		const id = projectId;
@@ -76,10 +80,13 @@
 		function scheduleRefresh() {
 			clearRefresh();
 			if (cancelled || document.hidden) return;
-			timer = setTimeout(async () => {
-				await fetchSnapshot();
-				scheduleRefresh();
-			}, (snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS) * 1000);
+			timer = setTimeout(
+				async () => {
+					await fetchSnapshot();
+					scheduleRefresh();
+				},
+				(snapshot?.refresh_after_seconds ?? DEFAULT_REFRESH_SECONDS) * 1000
+			);
 		}
 
 		async function fetchHistory() {
@@ -89,6 +96,7 @@
 				});
 				if (cancelled || !data) return;
 				history = mergeHistory(history, retainedTimeline(data));
+				markers = mergeMarkers(markers, data.deployment_markers ?? []);
 			} catch {
 				// Live metrics remain useful when retained history is unavailable.
 			}
@@ -190,6 +198,89 @@
 			.slice(-MAX_HISTORY_POINTS);
 	}
 
+	function mergeMarkers(
+		current: DeploymentMarker[],
+		incoming: DeploymentMarker[]
+	): DeploymentMarker[] {
+		const byId = new Map(current.map((marker) => [marker.deployment_id, marker]));
+		for (const marker of incoming) byId.set(marker.deployment_id, marker);
+		return [...byId.values()].sort(
+			(left, right) => new Date(left.at).getTime() - new Date(right.at).getTime()
+		);
+	}
+
+	type MarkerGroup = {
+		at: string;
+		markers: DeploymentMarker[];
+	};
+
+	function groupMarkers(items: DeploymentMarker[]): MarkerGroup[] {
+		const sorted = [...items].sort(
+			(left, right) => new Date(left.at).getTime() - new Date(right.at).getTime()
+		);
+		if (sorted.length <= MAX_VISIBLE_MARKERS) {
+			return sorted.map((marker) => ({ at: marker.at, markers: [marker] }));
+		}
+		const start = new Date(history[0]?.at ?? sorted[0].at).getTime();
+		const end = new Date(history.at(-1)?.at ?? sorted.at(-1)!.at).getTime();
+		const bucketSize = Math.max(
+			6 * 60 * 60 * 1000,
+			Math.ceil(Math.max(1, end - start) / MAX_VISIBLE_MARKERS)
+		);
+		const buckets = new Map<number, DeploymentMarker[]>();
+		for (const marker of sorted) {
+			const bucket = Math.floor(new Date(marker.at).getTime() / bucketSize) * bucketSize;
+			buckets.set(bucket, [...(buckets.get(bucket) ?? []), marker]);
+		}
+		return [...buckets.entries()]
+			.sort(([left], [right]) => left - right)
+			.map(([at, grouped]) => ({ at: new Date(at).toISOString(), markers: grouped }));
+	}
+
+	function markerX(at: string): number {
+		if (!history.length) return 0;
+		const start = new Date(history[0].at).getTime();
+		const end = new Date(history.at(-1)!.at).getTime();
+		if (end <= start) return 360;
+		const progress = (new Date(at).getTime() - start) / (end - start);
+		return Math.min(720, Math.max(0, progress * 720));
+	}
+
+	function markerTitle(group: MarkerGroup): string {
+		if (group.markers.length > 1) {
+			return `${group.markers.length} deployments · ${formatTime(group.at)}`;
+		}
+		const marker = group.markers[0];
+		const reference = marker.commit
+			? `Commit ${marker.commit}`
+			: `Deployment ${shortDeploymentId(marker.deployment_id)}`;
+		const status =
+			marker.status === 'success'
+				? 'Succeeded'
+				: marker.status === 'failed'
+					? 'Failed'
+					: 'In progress';
+		const image = marker.image ? ` · ${marker.image}` : '';
+		return `Deploy · ${formatTime(marker.at)} · ${reference}${image} · ${status} · ${formatDuration(marker.duration_seconds)}`;
+	}
+
+	function markerColor(group: MarkerGroup): string {
+		if (group.markers.some((marker) => marker.status === 'failed')) return 'text-destructive';
+		if (group.markers.some((marker) => marker.status === 'in_progress')) return 'text-warning';
+		return 'text-muted-foreground';
+	}
+
+	function shortDeploymentId(id: string): string {
+		return id.length > 12 ? id.slice(0, 12) : id;
+	}
+
+	function formatDuration(seconds: number): string {
+		if (seconds < 60) return `${seconds}s`;
+		const minutes = Math.floor(seconds / 60);
+		const remaining = seconds % 60;
+		return remaining ? `${minutes}m ${remaining}s` : `${minutes}m`;
+	}
+
 	function retainedTimeline(
 		response: components['schemas']['ProjectObservabilityHistoryResponse']
 	): HistoryPoint[] {
@@ -205,13 +296,18 @@
 		for (const service of response.services) {
 			for (const deployment of service.deployments) {
 				const points = [...deployment.points].sort(
-					(left, right) => new Date(left.sampled_at).getTime() - new Date(right.sampled_at).getTime()
+					(left, right) =>
+						new Date(left.sampled_at).getTime() - new Date(right.sampled_at).getTime()
 				);
 				for (let index = 0; index < points.length; index++) {
 					const point = points[index];
 					const previous = points[index - 1];
 					const seconds = previous
-						? Math.max(1, (new Date(point.sampled_at).getTime() - new Date(previous.sampled_at).getTime()) / 1000)
+						? Math.max(
+								1,
+								(new Date(point.sampled_at).getTime() - new Date(previous.sampled_at).getTime()) /
+									1000
+							)
 						: 0;
 					const bucketAt = new Date(
 						Math.floor(new Date(point.sampled_at).getTime() / 60_000) * 60_000
@@ -515,6 +611,29 @@
 								stroke="currentColor"
 								stroke-width="1"
 							/>
+							{#each markerGroups as group (group.at)}
+								<a
+									href={group.markers.length === 1
+										? `/services/${encodeURIComponent(group.markers[0].service_id)}?deployment=${encodeURIComponent(group.markers[0].deployment_id)}`
+										: `/services/${encodeURIComponent(group.markers[0].service_id)}`}
+									class={markerColor(group)}
+									aria-label={markerTitle(group)}
+								>
+									<line
+										x1={markerX(group.at)}
+										x2={markerX(group.at)}
+										y1="0"
+										y2="180"
+										stroke="currentColor"
+										stroke-opacity="0.55"
+										stroke-width={group.markers.length > 1 ? 2 : 1}
+										stroke-dasharray={group.markers.some((marker) => marker.status === 'failed')
+											? '2 3'
+											: '4 4'}
+									/>
+									<title>{markerTitle(group)}</title>
+								</a>
+							{/each}
 							<path
 								d={chartPath(
 									history.map((point) => point.cpu),
@@ -566,8 +685,8 @@
 								</p>
 								<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
 									{snapshot.summary.running_services
-									? 'Enable server monitoring to retain this timeline across page visits.'
-									: 'Start or restore an active deployment to populate this chart.'}
+										? 'Enable server monitoring to retain this timeline across page visits.'
+										: 'Start or restore an active deployment to populate this chart.'}
 								</p>
 							</div>
 						</div>

@@ -307,8 +307,12 @@ func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.R
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to list project services"})
 		return
 	}
-	response := gen.ProjectObservabilityHistoryResponse{Services: make([]gen.ServiceObservabilityHistory, len(services))}
+	response := gen.ProjectObservabilityHistoryResponse{
+		Services:          make([]gen.ServiceObservabilityHistory, len(services)),
+		DeploymentMarkers: []gen.DeploymentMarker{},
+	}
 	byServer := make(map[string][]observedHistory)
+	to := time.Now().UTC()
 	for serviceIndex, service := range services {
 		response.Services[serviceIndex] = gen.ServiceObservabilityHistory{ServiceId: service.ID, Name: service.Name, Deployments: []gen.DeploymentObservabilityHistory{}}
 		deployments, err := db.ListDeploymentsByService(r.Context(), service.ID, 100)
@@ -317,6 +321,15 @@ func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.R
 			continue
 		}
 		for _, deployment := range deployments {
+			if deployment.CreatedAt.Before(from) || deployment.CreatedAt.After(to) {
+				continue
+			}
+			deploymentConfig, configErr := db.GetDeploymentConfig(r.Context(), deployment.ID)
+			image := ""
+			if configErr == nil {
+				image = deploymentConfig.Image
+			}
+			response.DeploymentMarkers = append(response.DeploymentMarkers, deploymentMarker(service, deployment, image, to))
 			if deployment.Status != "success" {
 				continue
 			}
@@ -324,8 +337,7 @@ func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.R
 			response.Services[serviceIndex].Deployments = append(response.Services[serviceIndex].Deployments, gen.DeploymentObservabilityHistory{
 				DeploymentId: deployment.ID, Points: []gen.ContainerObservabilitySample{},
 			})
-			deploymentConfig, err := db.GetDeploymentConfig(r.Context(), deployment.ID)
-			if err != nil {
+			if configErr != nil {
 				response.Services[serviceIndex].Deployments[deploymentIndex].UnavailableReason = stringPointer("Deployment configuration is unavailable")
 				continue
 			}
@@ -334,11 +346,60 @@ func (s *Server) GetProjectObservabilityHistory(w http.ResponseWriter, r *http.R
 			})
 		}
 	}
-	to := time.Now().UTC()
 	for serverID, observations := range byServer {
 		s.collectServerHistory(r.Context(), serverID, observations, response.Services, from, to, maxPoints)
 	}
 	respond.JSON(w, http.StatusOK, response)
+}
+
+func deploymentMarker(service db.Service, deployment db.Deployment, image string, now time.Time) gen.DeploymentMarker {
+	start := deployment.StartedAt
+	if start.IsZero() {
+		start = deployment.CreatedAt
+	}
+	end := now
+	if deployment.CompletedAt != nil && !deployment.CompletedAt.IsZero() && deployment.Status != "in_progress" {
+		end = *deployment.CompletedAt
+	}
+	duration := int(end.Sub(start).Seconds())
+	if duration < 0 {
+		duration = 0
+	}
+	return gen.DeploymentMarker{
+		DeploymentId:    deployment.ID,
+		ServiceId:       service.ID,
+		ServiceName:     service.Name,
+		At:              deployment.CreatedAt,
+		Status:          gen.DeploymentMarkerStatus(deployment.Status),
+		DurationSeconds: duration,
+		Image:           image,
+		Commit:          imageCommit(image),
+	}
+}
+
+func imageCommit(image string) string {
+	if digestIndex := strings.LastIndex(image, "@sha256:"); digestIndex >= 0 {
+		digest := image[digestIndex+len("@sha256:"):]
+		if len(digest) > 12 {
+			return digest[:12]
+		}
+		return digest
+	}
+	last := image[strings.LastIndex(image, "/")+1:]
+	colon := strings.LastIndex(last, ":")
+	if colon < 0 || colon == len(last)-1 {
+		return ""
+	}
+	tag := last[colon+1:]
+	if len(tag) < 7 || len(tag) > 40 {
+		return ""
+	}
+	for _, char := range tag {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')) {
+			return ""
+		}
+	}
+	return tag
 }
 
 func (s *Server) collectServerHistory(ctx context.Context, serverID string, observations []observedHistory, services []gen.ServiceObservabilityHistory, from, to time.Time, maxPoints int) {

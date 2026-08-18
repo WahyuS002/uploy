@@ -118,21 +118,42 @@ func (e CreateServiceRequestKind) Valid() bool {
 	}
 }
 
+// Defines values for DeploymentMarkerStatus.
+const (
+	DeploymentMarkerStatusFailed     DeploymentMarkerStatus = "failed"
+	DeploymentMarkerStatusInProgress DeploymentMarkerStatus = "in_progress"
+	DeploymentMarkerStatusSuccess    DeploymentMarkerStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the DeploymentMarkerStatus enum.
+func (e DeploymentMarkerStatus) Valid() bool {
+	switch e {
+	case DeploymentMarkerStatusFailed:
+		return true
+	case DeploymentMarkerStatusInProgress:
+		return true
+	case DeploymentMarkerStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeploymentResponseStatus.
 const (
-	Failed     DeploymentResponseStatus = "failed"
-	InProgress DeploymentResponseStatus = "in_progress"
-	Success    DeploymentResponseStatus = "success"
+	DeploymentResponseStatusFailed     DeploymentResponseStatus = "failed"
+	DeploymentResponseStatusInProgress DeploymentResponseStatus = "in_progress"
+	DeploymentResponseStatusSuccess    DeploymentResponseStatus = "success"
 )
 
 // Valid indicates whether the value is a known member of the DeploymentResponseStatus enum.
 func (e DeploymentResponseStatus) Valid() bool {
 	switch e {
-	case Failed:
+	case DeploymentResponseStatusFailed:
 		return true
-	case InProgress:
+	case DeploymentResponseStatusInProgress:
 		return true
-	case Success:
+	case DeploymentResponseStatusSuccess:
 		return true
 	default:
 		return false
@@ -648,6 +669,25 @@ type DeployResponse struct {
 	DeploymentId string `json:"deployment_id"`
 }
 
+// DeploymentMarker defines model for DeploymentMarker.
+type DeploymentMarker struct {
+	At time.Time `json:"at"`
+
+	// Commit Commit-like image tag or digest when the image reference encodes one; empty otherwise.
+	Commit          string `json:"commit"`
+	DeploymentId    string `json:"deployment_id"`
+	DurationSeconds int    `json:"duration_seconds"`
+
+	// Image Image deployed by this run; used when source-control metadata is unavailable.
+	Image       string                 `json:"image"`
+	ServiceId   string                 `json:"service_id"`
+	ServiceName string                 `json:"service_name"`
+	Status      DeploymentMarkerStatus `json:"status"`
+}
+
+// DeploymentMarkerStatus defines model for DeploymentMarker.Status.
+type DeploymentMarkerStatus string
+
 // DeploymentObservabilityHistory defines model for DeploymentObservabilityHistory.
 type DeploymentObservabilityHistory struct {
 	DeploymentId      string                         `json:"deployment_id"`
@@ -747,7 +787,9 @@ type PendingChangesResponse struct {
 
 // ProjectObservabilityHistoryResponse defines model for ProjectObservabilityHistoryResponse.
 type ProjectObservabilityHistoryResponse struct {
-	Services []ServiceObservabilityHistory `json:"services"`
+	// DeploymentMarkers Deployments created within the requested history window, including failed attempts.
+	DeploymentMarkers []DeploymentMarker            `json:"deployment_markers"`
+	Services          []ServiceObservabilityHistory `json:"services"`
 }
 
 // ProjectObservabilityResponse defines model for ProjectObservabilityResponse.

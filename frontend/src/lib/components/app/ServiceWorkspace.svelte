@@ -72,6 +72,8 @@
 		 * in, and a child cannot draw outside its own parent's edge.
 		 */
 		openDeployment?: DeploymentResponse | null;
+		/** A deployment selected from an observability marker deep link. */
+		initialDeploymentId?: string | null;
 	};
 
 	let {
@@ -84,7 +86,8 @@
 		onUpdated,
 		onDeployStarted,
 		class: className,
-		openDeployment = $bindable<DeploymentResponse | null>(null)
+		openDeployment = $bindable<DeploymentResponse | null>(null),
+		initialDeploymentId = null
 	}: Props = $props();
 
 	let svcId = $derived(service.id);
@@ -134,6 +137,7 @@
 	let deploying = $state(false);
 	let deployError = $state('');
 	let deployments = $state<DeploymentResponse[]>([]);
+	let initialDeploymentOpened = $state<string | null>(null);
 	// The API returns them newest first, so the head is the current one and the
 	// tail is history — the same split the panel shows.
 	let latestDeployment = $derived(deployments[0] ?? null);
@@ -407,10 +411,20 @@
 
 	async function loadDeployments(id: string, token: number = loadToken) {
 		const { data } = await api.GET('/api/services/{id}/deployments', {
-			params: { path: { id }, query: { limit: 10 } }
+			params: { path: { id }, query: { limit: 100 } }
 		});
 		if (token !== loadToken) return;
-		if (data) deployments = data;
+		if (!data) return;
+		deployments = data;
+		if (initialDeploymentId && initialDeploymentOpened !== initialDeploymentId) {
+			const selected = data.find((deployment) => deployment.id === initialDeploymentId);
+			if (selected) {
+				initialDeploymentOpened = initialDeploymentId;
+				deploymentId = selected.id;
+				activeTab = 'deployments';
+				openDeployment = selected;
+			}
+		}
 	}
 
 	/**
@@ -557,6 +571,7 @@
 		deployments = [];
 		openDeployment = null;
 		deploymentId = null;
+		initialDeploymentOpened = null;
 		deployError = '';
 		deploying = false;
 
