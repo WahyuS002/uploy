@@ -59,6 +59,8 @@ func TestBuildRunCommand(t *testing.T) {
 	for _, want := range []string{
 		"sudo -n docker run -d --name uploy-monitor",
 		"-p 10.0.0.4:9184:9184",
+		"-v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /:/host:ro",
+		"UPLOY_MONITOR_RETENTION_DAYS=7 -e HOST_PROC=/host/proc -e HOST_SYS=/host/sys -e HOST_ROOT=/host",
 		"UPLOY_MONITOR_CONTROL_TOKEN='control'\\''s token'",
 		"UPLOY_MONITOR_READER_TOKEN='reader token'",
 		"UPLOY_MONITOR_RETENTION_DAYS=7",

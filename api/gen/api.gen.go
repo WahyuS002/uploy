@@ -349,6 +349,33 @@ func (e GetProjectObservabilityHistoryParamsSince) Valid() bool {
 	}
 }
 
+// Defines values for GetServerObservabilityHistoryParamsSince.
+const (
+	GetServerObservabilityHistoryParamsSinceN1h  GetServerObservabilityHistoryParamsSince = "1h"
+	GetServerObservabilityHistoryParamsSinceN24h GetServerObservabilityHistoryParamsSince = "24h"
+	GetServerObservabilityHistoryParamsSinceN30d GetServerObservabilityHistoryParamsSince = "30d"
+	GetServerObservabilityHistoryParamsSinceN6h  GetServerObservabilityHistoryParamsSince = "6h"
+	GetServerObservabilityHistoryParamsSinceN7d  GetServerObservabilityHistoryParamsSince = "7d"
+)
+
+// Valid indicates whether the value is a known member of the GetServerObservabilityHistoryParamsSince enum.
+func (e GetServerObservabilityHistoryParamsSince) Valid() bool {
+	switch e {
+	case GetServerObservabilityHistoryParamsSinceN1h:
+		return true
+	case GetServerObservabilityHistoryParamsSinceN24h:
+		return true
+	case GetServerObservabilityHistoryParamsSinceN30d:
+		return true
+	case GetServerObservabilityHistoryParamsSinceN6h:
+		return true
+	case GetServerObservabilityHistoryParamsSinceN7d:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetProxyLogsParamsSince.
 const (
 	GetProxyLogsParamsSinceN1h  GetProxyLogsParamsSince = "1h"
@@ -378,25 +405,25 @@ func (e GetProxyLogsParamsSince) Valid() bool {
 
 // Defines values for GetServiceLogsParamsSince.
 const (
-	N1h  GetServiceLogsParamsSince = "1h"
-	N24h GetServiceLogsParamsSince = "24h"
-	N30d GetServiceLogsParamsSince = "30d"
-	N6h  GetServiceLogsParamsSince = "6h"
-	N7d  GetServiceLogsParamsSince = "7d"
+	GetServiceLogsParamsSinceN1h  GetServiceLogsParamsSince = "1h"
+	GetServiceLogsParamsSinceN24h GetServiceLogsParamsSince = "24h"
+	GetServiceLogsParamsSinceN30d GetServiceLogsParamsSince = "30d"
+	GetServiceLogsParamsSinceN6h  GetServiceLogsParamsSince = "6h"
+	GetServiceLogsParamsSinceN7d  GetServiceLogsParamsSince = "7d"
 )
 
 // Valid indicates whether the value is a known member of the GetServiceLogsParamsSince enum.
 func (e GetServiceLogsParamsSince) Valid() bool {
 	switch e {
-	case N1h:
+	case GetServiceLogsParamsSinceN1h:
 		return true
-	case N24h:
+	case GetServiceLogsParamsSinceN24h:
 		return true
-	case N30d:
+	case GetServiceLogsParamsSinceN30d:
 		return true
-	case N6h:
+	case GetServiceLogsParamsSinceN6h:
 		return true
-	case N7d:
+	case GetServiceLogsParamsSinceN7d:
 		return true
 	default:
 		return false
@@ -763,6 +790,14 @@ type SSHKeyResponse struct {
 	PublicKey string `json:"public_key"`
 }
 
+// ServerDiskPartition defines model for ServerDiskPartition.
+type ServerDiskPartition struct {
+	Mountpoint  string  `json:"mountpoint"`
+	TotalBytes  int64   `json:"total_bytes"`
+	UsedBytes   int64   `json:"used_bytes"`
+	UsedPercent float64 `json:"used_percent"`
+}
+
 // ServerMonitoringResponse defines model for ServerMonitoringResponse.
 type ServerMonitoringResponse struct {
 	CleanupAt        *time.Time                     `json:"cleanup_at,omitempty"`
@@ -778,6 +813,27 @@ type ServerMonitoringResponse struct {
 
 // ServerMonitoringResponseStatus defines model for ServerMonitoringResponse.Status.
 type ServerMonitoringResponseStatus string
+
+// ServerObservabilityHistoryResponse defines model for ServerObservabilityHistoryResponse.
+type ServerObservabilityHistoryResponse struct {
+	Points []ServerObservabilityResponse `json:"points"`
+}
+
+// ServerObservabilityResponse defines model for ServerObservabilityResponse.
+type ServerObservabilityResponse struct {
+	DiskReadBytesTotal  int64                 `json:"disk_read_bytes_total"`
+	DiskTotalBytes      int64                 `json:"disk_total_bytes"`
+	DiskUsedBytes       int64                 `json:"disk_used_bytes"`
+	DiskUsedPercent     float64               `json:"disk_used_percent"`
+	DiskWriteBytesTotal int64                 `json:"disk_write_bytes_total"`
+	Load1               float64               `json:"load_1"`
+	Load15              float64               `json:"load_15"`
+	Load5               float64               `json:"load_5"`
+	Partitions          []ServerDiskPartition `json:"partitions"`
+	SampledAt           time.Time             `json:"sampled_at"`
+	SwapTotalBytes      int64                 `json:"swap_total_bytes"`
+	SwapUsedBytes       int64                 `json:"swap_used_bytes"`
+}
 
 // ServerResponse defines model for ServerResponse.
 type ServerResponse struct {
@@ -961,6 +1017,15 @@ type GetProjectObservabilityHistoryParams struct {
 
 // GetProjectObservabilityHistoryParamsSince defines parameters for GetProjectObservabilityHistory.
 type GetProjectObservabilityHistoryParamsSince string
+
+// GetServerObservabilityHistoryParams defines parameters for GetServerObservabilityHistory.
+type GetServerObservabilityHistoryParams struct {
+	Since     *GetServerObservabilityHistoryParamsSince `form:"since,omitempty" json:"since,omitempty"`
+	MaxPoints *int                                      `form:"max_points,omitempty" json:"max_points,omitempty"`
+}
+
+// GetServerObservabilityHistoryParamsSince defines parameters for GetServerObservabilityHistory.
+type GetServerObservabilityHistoryParamsSince string
 
 // GetProxyLogsParams defines parameters for GetProxyLogs.
 type GetProxyLogsParams struct {
@@ -1161,6 +1226,12 @@ type ServerInterface interface {
 	// Permanently delete retained monitoring history
 	// (DELETE /api/servers/{id}/monitoring/history)
 	DeleteServerMonitoringHistory(w http.ResponseWriter, r *http.Request, id string)
+	// Get current server health metrics
+	// (GET /api/servers/{id}/observability)
+	GetServerObservability(w http.ResponseWriter, r *http.Request, id string)
+	// Get retained server health metrics
+	// (GET /api/servers/{id}/observability/history)
+	GetServerObservabilityHistory(w http.ResponseWriter, r *http.Request, id string, params GetServerObservabilityHistoryParams)
 	// Install or upgrade the managed Traefik proxy
 	// (POST /api/servers/{id}/proxy)
 	UpgradeServerProxy(w http.ResponseWriter, r *http.Request, id string)
@@ -2227,6 +2298,87 @@ func (siw *ServerInterfaceWrapper) DeleteServerMonitoringHistory(w http.Response
 	handler.ServeHTTP(w, r)
 }
 
+// GetServerObservability operation middleware
+func (siw *ServerInterfaceWrapper) GetServerObservability(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServerObservability(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetServerObservabilityHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetServerObservabilityHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetServerObservabilityHistoryParams
+
+	// ------------- Optional query parameter "since" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "since", r.URL.Query(), &params.Since, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "since", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "max_points" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "max_points", r.URL.Query(), &params.MaxPoints, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "max_points", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServerObservabilityHistory(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UpgradeServerProxy operation middleware
 func (siw *ServerInterfaceWrapper) UpgradeServerProxy(w http.ResponseWriter, r *http.Request) {
 
@@ -3008,6 +3160,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/servers/{id}/monitoring", wrapper.DisableServerMonitoring)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/{id}/monitoring", wrapper.ConfigureServerMonitoring)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/servers/{id}/monitoring/history", wrapper.DeleteServerMonitoringHistory)
+	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/observability", wrapper.GetServerObservability)
+	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/observability/history", wrapper.GetServerObservabilityHistory)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/{id}/proxy", wrapper.UpgradeServerProxy)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/proxy-logs", wrapper.GetProxyLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services", wrapper.ListServices)

@@ -200,6 +200,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/servers/{id}/observability': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get current server health metrics */
+		get: operations['getServerObservability'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/servers/{id}/observability/history': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get retained server health metrics */
+		get: operations['getServerObservabilityHistory'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/servers/{id}/monitoring/history': {
 		parameters: {
 			query?: never;
@@ -898,6 +932,43 @@ export interface components {
 			last_error?: string;
 			/** Format: date-time */
 			cleanup_at?: string;
+		};
+		ServerObservabilityResponse: {
+			/** Format: date-time */
+			sampled_at: string;
+			/** Format: int64 */
+			disk_used_bytes: number;
+			/** Format: int64 */
+			disk_total_bytes: number;
+			/** Format: double */
+			disk_used_percent: number;
+			/** Format: int64 */
+			disk_read_bytes_total: number;
+			/** Format: int64 */
+			disk_write_bytes_total: number;
+			/** Format: double */
+			load_1: number;
+			/** Format: double */
+			load_5: number;
+			/** Format: double */
+			load_15: number;
+			/** Format: int64 */
+			swap_used_bytes: number;
+			/** Format: int64 */
+			swap_total_bytes: number;
+			partitions: components['schemas']['ServerDiskPartition'][];
+		};
+		ServerDiskPartition: {
+			mountpoint: string;
+			/** Format: int64 */
+			used_bytes: number;
+			/** Format: int64 */
+			total_bytes: number;
+			/** Format: double */
+			used_percent: number;
+		};
+		ServerObservabilityHistoryResponse: {
+			points: components['schemas']['ServerObservabilityResponse'][];
 		};
 		LogEntry: {
 			/** Format: int64 */
@@ -1858,6 +1929,134 @@ export interface operations {
 			};
 			/** @description Monitoring agent could not be removed */
 			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	getServerObservability: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Current server health metrics */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServerObservabilityResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring is not enabled on this server */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring agent could not be reached */
+			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	getServerObservabilityHistory: {
+		parameters: {
+			query?: {
+				since?: '1h' | '6h' | '24h' | '7d' | '30d';
+				max_points?: number;
+			};
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Retained server health metrics */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServerObservabilityHistoryResponse'];
+				};
+			};
+			/** @description Invalid history parameters */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring is not enabled on this server */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring agent could not be reached */
+			502: {
 				headers: {
 					[name: string]: unknown;
 				};

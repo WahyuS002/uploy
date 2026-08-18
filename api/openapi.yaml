@@ -546,6 +546,115 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/servers/{id}/observability:
+    get:
+      operationId: getServerObservability
+      summary: Get current server health metrics
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current server health metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerObservabilityResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Monitoring is not enabled on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Monitoring agent could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/servers/{id}/observability/history:
+    get:
+      operationId: getServerObservabilityHistory
+      summary: Get retained server health metrics
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 7d
+        - name: max_points
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 300
+      responses:
+        "200":
+          description: Retained server health metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerObservabilityHistoryResponse"
+        "400":
+          description: Invalid history parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Monitoring is not enabled on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Monitoring agent could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/servers/{id}/monitoring/history:
     delete:
       operationId: deleteServerMonitoringHistory
@@ -2828,6 +2937,90 @@ components:
         cleanup_at:
           type: string
           format: date-time
+
+    ServerObservabilityResponse:
+      type: object
+      required:
+        - sampled_at
+        - disk_used_bytes
+        - disk_total_bytes
+        - disk_used_percent
+        - disk_read_bytes_total
+        - disk_write_bytes_total
+        - load_1
+        - load_5
+        - load_15
+        - swap_used_bytes
+        - swap_total_bytes
+        - partitions
+      properties:
+        sampled_at:
+          type: string
+          format: date-time
+        disk_used_bytes:
+          type: integer
+          format: int64
+        disk_total_bytes:
+          type: integer
+          format: int64
+        disk_used_percent:
+          type: number
+          format: double
+        disk_read_bytes_total:
+          type: integer
+          format: int64
+        disk_write_bytes_total:
+          type: integer
+          format: int64
+        load_1:
+          type: number
+          format: double
+        load_5:
+          type: number
+          format: double
+        load_15:
+          type: number
+          format: double
+        swap_used_bytes:
+          type: integer
+          format: int64
+        swap_total_bytes:
+          type: integer
+          format: int64
+        partitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerDiskPartition"
+
+    ServerDiskPartition:
+      type: object
+      required:
+        - mountpoint
+        - used_bytes
+        - total_bytes
+        - used_percent
+      properties:
+        mountpoint:
+          type: string
+        used_bytes:
+          type: integer
+          format: int64
+        total_bytes:
+          type: integer
+          format: int64
+        used_percent:
+          type: number
+          format: double
+
+    ServerObservabilityHistoryResponse:
+      type: object
+      required:
+        - points
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerObservabilityResponse"
 
     LogEntry:
       type: object

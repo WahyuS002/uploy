@@ -19,6 +19,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/load"
+	"github.com/shirou/gopsutil/v4/mem"
 	sqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
 )
@@ -71,12 +74,33 @@ type sample struct {
 }
 
 type serverSample struct {
-	SampledAt       int64   `json:"sampled_at"`
-	DiskUsedPercent float64 `json:"disk_used_percent"`
+	SampledAt           int64             `json:"sampled_at"`
+	DiskUsedBytes       int64             `json:"disk_used_bytes"`
+	DiskTotalBytes      int64             `json:"disk_total_bytes"`
+	DiskUsedPercent     float64           `json:"disk_used_percent"`
+	DiskReadBytesTotal  int64             `json:"disk_read_bytes_total"`
+	DiskWriteBytesTotal int64             `json:"disk_write_bytes_total"`
+	Load1               float64           `json:"load_1"`
+	Load5               float64           `json:"load_5"`
+	Load15              float64           `json:"load_15"`
+	SwapUsedBytes       int64             `json:"swap_used_bytes"`
+	SwapTotalBytes      int64             `json:"swap_total_bytes"`
+	Partitions          []serverPartition `json:"partitions"`
+}
+
+type serverPartition struct {
+	Mountpoint  string  `json:"mountpoint"`
+	UsedBytes   int64   `json:"used_bytes"`
+	TotalBytes  int64   `json:"total_bytes"`
+	UsedPercent float64 `json:"used_percent"`
 }
 
 type historyResponse struct {
 	Points []sample `json:"points"`
+}
+
+type serverHistoryResponse struct {
+	Points []serverSample `json:"points"`
 }
 
 type historyQuery struct {
@@ -117,6 +141,7 @@ func main() {
 	mux.Handle("GET /metrics", requireToken(cfg, http.HandlerFunc(collector.metricsHandler)))
 	mux.Handle("GET /v1/latest", requireToken(cfg, http.HandlerFunc(collector.latestAllHandler)))
 	mux.Handle("GET /v1/server/latest", requireToken(cfg, http.HandlerFunc(collector.serverLatestHandler)))
+	mux.Handle("GET /v1/server/history", requireToken(cfg, http.HandlerFunc(collector.serverHistoryHandler)))
 	mux.Handle("GET /v1/history", requireToken(cfg, http.HandlerFunc(collector.historiesHandler)))
 	mux.Handle("POST /v1/history", requireToken(cfg, http.HandlerFunc(collector.historiesQueryHandler)))
 	mux.Handle("GET /v1/deployments/{id}/latest", requireToken(cfg, http.HandlerFunc(collector.latestHandler)))
@@ -196,6 +221,37 @@ func openDatabase(path string) (*sql.DB, error) {
 		)`,
 		"CREATE INDEX IF NOT EXISTS idx_deployment_metric_rollups_history ON deployment_metric_rollups (deployment_id, resolution_minutes, sampled_at)",
 		"CREATE INDEX IF NOT EXISTS idx_deployment_metric_rollups_compaction ON deployment_metric_rollups (resolution_minutes, sampled_at)",
+		`CREATE TABLE IF NOT EXISTS server_metrics (
+			sampled_at INTEGER PRIMARY KEY,
+			disk_used_bytes INTEGER NOT NULL,
+			disk_total_bytes INTEGER NOT NULL,
+			disk_used_percent REAL NOT NULL,
+			disk_read_bytes_total INTEGER NOT NULL,
+			disk_write_bytes_total INTEGER NOT NULL,
+			load_1 REAL NOT NULL,
+			load_5 REAL NOT NULL,
+			load_15 REAL NOT NULL,
+			swap_used_bytes INTEGER NOT NULL,
+			swap_total_bytes INTEGER NOT NULL,
+			partitions_json TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS server_metric_rollups (
+			resolution_minutes INTEGER NOT NULL,
+			sampled_at INTEGER NOT NULL,
+			disk_used_bytes INTEGER NOT NULL,
+			disk_total_bytes INTEGER NOT NULL,
+			disk_used_percent REAL NOT NULL,
+			disk_read_bytes_total INTEGER NOT NULL,
+			disk_write_bytes_total INTEGER NOT NULL,
+			load_1 REAL NOT NULL,
+			load_5 REAL NOT NULL,
+			load_15 REAL NOT NULL,
+			swap_used_bytes INTEGER NOT NULL,
+			swap_total_bytes INTEGER NOT NULL,
+			partitions_json TEXT NOT NULL,
+			PRIMARY KEY (resolution_minutes, sampled_at)
+		)`,
+		"CREATE INDEX IF NOT EXISTS idx_server_metric_rollups_history ON server_metric_rollups (resolution_minutes, sampled_at)",
 	} {
 		if _, err := db.Exec(statement); err != nil {
 			db.Close()
@@ -245,7 +301,11 @@ func (c *collector) collect(ctx context.Context, forcePersist bool) {
 	if !persist {
 		return
 	}
-	if err := c.persist(samples); err != nil {
+	var persistedServer *serverSample
+	if serverErr == nil {
+		persistedServer = &server
+	}
+	if err := c.persist(samples, persistedServer); err != nil {
 		log.Printf("persist metrics: %v", err)
 		return
 	}
@@ -254,13 +314,21 @@ func (c *collector) collect(ctx context.Context, forcePersist bool) {
 	c.mu.Unlock()
 }
 
-func (c *collector) persist(samples []sample) error {
+func (c *collector) persist(samples []sample, server *serverSample) error {
 	if err := c.compactAndExpire(time.Now().UTC()); err != nil {
 		return err
 	}
-	if len(samples) == 0 {
-		return nil
+	var persistErr error
+	if len(samples) > 0 {
+		persistErr = errors.Join(persistErr, c.persistDeploymentSamples(samples))
 	}
+	if server != nil {
+		persistErr = errors.Join(persistErr, c.persistServerSample(*server))
+	}
+	return persistErr
+}
+
+func (c *collector) persistDeploymentSamples(samples []sample) error {
 	write := func() error {
 		tx, err := c.db.Begin()
 		if err != nil {
@@ -293,6 +361,24 @@ func (c *collector) persist(samples []sample) error {
 	return nil
 }
 
+func (c *collector) persistServerSample(metric serverSample) error {
+	partitions, err := json.Marshal(metric.Partitions)
+	if err != nil {
+		return fmt.Errorf("encode server partitions: %w", err)
+	}
+	_, err = c.db.Exec(`INSERT OR REPLACE INTO server_metrics (
+		sampled_at, disk_used_bytes, disk_total_bytes, disk_used_percent, disk_read_bytes_total,
+		disk_write_bytes_total, load_1, load_5, load_15, swap_used_bytes, swap_total_bytes, partitions_json
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		metric.SampledAt, metric.DiskUsedBytes, metric.DiskTotalBytes, metric.DiskUsedPercent,
+		metric.DiskReadBytesTotal, metric.DiskWriteBytesTotal, metric.Load1, metric.Load5, metric.Load15,
+		metric.SwapUsedBytes, metric.SwapTotalBytes, string(partitions))
+	if err != nil && isSQLiteFull(err) {
+		return fmt.Errorf("metrics database is full after compaction: %w", err)
+	}
+	return err
+}
+
 func isSQLiteFull(err error) bool {
 	var sqliteErr *sqlite.Error
 	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqlite3.SQLITE_FULL
@@ -317,6 +403,9 @@ func (c *collector) compactAndExpire(now time.Time) error {
 	completeBefore := now.UnixMilli()
 	for _, tier := range metricTiers {
 		if err := writeMetricRollup(tx, tier, retentionCutoff, completeBefore); err != nil {
+			return err
+		}
+		if err := writeServerMetricRollup(tx, tier, retentionCutoff, completeBefore); err != nil {
 			return err
 		}
 	}
@@ -381,12 +470,71 @@ FROM aggregated`, sourceTable, sourceFilter), args...)
 	return err
 }
 
+func writeServerMetricRollup(tx *sql.Tx, tier metricTier, retentionCutoff, completeBefore int64) error {
+	sourceTable := "server_metrics"
+	sourceFilter := ""
+	bucketSize := int64(tier.resolutionMinutes) * int64(time.Minute/time.Millisecond)
+	args := []any{
+		bucketSize,
+		bucketSize,
+		retentionCutoff,
+		(completeBefore / bucketSize) * bucketSize,
+	}
+	if tier.sourceMinutes > 1 {
+		sourceTable = "server_metric_rollups"
+		sourceFilter = " AND m.resolution_minutes = ?"
+		args = append(args, tier.sourceMinutes)
+	}
+	args = append(args, tier.resolutionMinutes)
+
+	_, err := tx.Exec(fmt.Sprintf(`
+WITH bucketed AS (
+	SELECT m.*, (m.sampled_at / ?) * ? AS bucket_at
+	FROM %s AS m
+	WHERE m.sampled_at >= ? AND m.sampled_at < ?%s
+), latest AS (
+	SELECT bucket_at, MAX(sampled_at) AS sampled_at
+	FROM bucketed
+	GROUP BY bucket_at
+), aggregated AS (
+	SELECT b.bucket_at,
+		CAST(AVG(b.disk_used_bytes) AS INTEGER) AS disk_used_bytes,
+		CAST(AVG(b.disk_total_bytes) AS INTEGER) AS disk_total_bytes,
+		AVG(b.disk_used_percent) AS disk_used_percent,
+		MAX(CASE WHEN b.sampled_at = l.sampled_at THEN b.disk_read_bytes_total ELSE 0 END) AS disk_read_bytes_total,
+		MAX(CASE WHEN b.sampled_at = l.sampled_at THEN b.disk_write_bytes_total ELSE 0 END) AS disk_write_bytes_total,
+		AVG(b.load_1) AS load_1,
+		AVG(b.load_5) AS load_5,
+		AVG(b.load_15) AS load_15,
+		CAST(AVG(b.swap_used_bytes) AS INTEGER) AS swap_used_bytes,
+		CAST(AVG(b.swap_total_bytes) AS INTEGER) AS swap_total_bytes,
+		MAX(CASE WHEN b.sampled_at = l.sampled_at THEN b.partitions_json ELSE '' END) AS partitions_json
+	FROM bucketed AS b
+	JOIN latest AS l ON l.bucket_at = b.bucket_at
+	GROUP BY b.bucket_at
+)
+INSERT OR REPLACE INTO server_metric_rollups (
+	resolution_minutes, sampled_at, disk_used_bytes, disk_total_bytes, disk_used_percent, disk_read_bytes_total,
+	disk_write_bytes_total, load_1, load_5, load_15, swap_used_bytes, swap_total_bytes, partitions_json
+)
+SELECT ?, bucket_at, disk_used_bytes, disk_total_bytes, disk_used_percent, disk_read_bytes_total,
+	disk_write_bytes_total, load_1, load_5, load_15, swap_used_bytes, swap_total_bytes, partitions_json
+FROM aggregated`, sourceTable, sourceFilter), args...)
+	return err
+}
+
 func expireMetricData(tx *sql.Tx, now time.Time, retention time.Duration) error {
 	retentionCutoff := now.Add(-retention).UnixMilli()
 	if _, err := tx.Exec("DELETE FROM deployment_metrics WHERE sampled_at < ?", retentionCutoff); err != nil {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM deployment_metric_rollups WHERE sampled_at < ?", retentionCutoff); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM server_metrics WHERE sampled_at < ?", retentionCutoff); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM server_metric_rollups WHERE sampled_at < ?", retentionCutoff); err != nil {
 		return err
 	}
 
@@ -398,6 +546,9 @@ func expireMetricData(tx *sql.Tx, now time.Time, retention time.Duration) error 
 		if _, err := tx.Exec("DELETE FROM deployment_metric_rollups WHERE resolution_minutes = ? AND sampled_at < ?", tier.resolutionMinutes, rollupCutoff); err != nil {
 			return err
 		}
+		if _, err := tx.Exec("DELETE FROM server_metric_rollups WHERE resolution_minutes = ? AND sampled_at < ?", tier.resolutionMinutes, rollupCutoff); err != nil {
+			return err
+		}
 
 		sourceCutoff := now.Add(-tier.sourceRetention).UnixMilli()
 		if sourceCutoff < retentionCutoff {
@@ -407,6 +558,9 @@ func expireMetricData(tx *sql.Tx, now time.Time, retention time.Duration) error 
 			continue
 		}
 		if err := deleteCoveredSource(tx, tier, sourceCutoff, retentionCutoff); err != nil {
+			return err
+		}
+		if err := deleteCoveredServerSource(tx, tier, sourceCutoff, retentionCutoff); err != nil {
 			return err
 		}
 	}
@@ -433,6 +587,28 @@ WHERE source.sampled_at < ? AND source.sampled_at >= ?%s
 		  AND target.resolution_minutes = ?
 		  AND target.sampled_at = (source.sampled_at / ?) * ?
   )`, sourceTable, sourceFilter), args...)
+	return err
+}
+
+func deleteCoveredServerSource(tx *sql.Tx, tier metricTier, sourceCutoff, retentionCutoff int64) error {
+	sourceTable := "server_metrics"
+	sourceFilter := ""
+	args := []any{sourceCutoff, retentionCutoff}
+	if tier.sourceMinutes > 1 {
+		sourceTable = "server_metric_rollups"
+		sourceFilter = " AND source.resolution_minutes = ?"
+		args = append(args, tier.sourceMinutes)
+	}
+	bucketSize := int64(tier.resolutionMinutes) * int64(time.Minute/time.Millisecond)
+	args = append(args, tier.resolutionMinutes, bucketSize, bucketSize)
+	_, err := tx.Exec(fmt.Sprintf(`
+DELETE FROM %s AS source
+WHERE source.sampled_at < ? AND source.sampled_at >= ?%s
+  AND EXISTS (
+		SELECT 1 FROM server_metric_rollups AS target
+		WHERE target.resolution_minutes = ?
+		  AND target.sampled_at = (source.sampled_at / ?) * ?
+	)`, sourceTable, sourceFilter), args...)
 	return err
 }
 
@@ -523,23 +699,99 @@ func readDockerSamples(ctx context.Context) ([]sample, error) {
 }
 
 func readServerSample(ctx context.Context) (serverSample, error) {
-	output, err := exec.CommandContext(ctx, "df", "-Pk", "/").Output()
+	partitions, err := disk.PartitionsWithContext(ctx, false)
 	if err != nil {
-		return serverSample{}, err
+		return serverSample{}, fmt.Errorf("read disk partitions: %w", err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) < 2 {
-		return serverSample{}, errors.New("df returned no filesystem rows")
+	seen := make(map[string]struct{}, len(partitions))
+	usage := make([]serverPartition, 0, len(partitions))
+	for _, partition := range partitions {
+		if !trackFilesystem(partition.Fstype) {
+			continue
+		}
+		mountpoint := strings.TrimSpace(partition.Mountpoint)
+		if mountpoint == "" {
+			continue
+		}
+		if _, exists := seen[mountpoint]; exists {
+			continue
+		}
+		seen[mountpoint] = struct{}{}
+		stats, usageErr := disk.UsageWithContext(ctx, hostPath(mountpoint))
+		if usageErr != nil || stats.Total == 0 {
+			continue
+		}
+		usage = append(usage, serverPartition{Mountpoint: mountpoint, UsedBytes: safeInt64(stats.Used), TotalBytes: safeInt64(stats.Total), UsedPercent: stats.UsedPercent})
 	}
-	fields := strings.Fields(lines[len(lines)-1])
-	if len(fields) < 5 {
-		return serverSample{}, fmt.Errorf("invalid df output")
+	if len(usage) == 0 {
+		stats, usageErr := disk.UsageWithContext(ctx, hostPath("/"))
+		if usageErr != nil || stats.Total == 0 {
+			return serverSample{}, fmt.Errorf("read disk usage: %w", usageErr)
+		}
+		usage = append(usage, serverPartition{Mountpoint: "/", UsedBytes: safeInt64(stats.Used), TotalBytes: safeInt64(stats.Total), UsedPercent: stats.UsedPercent})
 	}
-	used, err := strconv.ParseFloat(strings.TrimSuffix(fields[4], "%"), 64)
+	sort.SliceStable(usage, func(left, right int) bool {
+		if usage[left].UsedPercent == usage[right].UsedPercent {
+			return usage[left].Mountpoint < usage[right].Mountpoint
+		}
+		return usage[left].UsedPercent > usage[right].UsedPercent
+	})
+	primary := usage[0]
+	readBytes, writeBytes := diskIO(ctx)
+	loadAverage, loadErr := load.AvgWithContext(ctx)
+	if loadErr != nil {
+		return serverSample{}, fmt.Errorf("read load average: %w", loadErr)
+	}
+	swap, swapErr := mem.SwapMemoryWithContext(ctx)
+	if swapErr != nil {
+		return serverSample{}, fmt.Errorf("read swap usage: %w", swapErr)
+	}
+	return serverSample{
+		SampledAt: time.Now().UTC().UnixMilli(), DiskUsedBytes: primary.UsedBytes, DiskTotalBytes: primary.TotalBytes,
+		DiskUsedPercent: primary.UsedPercent, DiskReadBytesTotal: readBytes, DiskWriteBytesTotal: writeBytes,
+		Load1: loadAverage.Load1, Load5: loadAverage.Load5, Load15: loadAverage.Load15,
+		SwapUsedBytes: safeInt64(swap.Used), SwapTotalBytes: safeInt64(swap.Total), Partitions: usage,
+	}, nil
+}
+
+func diskIO(ctx context.Context) (int64, int64) {
+	counters, err := disk.IOCountersWithContext(ctx)
 	if err != nil {
-		return serverSample{}, err
+		return 0, 0
 	}
-	return serverSample{SampledAt: time.Now().UTC().UnixMilli(), DiskUsedPercent: used}, nil
+	var readBytes, writeBytes uint64
+	for _, counter := range counters {
+		readBytes += counter.ReadBytes
+		writeBytes += counter.WriteBytes
+	}
+	return safeInt64(readBytes), safeInt64(writeBytes)
+}
+
+func safeInt64(value uint64) int64 {
+	if value > uint64(math.MaxInt64) {
+		return math.MaxInt64
+	}
+	return int64(value)
+}
+
+func trackFilesystem(fstype string) bool {
+	switch strings.ToLower(fstype) {
+	case "", "autofs", "cgroup", "cgroup2", "devpts", "devtmpfs", "mqueue", "proc", "pstore", "securityfs", "squashfs", "sysfs", "tmpfs", "overlay":
+		return false
+	default:
+		return true
+	}
+}
+
+func hostPath(path string) string {
+	root := strings.TrimRight(strings.TrimSpace(os.Getenv("HOST_ROOT")), "/")
+	if root == "" || root == "/" {
+		return path
+	}
+	if path == "/" {
+		return root
+	}
+	return root + "/" + strings.TrimLeft(path, "/")
 }
 
 func sortedSamples(byID map[string]sample) []sample {
@@ -645,7 +897,22 @@ func (c *collector) metricsHandler(w http.ResponseWriter, _ *http.Request) {
 	server := c.server
 	c.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/openmetrics-text; version=1.0.0; charset=utf-8")
+	fmt.Fprintf(w, "uploy_server_disk_used_bytes %d\n", server.DiskUsedBytes)
+	fmt.Fprintf(w, "uploy_server_disk_total_bytes %d\n", server.DiskTotalBytes)
 	fmt.Fprintf(w, "uploy_server_disk_used_percent %g\n", server.DiskUsedPercent)
+	fmt.Fprintf(w, "uploy_server_disk_read_bytes_total %d\n", server.DiskReadBytesTotal)
+	fmt.Fprintf(w, "uploy_server_disk_write_bytes_total %d\n", server.DiskWriteBytesTotal)
+	fmt.Fprintf(w, "uploy_server_load_1 %g\n", server.Load1)
+	fmt.Fprintf(w, "uploy_server_load_5 %g\n", server.Load5)
+	fmt.Fprintf(w, "uploy_server_load_15 %g\n", server.Load15)
+	fmt.Fprintf(w, "uploy_server_swap_used_bytes %d\n", server.SwapUsedBytes)
+	fmt.Fprintf(w, "uploy_server_swap_total_bytes %d\n", server.SwapTotalBytes)
+	for _, partition := range server.Partitions {
+		labels := fmt.Sprintf(`mountpoint=%q`, partition.Mountpoint)
+		fmt.Fprintf(w, "uploy_server_partition_used_bytes{%s} %d\n", labels, partition.UsedBytes)
+		fmt.Fprintf(w, "uploy_server_partition_total_bytes{%s} %d\n", labels, partition.TotalBytes)
+		fmt.Fprintf(w, "uploy_server_partition_used_percent{%s} %g\n", labels, partition.UsedPercent)
+	}
 	fmt.Fprintf(w, "uploy_server_sample_timestamp_seconds %d\n", server.SampledAt/1000)
 	for _, metric := range metrics {
 		labels := fmt.Sprintf(`deployment_id=%q,container_id=%q,container_name=%q`, metric.DeploymentID, metric.ContainerID, metric.ContainerName)
@@ -696,6 +963,23 @@ func (c *collector) serverLatestHandler(w http.ResponseWriter, _ *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(sample); err != nil {
 		log.Printf("write server latest: %v", err)
+	}
+}
+
+func (c *collector) serverHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	start, end, maxPoints, ok := parseHistoryQuery(w, r)
+	if !ok {
+		return
+	}
+	metrics, err := c.queryServerHistory(start.UnixMilli(), end.UnixMilli(), maxPoints)
+	if err != nil {
+		log.Printf("query server history: %v", err)
+		http.Error(w, "failed to read server history", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(serverHistoryResponse{Points: metrics}); err != nil {
+		log.Printf("write server history: %v", err)
 	}
 }
 
@@ -821,13 +1105,22 @@ func validDeploymentID(value string) bool {
 }
 
 func (c *collector) deleteHistoryHandler(w http.ResponseWriter, _ *http.Request) {
-	if _, err := c.db.Exec("DELETE FROM deployment_metrics"); err != nil {
-		log.Printf("delete history: %v", err)
+	tx, err := c.db.Begin()
+	if err != nil {
+		log.Printf("delete history begin: %v", err)
 		http.Error(w, "failed to delete history", http.StatusInternalServerError)
 		return
 	}
-	if _, err := c.db.Exec("DELETE FROM deployment_metric_rollups"); err != nil {
-		log.Printf("delete history rollups: %v", err)
+	defer tx.Rollback()
+	for _, table := range []string{"deployment_metrics", "deployment_metric_rollups", "server_metrics", "server_metric_rollups"} {
+		if _, err := tx.Exec("DELETE FROM " + table); err != nil {
+			log.Printf("delete history table=%s: %v", table, err)
+			http.Error(w, "failed to delete history", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("delete history commit: %v", err)
 		http.Error(w, "failed to delete history", http.StatusInternalServerError)
 		return
 	}
@@ -939,6 +1232,83 @@ func (c *collector) queryHistoryBand(deploymentID string, band historyBand) ([]s
 	return metrics, nil
 }
 
+func (c *collector) queryServerHistory(from, to int64, maxPoints int) ([]serverSample, error) {
+	return c.queryServerHistoryAt(from, to, maxPoints, time.Now().UTC())
+}
+
+func (c *collector) queryServerHistoryAt(from, to int64, maxPoints int, now time.Time) ([]serverSample, error) {
+	from = max(from, now.Add(-c.retentionWindow()).UnixMilli())
+	if from >= to {
+		return []serverSample{}, nil
+	}
+	metrics := []serverSample{}
+	for _, band := range historyBands(now, from, to) {
+		bandMetrics, err := c.queryServerHistoryBand(band)
+		if err != nil {
+			return nil, err
+		}
+		metrics = append(metrics, bandMetrics...)
+	}
+	sort.Slice(metrics, func(left, right int) bool {
+		return metrics[left].SampledAt < metrics[right].SampledAt
+	})
+	if len(metrics) <= maxPoints {
+		return metrics, nil
+	}
+	return downsampleServer(metrics, from, to, maxPoints), nil
+}
+
+func (c *collector) queryServerHistoryBand(band historyBand) ([]serverSample, error) {
+	table := "server_metrics"
+	filter := ""
+	args := []any{band.from, band.to}
+	if band.resolutionMinutes > 0 {
+		table = "server_metric_rollups"
+		filter = " AND resolution_minutes = ?"
+		args = append(args, band.resolutionMinutes)
+	}
+	rows, err := c.db.Query(fmt.Sprintf(`SELECT sampled_at, disk_used_bytes, disk_total_bytes, disk_used_percent,
+		disk_read_bytes_total, disk_write_bytes_total, load_1, load_5, load_15, swap_used_bytes, swap_total_bytes, partitions_json
+		FROM %s WHERE sampled_at >= ? AND sampled_at < ?%s ORDER BY sampled_at ASC`, table, filter), args...)
+	if err != nil {
+		return nil, err
+	}
+	metrics := []serverSample{}
+	for rows.Next() {
+		var metric serverSample
+		var partitionsJSON string
+		if err := rows.Scan(&metric.SampledAt, &metric.DiskUsedBytes, &metric.DiskTotalBytes, &metric.DiskUsedPercent,
+			&metric.DiskReadBytesTotal, &metric.DiskWriteBytesTotal, &metric.Load1, &metric.Load5, &metric.Load15,
+			&metric.SwapUsedBytes, &metric.SwapTotalBytes, &partitionsJSON); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if partitionsJSON != "" {
+			if err := json.Unmarshal([]byte(partitionsJSON), &metric.Partitions); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("decode server partitions: %w", err)
+			}
+		}
+		if metric.Partitions == nil {
+			metric.Partitions = []serverPartition{}
+		}
+		metrics = append(metrics, metric)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	if len(metrics) > 0 || band.resolutionMinutes == 0 {
+		return metrics, nil
+	}
+	if sourceResolution := historySourceResolution(band.resolutionMinutes); sourceResolution >= 0 {
+		band.resolutionMinutes = sourceResolution
+		return c.queryServerHistoryBand(band)
+	}
+	return metrics, nil
+}
+
 func historySourceResolution(resolutionMinutes int) int {
 	switch resolutionMinutes {
 	case 10:
@@ -958,6 +1328,21 @@ func downsample(raw []sample, from, to int64, maxPoints int) []sample {
 	span := max(int64(1), to-from+1)
 	width := max(int64(1), (span+int64(maxPoints)-1)/int64(maxPoints))
 	result := make([]sample, 0, maxPoints)
+	for _, metric := range raw {
+		bucket := (metric.SampledAt - from) / width
+		if len(result) > 0 && (result[len(result)-1].SampledAt-from)/width == bucket {
+			result[len(result)-1] = metric
+			continue
+		}
+		result = append(result, metric)
+	}
+	return result
+}
+
+func downsampleServer(raw []serverSample, from, to int64, maxPoints int) []serverSample {
+	span := max(int64(1), to-from+1)
+	width := max(int64(1), (span+int64(maxPoints)-1)/int64(maxPoints))
+	result := make([]serverSample, 0, maxPoints)
 	for _, metric := range raw {
 		bucket := (metric.SampledAt - from) / width
 		if len(result) > 0 && (result[len(result)-1].SampledAt-from)/width == bucket {

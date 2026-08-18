@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -61,8 +62,29 @@ type LatestResponse struct {
 }
 
 type ServerLatestResponse struct {
-	SampledAt       int64   `json:"sampled_at"`
-	DiskUsedPercent float64 `json:"disk_used_percent"`
+	SampledAt           int64             `json:"sampled_at"`
+	DiskUsedBytes       int64             `json:"disk_used_bytes"`
+	DiskTotalBytes      int64             `json:"disk_total_bytes"`
+	DiskUsedPercent     float64           `json:"disk_used_percent"`
+	DiskReadBytesTotal  int64             `json:"disk_read_bytes_total"`
+	DiskWriteBytesTotal int64             `json:"disk_write_bytes_total"`
+	Load1               float64           `json:"load_1"`
+	Load5               float64           `json:"load_5"`
+	Load15              float64           `json:"load_15"`
+	SwapUsedBytes       int64             `json:"swap_used_bytes"`
+	SwapTotalBytes      int64             `json:"swap_total_bytes"`
+	Partitions          []ServerPartition `json:"partitions"`
+}
+
+type ServerPartition struct {
+	Mountpoint  string  `json:"mountpoint"`
+	UsedBytes   int64   `json:"used_bytes"`
+	TotalBytes  int64   `json:"total_bytes"`
+	UsedPercent float64 `json:"used_percent"`
+}
+
+type ServerHistoryResponse struct {
+	Points []ServerLatestResponse `json:"points"`
 }
 
 func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config) (err error) {
@@ -133,9 +155,9 @@ func buildRunCommand(docker string, cfg Config) string {
 	publishedAddress := net.JoinHostPort(cfg.PrivateAddress, strconv.Itoa(cfg.HostPort))
 	return fmt.Sprintf(
 		"%s run -d --name %s --restart unless-stopped --network uploy -p %s:%d "+
-			"-v /var/run/docker.sock:/var/run/docker.sock:ro -v %s:/data "+
+			"-v /var/run/docker.sock:/var/run/docker.sock:ro -v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /:/host:ro -v %s:/data "+
 			"-e UPLOY_MONITOR_CONTROL_TOKEN=%s -e UPLOY_MONITOR_READER_TOKEN=%s "+
-			"-e UPLOY_MONITOR_RETENTION_DAYS=%d %s",
+			"-e UPLOY_MONITOR_RETENTION_DAYS=%d -e HOST_PROC=/host/proc -e HOST_SYS=/host/sys -e HOST_ROOT=/host %s",
 		docker, ContainerName, publishedAddress, AgentPort, dataDir,
 		ssh.ShellQuote(cfg.ControlToken), ssh.ShellQuote(cfg.ReaderToken), cfg.RetentionDays, ssh.ShellQuote(cfg.Image),
 	)
@@ -365,6 +387,34 @@ func GetServerLatest(ctx context.Context, baseURL, controlToken string) (ServerL
 		return ServerLatestResponse{}, err
 	}
 	return latest, nil
+}
+
+func GetServerHistory(ctx context.Context, baseURL, controlToken string, from, to time.Time, maxPoints int) (ServerHistoryResponse, error) {
+	requestURL := strings.TrimRight(baseURL, "/") + "/v1/server/history?from=" +
+		url.QueryEscape(from.UTC().Format(time.RFC3339)) + "&to=" + url.QueryEscape(to.UTC().Format(time.RFC3339)) +
+		"&max_points=" + strconv.Itoa(maxPoints)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return ServerHistoryResponse{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+controlToken)
+	response, err := httpClient.Do(req)
+	if err != nil {
+		return ServerHistoryResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		return ServerHistoryResponse{}, fmt.Errorf("monitoring agent HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var history ServerHistoryResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 16<<20)).Decode(&history); err != nil {
+		return ServerHistoryResponse{}, err
+	}
+	if history.Points == nil {
+		history.Points = []ServerLatestResponse{}
+	}
+	return history, nil
 }
 
 func DeleteHistory(ctx context.Context, baseURL, controlToken string) error {

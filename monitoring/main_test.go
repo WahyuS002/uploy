@@ -72,7 +72,11 @@ func TestReaderCannotDeleteHistory(t *testing.T) {
 }
 
 func TestServerLatestHandler(t *testing.T) {
-	collector := &collector{server: serverSample{SampledAt: 123, DiskUsedPercent: 87.5}}
+	collector := &collector{server: serverSample{
+		SampledAt: 123, DiskUsedBytes: 8, DiskTotalBytes: 10, DiskUsedPercent: 87.5,
+		Load1: 2.4, SwapUsedBytes: 512, SwapTotalBytes: 2048,
+		Partitions: []serverPartition{{Mountpoint: "/", UsedPercent: 87.5}},
+	}}
 	response := httptest.NewRecorder()
 	collector.serverLatestHandler(response, httptest.NewRequest(http.MethodGet, "/v1/server/latest", nil))
 	if response.Code != http.StatusOK {
@@ -84,6 +88,22 @@ func TestServerLatestHandler(t *testing.T) {
 	}
 	if got.DiskUsedPercent != 87.5 {
 		t.Fatalf("disk_used_percent = %v, want 87.5", got.DiskUsedPercent)
+	}
+	if got.DiskUsedBytes != 8 || got.Load1 != 2.4 || len(got.Partitions) != 1 {
+		t.Fatalf("server metrics = %+v", got)
+	}
+}
+
+func TestTrackFilesystemFiltersVirtualFilesystems(t *testing.T) {
+	for _, filesystem := range []string{"proc", "sysfs", "tmpfs", "overlay", "cgroup2"} {
+		if trackFilesystem(filesystem) {
+			t.Fatalf("trackFilesystem(%q) = true", filesystem)
+		}
+	}
+	for _, filesystem := range []string{"ext4", "xfs", "btrfs"} {
+		if !trackFilesystem(filesystem) {
+			t.Fatalf("trackFilesystem(%q) = false", filesystem)
+		}
 	}
 }
 
@@ -326,13 +346,15 @@ func TestDeleteHistoryHandlerRemovesRollups(t *testing.T) {
 	now := time.Now().UTC()
 	insertMetric(t, database, "deployment_metrics", 0, testMetric(now, 1))
 	insertMetric(t, database, "deployment_metric_rollups", 10, testMetric(now.Add(-time.Hour), 2))
+	insertServerMetric(t, database, "server_metrics", 0, testServerMetric(now, 1))
+	insertServerMetric(t, database, "server_metric_rollups", 10, testServerMetric(now.Add(-time.Hour), 2))
 	collector := &collector{db: database}
 	response := httptest.NewRecorder()
 	collector.deleteHistoryHandler(response, httptest.NewRequest(http.MethodDelete, "/v1/history", nil))
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status = %d; body = %s", response.Code, response.Body.String())
 	}
-	for _, table := range []string{"deployment_metrics", "deployment_metric_rollups"} {
+	for _, table := range []string{"deployment_metrics", "deployment_metric_rollups", "server_metrics", "server_metric_rollups"} {
 		var count int
 		if err := database.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); err != nil {
 			t.Fatal(err)
@@ -340,6 +362,39 @@ func TestDeleteHistoryHandlerRemovesRollups(t *testing.T) {
 		if count != 0 {
 			t.Fatalf("%s count = %d, want 0", table, count)
 		}
+	}
+}
+
+func TestCompactAndQueryServerHistory(t *testing.T) {
+	database, err := openDatabase(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	now := time.Date(2026, time.August, 18, 18, 20, 0, 0, time.UTC)
+	start := time.Date(2026, time.August, 18, 8, 0, 0, 0, time.UTC)
+	for index := 0; index < 10; index++ {
+		insertServerMetric(t, database, "server_metrics", 0, testServerMetric(start.Add(time.Duration(index)*time.Minute), float64(index)))
+	}
+	collector := &collector{db: database, retention: 30 * 24 * time.Hour}
+	if err := collector.compactAndExpire(now); err != nil {
+		t.Fatal(err)
+	}
+
+	var loadAverage float64
+	if err := database.QueryRow(`SELECT load_1 FROM server_metric_rollups WHERE resolution_minutes = 480 AND sampled_at = ?`, start.UnixMilli()).Scan(&loadAverage); err != nil {
+		t.Fatal(err)
+	}
+	if loadAverage != 4.5 {
+		t.Fatalf("server 480m load = %v, want 4.5", loadAverage)
+	}
+	points, err := collector.queryServerHistoryAt(now.Add(-12*time.Hour).UnixMilli(), now.UnixMilli(), 100, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(points) != 1 || points[0].Load1 != 4.5 || len(points[0].Partitions) != 1 {
+		t.Fatalf("server history = %+v", points)
 	}
 }
 
@@ -356,6 +411,15 @@ func testMetric(sampledAt time.Time, cpu float64) sample {
 		NetworkInBytesTotal:  300,
 		NetworkOutBytesTotal: 400,
 		UptimeSeconds:        500,
+	}
+}
+
+func testServerMetric(sampledAt time.Time, loadAverage float64) serverSample {
+	return serverSample{
+		SampledAt: sampledAt.UnixMilli(), DiskUsedBytes: 100, DiskTotalBytes: 200, DiskUsedPercent: 50,
+		DiskReadBytesTotal: 300, DiskWriteBytesTotal: 400, Load1: loadAverage, Load5: loadAverage + 1,
+		Load15: loadAverage + 2, SwapUsedBytes: 500, SwapTotalBytes: 600,
+		Partitions: []serverPartition{{Mountpoint: "/", UsedBytes: 100, TotalBytes: 200, UsedPercent: 50}},
 	}
 }
 
@@ -378,6 +442,32 @@ func insertMetric(t *testing.T, database *sql.DB, table string, resolutionMinute
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, metric.DeploymentID, resolutionMinutes, metric.SampledAt,
 		metric.ContainerID, metric.ContainerName, metric.State, metric.CPUPercent, metric.MemoryUsedBytes,
 		metric.MemoryLimitBytes, metric.NetworkInBytesTotal, metric.NetworkOutBytesTotal, metric.UptimeSeconds); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func insertServerMetric(t *testing.T, database *sql.DB, table string, resolutionMinutes int, metric serverSample) {
+	t.Helper()
+	partitions, err := json.Marshal(metric.Partitions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table == "server_metrics" {
+		_, err = database.Exec(`INSERT INTO server_metrics (
+			sampled_at, disk_used_bytes, disk_total_bytes, disk_used_percent, disk_read_bytes_total,
+			disk_write_bytes_total, load_1, load_5, load_15, swap_used_bytes, swap_total_bytes, partitions_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, metric.SampledAt, metric.DiskUsedBytes, metric.DiskTotalBytes,
+			metric.DiskUsedPercent, metric.DiskReadBytesTotal, metric.DiskWriteBytesTotal, metric.Load1, metric.Load5,
+			metric.Load15, metric.SwapUsedBytes, metric.SwapTotalBytes, string(partitions))
+	} else {
+		_, err = database.Exec(`INSERT INTO server_metric_rollups (
+			resolution_minutes, sampled_at, disk_used_bytes, disk_total_bytes, disk_used_percent, disk_read_bytes_total,
+			disk_write_bytes_total, load_1, load_5, load_15, swap_used_bytes, swap_total_bytes, partitions_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, resolutionMinutes, metric.SampledAt, metric.DiskUsedBytes,
+			metric.DiskTotalBytes, metric.DiskUsedPercent, metric.DiskReadBytesTotal, metric.DiskWriteBytesTotal,
+			metric.Load1, metric.Load5, metric.Load15, metric.SwapUsedBytes, metric.SwapTotalBytes, string(partitions))
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 }

@@ -6,6 +6,7 @@
 	import PublicKeyHelper from '$lib/components/app/PublicKeyHelper.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
+	import ServerMetricTrend from '$lib/components/app/ServerMetricTrend.svelte';
 	import LogStream from '$lib/components/app/LogStream.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
@@ -19,9 +20,11 @@
 	let isOwner = $derived(data.workspace?.role === 'owner');
 	let servers = $derived(data.servers ?? []);
 	let keysById = $derived(new Map((data.keys ?? []).map((k) => [k.id, k])));
+	let serverHealth = $derived(data.serverHealth ?? {});
 
 	let dialogOpen = $state(false);
 	let expandedServerId = $state<string | null>(null);
+	let expandedHealthId = $state<string | null>(null);
 	let upgradingProxyId = $state<string | null>(null);
 	let monitoringActionId = $state<string | null>(null);
 	let monitoringServer = $state<(typeof servers)[number] | null>(null);
@@ -45,6 +48,41 @@
 	function openCreate() {
 		serverController.reset();
 		dialogOpen = true;
+	}
+
+	function formatBytes(value: number) {
+		if (!Number.isFinite(value) || value <= 0) return '0 B';
+		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+		const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+		return `${(value / 1024 ** exponent).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+	}
+
+	function diskHealthClass(percent: number) {
+		if (percent >= 90) return 'border-destructive/30 bg-destructive/5 text-destructive';
+		if (percent >= 80) return 'border-warning/30 bg-warning-muted text-warning';
+		return 'border-border/70 bg-muted/30 text-foreground';
+	}
+
+	function diskActivityPerSecond(points: components['schemas']['ServerObservabilityResponse'][]) {
+		const rates = diskActivityRates(points);
+		return rates.read + rates.write;
+	}
+
+	function diskActivityRates(points: components['schemas']['ServerObservabilityResponse'][]) {
+		if (points.length < 2) return { read: 0, write: 0 };
+		const current = points[points.length - 1];
+		const previous = points[points.length - 2];
+		const elapsed = Math.max(
+			1,
+			(new Date(current.sampled_at).getTime() - new Date(previous.sampled_at).getTime()) / 1000
+		);
+		return {
+			read: Math.max(0, (current.disk_read_bytes_total - previous.disk_read_bytes_total) / elapsed),
+			write: Math.max(
+				0,
+				(current.disk_write_bytes_total - previous.disk_write_bytes_total) / elapsed
+			)
+		};
 	}
 
 	function openMonitoring(server: (typeof servers)[number]) {
@@ -280,6 +318,7 @@
 						{#each servers as server (server.id)}
 							{@const key = keysById.get(server.ssh_key_id)}
 							{@const expanded = expandedServerId === server.id}
+							{@const health = serverHealth[server.id]}
 							<tr class="border-b border-border">
 								<td class="py-2.5 align-top">
 									<p class="font-medium text-foreground">{server.name}</p>
@@ -375,6 +414,58 @@
 											History expires {formatDate(server.monitoring.cleanup_at ?? '')}
 										</p>
 									{/if}
+									{#if health?.latest}
+										<div class="mt-3 space-y-1.5 text-xs">
+											<div
+												class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded border px-2 py-1.5 {diskHealthClass(
+													health.latest.disk_used_percent
+												)}"
+											>
+												<span class="font-medium">Disk</span>
+												<span class="tabular-nums">
+													{formatBytes(health.latest.disk_used_bytes)} / {formatBytes(
+														health.latest.disk_total_bytes
+													)}
+													({health.latest.disk_used_percent.toFixed(0)}%)
+												</span>
+											</div>
+											<div class="flex items-center justify-between gap-3 text-muted-foreground">
+												<span>Disk I/O</span>
+												<span class="tabular-nums"
+													>R {formatBytes(diskActivityRates(health.history).read)}/s / W
+													{formatBytes(diskActivityRates(health.history).write)}/s</span
+												>
+											</div>
+											<div class="flex items-center justify-between gap-3 text-muted-foreground">
+												<span>Load</span>
+												<span class="tabular-nums"
+													>{health.latest.load_1.toFixed(1)} / {health.latest.load_5.toFixed(1)} /
+													{health.latest.load_15.toFixed(1)}</span
+												>
+											</div>
+											<div class="flex items-center justify-between gap-3 text-muted-foreground">
+												<span>Swap</span>
+												<span class="tabular-nums"
+													>{formatBytes(health.latest.swap_used_bytes)} / {formatBytes(
+														health.latest.swap_total_bytes
+													)}</span
+												>
+											</div>
+										</div>
+										{#if health.history.length > 1}
+											<button
+												type="button"
+												class="mt-2 cursor-pointer rounded text-xs text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+												onclick={() =>
+													(expandedHealthId = expandedHealthId === server.id ? null : server.id)}
+												aria-expanded={expandedHealthId === server.id}
+											>
+												{expandedHealthId === server.id ? 'Hide trends' : '24h health trends'}
+											</button>
+										{/if}
+									{:else if server.monitoring.enabled}
+										<p class="mt-2 text-xs text-muted-foreground">Health metrics unavailable.</p>
+									{/if}
 									{#if isOwner}
 										<div class="mt-1 flex flex-wrap items-center gap-2">
 											<Button
@@ -419,6 +510,38 @@
 											<PublicKeyHelper
 												publicKey={key.public_key}
 												description="Add to ~/.ssh/authorized_keys for {server.ssh_user} on {server.host}."
+											/>
+										</div>
+									</td>
+								</tr>
+							{/if}
+							{#if expandedHealthId === server.id && health?.history.length}
+								<tr class="border-b border-border bg-muted/20">
+									<td colspan="5" class="pt-1 pb-4">
+										<div class="grid gap-4 px-1 pt-3 sm:grid-cols-2 xl:grid-cols-4">
+											<ServerMetricTrend
+												points={health?.history ?? []}
+												metric="disk"
+												label="Disk usage"
+												value={`${health?.latest?.disk_used_percent.toFixed(0) ?? '-'}%`}
+											/>
+											<ServerMetricTrend
+												points={health?.history ?? []}
+												metric="io"
+												label="Disk activity"
+												value={`${formatBytes(diskActivityPerSecond(health?.history ?? []))}/s`}
+											/>
+											<ServerMetricTrend
+												points={health?.history ?? []}
+												metric="load"
+												label="Load average (1m)"
+												value={health?.latest?.load_1.toFixed(1) ?? '-'}
+											/>
+											<ServerMetricTrend
+												points={health?.history ?? []}
+												metric="swap"
+												label="Swap used"
+												value={formatBytes(health?.latest?.swap_used_bytes ?? 0)}
 											/>
 										</div>
 									</td>
