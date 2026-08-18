@@ -11,7 +11,7 @@
 	import LogStream from '$lib/components/app/LogStream.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
-	import { Button, EmptyState, Input, Tooltip, toast } from '$lib/components/ui';
+	import { Button, Collapsible, EmptyState, Input, Tooltip, toast } from '$lib/components/ui';
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { ChevronRight, InformationCircle, Key, Plus, Server } from '@steeze-ui/heroicons';
@@ -34,6 +34,7 @@
 	let monitoringRetentionDays = $state('7');
 	let monitoringFQDN = $state('');
 	let monitoringReaderToken = $state('');
+	let monitoringAdvancedOpen = $state(false);
 
 	// The server whose proxy log is open, or null. Held whole rather than by id so
 	// the dialog can name the machine without looking it back up.
@@ -99,16 +100,34 @@
 		// Dropped once consumed, so closing the dialog and reloading does not reopen it.
 		const url = new URL(page.url);
 		url.searchParams.delete('monitoring');
+		// This is the route we are already on with one parameter removed, not a
+		// destination to resolve.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		replaceState(url, page.state);
 	});
 
 	function openMonitoring(server: (typeof servers)[number]) {
 		monitoringServer = server;
-		monitoringPrivateAddress = server.monitoring.private_address;
+		monitoringAdvancedOpen = false;
+		// A server being set up for the first time has no recorded private address. The
+		// host Uploy already reaches it on is right for the usual single-network box,
+		// and wrong in a way the user can see and correct.
+		monitoringPrivateAddress = server.monitoring.private_address || server.host;
 		monitoringPort = String(server.monitoring.port || 9184);
 		monitoringRetentionDays = String(server.monitoring.retention_days || 7);
 		monitoringFQDN = server.monitoring.fqdn ?? '';
-		monitoringReaderToken = '';
+		// Generated, not invented. Asking someone to compose 32 random characters before
+		// they can see a single metric is the step that stalls this dialog.
+		monitoringReaderToken = isFirstSetup(server) ? generateReaderToken() : '';
+	}
+
+	function isFirstSetup(server: (typeof servers)[number]) {
+		return !server.monitoring.enabled && !server.monitoring.cleanup_at;
+	}
+
+	function generateReaderToken() {
+		const bytes = crypto.getRandomValues(new Uint8Array(32));
+		return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 	}
 
 	async function saveMonitoring() {
@@ -124,12 +143,12 @@
 			});
 			return;
 		}
-		const readerTokenRequired =
-			!monitoringServer.monitoring.enabled && !monitoringServer.monitoring.cleanup_at;
-		if (readerTokenRequired && (readerToken.length < 32 || readerToken.length > 512)) {
+		// Required on first setup, and validated whenever it is being replaced.
+		const tokenSubmitted = isFirstSetup(monitoringServer) || readerToken.length > 0;
+		if (tokenSubmitted && (readerToken.length < 32 || readerToken.length > 512)) {
 			toast.error({
-				title: 'Reader token required',
-				description: 'Use 32 to 512 characters. It is shown only while you enter it.'
+				title: 'Invalid reader token',
+				description: 'Use 32 to 512 characters, or select Regenerate.'
 			});
 			return;
 		}
@@ -643,43 +662,81 @@
 			<label class="flex flex-col gap-1.5">
 				<span class="text-sm font-medium text-foreground">Private address</span>
 				<Input bind:value={monitoringPrivateAddress} placeholder="10.0.0.4" autocomplete="off" />
-			</label>
-			<div class="grid grid-cols-2 gap-3">
-				<label class="flex flex-col gap-1.5">
-					<span class="text-sm font-medium text-foreground">Port</span>
-					<Input bind:value={monitoringPort} inputmode="numeric" />
-				</label>
-				<label class="flex flex-col gap-1.5">
-					<span class="text-sm font-medium text-foreground">Retention days</span>
-					<Input bind:value={monitoringRetentionDays} inputmode="numeric" />
-				</label>
-			</div>
-			<label class="flex flex-col gap-1.5">
-				<span class="text-sm font-medium text-foreground"
-					>Public FQDN <span class="font-normal text-muted-foreground">(optional)</span></span
-				>
-				<Input bind:value={monitoringFQDN} placeholder="metrics.example.com" autocomplete="off" />
-			</label>
-			<label class="flex flex-col gap-1.5">
-				<span class="text-sm font-medium text-foreground"
-					>Reader token {#if !monitoringServer?.monitoring.enabled && !monitoringServer?.monitoring.cleanup_at}<span
-							class="text-destructive">required</span
-						>{:else}<span class="font-normal text-muted-foreground"
-							>(leave blank to keep current)</span
-						>{/if}</span
-				>
-				<Input
-					bind:value={monitoringReaderToken}
-					type="password"
-					minlength={32}
-					maxlength={512}
-					autocomplete="new-password"
-				/>
 				<p class="text-xs leading-5 text-muted-foreground">
-					This token authorizes `/metrics` and read-only JSON endpoints. Uploy never displays it
-					again.
+					The address Uploy reaches this server on. Change it if the agent should listen on a
+					private interface instead.
 				</p>
 			</label>
+			<div class="flex flex-col gap-1.5">
+				<div class="flex items-center justify-between gap-2">
+					<label for="monitoring-reader-token" class="text-sm font-medium text-foreground">
+						Reader token
+					</label>
+					<button
+						type="button"
+						class="cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+						onclick={() => (monitoringReaderToken = generateReaderToken())}
+					>
+						Regenerate
+					</button>
+				</div>
+				<Input
+					id="monitoring-reader-token"
+					bind:value={monitoringReaderToken}
+					class="font-mono text-xs"
+					minlength={32}
+					maxlength={512}
+					autocomplete="off"
+					spellcheck="false"
+					placeholder={monitoringServer && isFirstSetup(monitoringServer)
+						? ''
+						: 'Leave blank to keep the current token'}
+				/>
+				<p class="text-xs leading-5 text-muted-foreground">
+					Authorizes `/metrics` and the read-only JSON endpoints. Copy it now if an external scraper
+					needs it — Uploy does not show it again.
+				</p>
+			</div>
+			<!-- Collapsed by default. The generated token and the server's own address are
+			     right for almost every setup, so the dialog opens on nothing to decide. -->
+			<Collapsible bind:open={monitoringAdvancedOpen} class="rounded-md border border-border">
+				{#snippet trigger()}
+					<span
+						class="flex w-full cursor-pointer items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+					>
+						<Icon
+							src={ChevronRight}
+							theme="outline"
+							class="h-3.5 w-3.5 transition-transform duration-150 {monitoringAdvancedOpen
+								? 'rotate-90'
+								: ''}"
+						/>
+						Advanced
+					</span>
+				{/snippet}
+				<div class="space-y-4 border-t border-border px-3 py-3">
+					<div class="grid grid-cols-2 gap-3">
+						<label class="flex flex-col gap-1.5">
+							<span class="text-sm font-medium text-foreground">Port</span>
+							<Input bind:value={monitoringPort} inputmode="numeric" />
+						</label>
+						<label class="flex flex-col gap-1.5">
+							<span class="text-sm font-medium text-foreground">Retention days</span>
+							<Input bind:value={monitoringRetentionDays} inputmode="numeric" />
+						</label>
+					</div>
+					<label class="flex flex-col gap-1.5">
+						<span class="text-sm font-medium text-foreground"
+							>Public FQDN <span class="font-normal text-muted-foreground">(optional)</span></span
+						>
+						<Input
+							bind:value={monitoringFQDN}
+							placeholder="metrics.example.com"
+							autocomplete="off"
+						/>
+					</label>
+				</div>
+			</Collapsible>
 			<div class="flex justify-end gap-2 border-t border-border pt-4">
 				<Button type="button" variant="ghost" size="sm" onclick={() => (monitoringServer = null)}
 					>Cancel</Button
