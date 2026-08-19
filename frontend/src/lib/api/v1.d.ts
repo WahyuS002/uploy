@@ -285,6 +285,40 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/servers/{id}/monitoring/credentials': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Read the scrape credentials an external collector needs */
+		get: operations['getServerMonitoringCredentials'];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	'/api/servers/{id}/monitoring/reader-token': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Replace the read token and restart the agent with it */
+		post: operations['rotateServerMonitoringReaderToken'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/servers/{id}/monitoring/history': {
 		parameters: {
 			query?: never;
@@ -977,9 +1011,15 @@ export interface components {
 			fqdn?: string;
 			/**
 			 * Format: password
-			 * @description Optional external read token. Omit only when updating an already configured server.
+			 * @description Read token for external scrapers. Omit it — Uploy generates one on first setup and keeps the existing one afterwards.
 			 */
 			reader_token?: string;
+		};
+		ServerMonitoringCredentialsResponse: {
+			/** @description Read-only token for `/metrics` and the JSON read endpoints. */
+			reader_token: string;
+			/** @description Public scrape URL. Present only when the server has a monitoring FQDN. */
+			metrics_url?: string;
 		};
 		ServerMonitoringResponse: {
 			enabled: boolean;
@@ -2222,6 +2262,131 @@ export interface operations {
 			};
 			/** @description Monitoring agent could not be reached */
 			502: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	getServerMonitoringCredentials: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Scrape credentials */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServerMonitoringCredentialsResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring has never been configured on this server */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	rotateServerMonitoringReaderToken: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Scrape credentials, holding the replacement token */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServerMonitoringCredentialsResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Server not found */
+			404: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Monitoring is not enabled on this server */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description The agent could not be restarted with the new token */
+			422: {
 				headers: {
 					[name: string]: unknown;
 				};

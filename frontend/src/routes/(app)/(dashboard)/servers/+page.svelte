@@ -9,6 +9,7 @@
 	import ServerMetricTrend from '$lib/components/app/ServerMetricTrend.svelte';
 	import LogStream from '$lib/components/app/LogStream.svelte';
 	import MonitoringDialog from '$lib/components/app/MonitoringDialog.svelte';
+	import ScrapeEndpointDialog from '$lib/components/app/ScrapeEndpointDialog.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
 	import { formatDate } from '$lib/format-date';
 	import { Button, EmptyState, Tooltip, toast } from '$lib/components/ui';
@@ -29,6 +30,11 @@
 	let upgradingProxyId = $state<string | null>(null);
 	let monitoringActionId = $state<string | null>(null);
 	let monitoringServerId = $state<string | null>(null);
+
+	// The server whose scrape credentials are open, or null. Reachable only from an
+	// enabled row, because the token exists for external collectors and nobody else
+	// has a reason to meet it.
+	let scrapeServer = $state<(typeof servers)[number] | null>(null);
 
 	// The server whose proxy log is open, or null. Held whole rather than by id so
 	// the dialog can name the machine without looking it back up.
@@ -390,6 +396,14 @@
 													variant="ghost"
 													size="xs"
 													disabled={monitoringActionId !== null}
+													onclick={() => (scrapeServer = server)}
+												>
+													Scrape endpoint
+												</Button>
+												<Button
+													variant="ghost"
+													size="xs"
+													disabled={monitoringActionId !== null}
 													onclick={() => disableMonitoring(server)}
 												>
 													Disable
@@ -509,6 +523,8 @@
 	onClose={() => (monitoringServerId = null)}
 	onSaved={invalidateAll}
 />
+
+<ScrapeEndpointDialog server={scrapeServer} onClose={() => (scrapeServer = null)} />
 
 <!-- A dialog rather than a page of its own: there is no server detail view to
      hang it off, and the log is something you glance at from the row you were

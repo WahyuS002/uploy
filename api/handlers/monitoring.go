@@ -61,6 +61,17 @@ func (s *Server) ConfigureServerMonitoring(w http.ResponseWriter, r *http.Reques
 	if req.ReaderToken != nil {
 		readerToken = strings.TrimSpace(*req.ReaderToken)
 	}
+	// Generated rather than asked for. Only someone wiring up an external scraper
+	// ever needs to see this value, so enabling monitoring never mentions it; the
+	// credentials endpoint hands it out to whoever goes looking.
+	if readerToken == "" {
+		var err error
+		readerToken, err = generateMonitoringToken()
+		if err != nil {
+			respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to generate monitoring token"})
+			return
+		}
+	}
 	if len(readerToken) < 32 || len(readerToken) > 512 {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "reader_token must contain 32 to 512 characters"})
 		return
@@ -184,6 +195,79 @@ func (s *Server) DisableServerMonitoring(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	respond.JSON(w, http.StatusOK, serverToResponse(updated))
+}
+
+func (s *Server) GetServerMonitoringCredentials(w http.ResponseWriter, r *http.Request, id string) {
+	sc, _ := auth.GetSessionContext(r)
+	if sc.WorkspaceRole != "owner" {
+		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
+		return
+	}
+	server, ok := s.workspaceServerWithKey(w, r, id, sc.WorkspaceID)
+	if !ok {
+		return
+	}
+	if server.ReaderToken == "" {
+		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "monitoring has never been configured on this server"})
+		return
+	}
+	respond.JSON(w, http.StatusOK, monitoringCredentials(server, server.ReaderToken))
+}
+
+func (s *Server) RotateServerMonitoringReaderToken(w http.ResponseWriter, r *http.Request, id string) {
+	sc, _ := auth.GetSessionContext(r)
+	if sc.WorkspaceRole != "owner" {
+		respond.JSON(w, http.StatusForbidden, gen.ErrorResponse{Error: "insufficient permissions"})
+		return
+	}
+	server, ok := s.workspaceServerWithKey(w, r, id, sc.WorkspaceID)
+	if !ok {
+		return
+	}
+	if !server.Monitoring.Enabled {
+		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "monitoring is not enabled on this server"})
+		return
+	}
+	readerToken, err := generateMonitoringToken()
+	if err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to generate monitoring token"})
+		return
+	}
+
+	// Reprovisioned before the new token is stored: the agent only learns a token
+	// through its environment, so a failure here leaves the old one working
+	// everywhere rather than stranding the database ahead of the server.
+	agentConfig := monitoring.Config{
+		Image:         config.C.MonitoringImage,
+		HostPort:      int(server.Monitoring.Port),
+		RetentionDays: int(server.Monitoring.RetentionDays),
+		FQDN:          monitoringFQDN(server),
+		ControlToken:  server.ControlToken,
+		ReaderToken:   readerToken,
+	}
+	client, err := monitoringClient(server)
+	if err == nil {
+		defer client.Close()
+		err = monitoring.Enable(r.Context(), client, id, agentConfig)
+	}
+	if err != nil {
+		respond.JSON(w, http.StatusUnprocessableEntity, gen.ErrorResponse{Error: "reader token rotation failed: " + err.Error()})
+		return
+	}
+	if err := db.SetServerMonitoring(r.Context(), id, monitoringDBConfig(server), server.ControlToken, readerToken); err != nil {
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "agent restarted but the new reader token could not be saved"})
+		return
+	}
+	respond.JSON(w, http.StatusOK, monitoringCredentials(server, readerToken))
+}
+
+func monitoringCredentials(server db.ServerWithKey, readerToken string) gen.ServerMonitoringCredentialsResponse {
+	res := gen.ServerMonitoringCredentialsResponse{ReaderToken: readerToken}
+	if fqdn := monitoringFQDN(server); fqdn != "" {
+		url := "https://" + fqdn + "/metrics"
+		res.MetricsUrl = &url
+	}
+	return res
 }
 
 func (s *Server) DeleteServerMonitoringHistory(w http.ResponseWriter, r *http.Request, id string) {

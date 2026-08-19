@@ -590,7 +590,7 @@ type ConfigureServerMonitoringRequest struct {
 	// Port Loopback port the agent is published on. Uploy reaches it by tunneling through the server's SSH connection, so nothing outside the machine can.
 	Port *int `json:"port,omitempty"`
 
-	// ReaderToken Optional external read token. Omit only when updating an already configured server.
+	// ReaderToken Read token for external scrapers. Omit it — Uploy generates one on first setup and keeps the existing one afterwards.
 	ReaderToken   *string `json:"reader_token,omitempty"`
 	RetentionDays *int    `json:"retention_days,omitempty"`
 }
@@ -913,6 +913,15 @@ type ServerDiskPartition struct {
 	TotalBytes  int64   `json:"total_bytes"`
 	UsedBytes   int64   `json:"used_bytes"`
 	UsedPercent float64 `json:"used_percent"`
+}
+
+// ServerMonitoringCredentialsResponse defines model for ServerMonitoringCredentialsResponse.
+type ServerMonitoringCredentialsResponse struct {
+	// MetricsUrl Public scrape URL. Present only when the server has a monitoring FQDN.
+	MetricsUrl *string `json:"metrics_url,omitempty"`
+
+	// ReaderToken Read-only token for `/metrics` and the JSON read endpoints.
+	ReaderToken string `json:"reader_token"`
 }
 
 // ServerMonitoringResponse defines model for ServerMonitoringResponse.
@@ -1354,9 +1363,15 @@ type ServerInterface interface {
 	// Enable or update retained container metrics on a server
 	// (POST /api/servers/{id}/monitoring)
 	ConfigureServerMonitoring(w http.ResponseWriter, r *http.Request, id string)
+	// Read the scrape credentials an external collector needs
+	// (GET /api/servers/{id}/monitoring/credentials)
+	GetServerMonitoringCredentials(w http.ResponseWriter, r *http.Request, id string)
 	// Permanently delete retained monitoring history
 	// (DELETE /api/servers/{id}/monitoring/history)
 	DeleteServerMonitoringHistory(w http.ResponseWriter, r *http.Request, id string)
+	// Replace the read token and restart the agent with it
+	// (POST /api/servers/{id}/monitoring/reader-token)
+	RotateServerMonitoringReaderToken(w http.ResponseWriter, r *http.Request, id string)
 	// Get current server health metrics
 	// (GET /api/servers/{id}/observability)
 	GetServerObservability(w http.ResponseWriter, r *http.Request, id string)
@@ -2407,6 +2422,37 @@ func (siw *ServerInterfaceWrapper) ConfigureServerMonitoring(w http.ResponseWrit
 	handler.ServeHTTP(w, r)
 }
 
+// GetServerMonitoringCredentials operation middleware
+func (siw *ServerInterfaceWrapper) GetServerMonitoringCredentials(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServerMonitoringCredentials(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteServerMonitoringHistory operation middleware
 func (siw *ServerInterfaceWrapper) DeleteServerMonitoringHistory(w http.ResponseWriter, r *http.Request) {
 
@@ -2429,6 +2475,37 @@ func (siw *ServerInterfaceWrapper) DeleteServerMonitoringHistory(w http.Response
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteServerMonitoringHistory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateServerMonitoringReaderToken operation middleware
+func (siw *ServerInterfaceWrapper) RotateServerMonitoringReaderToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateServerMonitoringReaderToken(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3341,7 +3418,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/check-connection", wrapper.CheckConnection)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/servers/{id}/monitoring", wrapper.DisableServerMonitoring)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/{id}/monitoring", wrapper.ConfigureServerMonitoring)
+	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/monitoring/credentials", wrapper.GetServerMonitoringCredentials)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/servers/{id}/monitoring/history", wrapper.DeleteServerMonitoringHistory)
+	m.HandleFunc("POST "+options.BaseURL+"/api/servers/{id}/monitoring/reader-token", wrapper.RotateServerMonitoringReaderToken)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/observability", wrapper.GetServerObservability)
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/observability/history", wrapper.GetServerObservabilityHistory)
 	m.HandleFunc("POST "+options.BaseURL+"/api/servers/{id}/proxy", wrapper.UpgradeServerProxy)

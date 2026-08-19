@@ -697,6 +697,100 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/servers/{id}/monitoring/credentials:
+    get:
+      operationId: getServerMonitoringCredentials
+      summary: Read the scrape credentials an external collector needs
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scrape credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerMonitoringCredentialsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Monitoring has never been configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/servers/{id}/monitoring/reader-token:
+    post:
+      operationId: rotateServerMonitoringReaderToken
+      summary: Replace the read token and restart the agent with it
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scrape credentials, holding the replacement token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerMonitoringCredentialsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Server not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Monitoring is not enabled on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: The agent could not be restarted with the new token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/servers/{id}/monitoring/history:
     delete:
       operationId: deleteServerMonitoringHistory
@@ -2965,7 +3059,19 @@ components:
           type: string
           format: password
           minLength: 32
-          description: Optional external read token. Omit only when updating an already configured server.
+          description: Read token for external scrapers. Omit it — Uploy generates one on first setup and keeps the existing one afterwards.
+
+    ServerMonitoringCredentialsResponse:
+      type: object
+      required:
+        - reader_token
+      properties:
+        reader_token:
+          type: string
+          description: Read-only token for `/metrics` and the JSON read endpoints.
+        metrics_url:
+          type: string
+          description: Public scrape URL. Present only when the server has a monitoring FQDN.
 
     ServerMonitoringResponse:
       type: object
