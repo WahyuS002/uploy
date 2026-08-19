@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { api } from '$lib/api/client';
 	import type { components } from '$lib/api/v1';
-	import { Button, Collapsible, Input, toast } from '$lib/components/ui';
+	import { Button, Input, ToggleGroup, toast } from '$lib/components/ui';
 	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { ChevronRight } from '@steeze-ui/heroicons';
+	import { ChevronRight, Pencil } from '@steeze-ui/heroicons';
+	import FormField from './FormField.svelte';
 
 	type ServerResponse = components['schemas']['ServerResponse'];
 
@@ -19,14 +21,31 @@
 
 	let { serverId, onClose, onSaved }: Props = $props();
 
+	// The windows worth offering. The API accepts 1 to 30, but a free-text day count
+	// is a question nobody arrives with an answer to; these four cover the reasons
+	// people actually keep metrics, and a server already set to something else keeps
+	// its value as a fifth choice.
+	const RETENTION_PRESETS = [3, 7, 14, 30];
+
 	let server = $state<ServerResponse | null>(null);
 	let loadError = $state('');
 	let saving = $state(false);
-	let advancedOpen = $state(false);
+	let portLocked = $state(true);
+	let portInput = $state<HTMLInputElement | null>(null);
+	let fqdnInput = $state<HTMLInputElement | null>(null);
+	let exposePublicly = $state(false);
 	let port = $state('9184');
 	let retentionDays = $state('7');
 	let fqdn = $state('');
-	let readerToken = $state('');
+
+	let retentionOptions = $derived.by(() => {
+		const current = Number(retentionDays);
+		const days =
+			Number.isInteger(current) && current >= 1 && current <= 30
+				? [...new Set([...RETENTION_PRESETS, current])].sort((a, b) => a - b)
+				: RETENTION_PRESETS;
+		return days.map((day) => ({ value: String(day), label: `${day} days` }));
+	});
 
 	// Loaded rather than passed in: the observability page knows only which server is
 	// unmonitored, not its host or current monitoring settings, and one request when a
@@ -58,34 +77,47 @@
 	});
 
 	function seed(target: ServerResponse) {
-		advancedOpen = false;
+		portLocked = true;
 		port = String(target.monitoring.port || 9184);
 		retentionDays = String(target.monitoring.retention_days || 7);
+		lastRetention = retentionDays;
 		fqdn = target.monitoring.fqdn ?? '';
-		// Generated, not invented. Asking someone to compose 32 random characters before
-		// they can see a single metric is the step that stalls this dialog.
-		readerToken = isFirstSetup(target) ? generateReaderToken() : '';
+		exposePublicly = fqdn !== '';
 	}
 
-	function isFirstSetup(target: ServerResponse) {
-		return !target.monitoring.enabled && !target.monitoring.cleanup_at;
+	async function editPort() {
+		portLocked = false;
+		await tick();
+		portInput?.focus();
+		portInput?.select();
 	}
 
-	function generateReaderToken() {
-		const bytes = crypto.getRandomValues(new Uint8Array(32));
-		return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+	async function revealDomain() {
+		if (!exposePublicly) return;
+		await tick();
+		fqdnInput?.focus();
+	}
+
+	// A toggle group deselects when its active item is clicked again. Retention has no
+	// "none", so the window that was there stands rather than emptying the control.
+	let lastRetention = '7';
+
+	function holdRetention(next: string) {
+		if (next) lastRetention = next;
+		else retentionDays = lastRetention;
 	}
 
 	async function save() {
 		if (!server || saving) return;
 		const portValue = Number(port);
 		const retentionValue = Number(retentionDays);
-		const token = readerToken.trim();
-		// Required on first setup, and validated whenever it is being replaced.
-		if ((isFirstSetup(server) || token.length > 0) && (token.length < 32 || token.length > 512)) {
+		// Unchecked means unpublished, whatever is still sitting in the field: the box is
+		// the answer, and the domain is only how that answer gets carried out.
+		const domain = exposePublicly ? fqdn.trim() : '';
+		if (exposePublicly && !domain) {
 			toast.error({
-				title: 'Invalid reader token',
-				description: 'Use 32 to 512 characters, or select Regenerate.'
+				title: 'Domain required',
+				description: 'Enter the domain to publish on, or clear the checkbox.'
 			});
 			return;
 		}
@@ -102,8 +134,8 @@
 		const toastId = `monitoring-save-${server.id}`;
 		toast.neutral({
 			id: toastId,
-			title: 'Provisioning monitoring',
-			description: 'Installing the edge agent on the server.',
+			title: 'Configuring monitoring',
+			description: 'Installing edge agent...',
 			icon: { kind: 'spinner' },
 			dismissible: false
 		});
@@ -113,14 +145,13 @@
 				body: {
 					port: portValue,
 					retention_days: retentionValue,
-					fqdn: fqdn.trim(),
-					...(token ? { reader_token: token } : {})
+					fqdn: domain
 				}
 			});
 			if (error) {
 				toast.error({
 					id: toastId,
-					title: 'Monitoring setup failed',
+					title: 'Configuration failed',
 					description: (error as components['schemas']['ErrorResponse']).error
 				});
 				return;
@@ -130,13 +161,13 @@
 			toast.success({
 				id: toastId,
 				title: 'Monitoring ready',
-				description: 'Uploy now reads live and retained metrics through the edge agent.'
+				description: 'Edge agent is now active and collecting metrics.'
 			});
 		} catch {
 			toast.error({
 				id: toastId,
-				title: 'Monitoring setup failed',
-				description: 'Network error. Check the server connection, then retry.'
+				title: 'Configuration failed',
+				description: 'Network error. Check server connection and retry.'
 			});
 		} finally {
 			saving = false;
@@ -167,90 +198,97 @@
 			</div>
 		{:else}
 			<form
-				class="space-y-4 px-5 py-4"
+				class="space-y-5 px-5 py-4"
 				onsubmit={(event) => {
 					event.preventDefault();
 					void save();
 				}}
 			>
-				<p class="text-sm leading-6 text-muted-foreground">
-					Stores container metrics locally on this server. Uploy reads them over the SSH connection
-					it already has, so nothing new is exposed to the network; a public FQDN is optional for
-					external scrapers.
-				</p>
-				<div class="flex flex-col gap-1.5">
-					<div class="flex items-center justify-between gap-2">
-						<label for="monitoring-reader-token" class="text-sm font-medium text-foreground">
-							Reader token
-						</label>
-						<button
-							type="button"
-							class="cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-							onclick={() => (readerToken = generateReaderToken())}
-						>
-							Regenerate
-						</button>
+				<!-- Two columns of one field each, rather than two full-width rows: both
+				     settings are short, and side by side they read as one pass over how
+				     the agent runs. Each column carries its own label so the pair stacks
+				     intact on a narrow screen instead of unzipping into four rows. -->
+				<div class="grid gap-x-5 gap-y-4 sm:grid-cols-[1fr_auto]">
+					<div class="flex min-w-0 flex-col gap-2">
+						<span class="text-sm font-medium text-foreground">Metrics retention</span>
+						<ToggleGroup
+							bind:value={retentionDays}
+							onValueChange={holdRetention}
+							options={retentionOptions}
+							class="self-start"
+						/>
 					</div>
-					<Input
-						id="monitoring-reader-token"
-						bind:value={readerToken}
-						class="font-mono text-xs"
-						minlength={32}
-						maxlength={512}
-						autocomplete="off"
-						spellcheck="false"
-						placeholder={isFirstSetup(server) ? '' : 'Leave blank to keep the current token'}
-					/>
-					<p class="text-xs leading-5 text-muted-foreground">
-						Authorizes `/metrics` and the read-only JSON endpoints. Copy it now if an external
-						scraper needs it — Uploy does not show it again.
-					</p>
-				</div>
-				<!-- Collapsed by default. The generated token and the server's own address are
-				     right for almost every setup, so the dialog opens on nothing to decide. -->
-				<Collapsible bind:open={advancedOpen} class="rounded-md border border-border">
-					{#snippet trigger()}
-						<span
-							class="flex w-full cursor-pointer items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-						>
-							<Icon
-								src={ChevronRight}
-								theme="outline"
-								class="h-3.5 w-3.5 transition-transform duration-150 {advancedOpen
-									? 'rotate-90'
-									: ''}"
+
+					<div class="flex flex-col gap-2">
+						<label for="monitoring-port" class="text-sm font-medium text-foreground">
+							Agent port
+						</label>
+						<div class="group relative w-32">
+							<Input
+								id="monitoring-port"
+								bind:value={port}
+								bind:ref={portInput}
+								readonly={portLocked}
+								onclick={portLocked ? () => void editPort() : undefined}
+								inputmode="numeric"
+								size="sm"
+								class="py-2 font-mono {portLocked ? 'cursor-pointer pr-8' : ''}"
 							/>
-							Advanced
-						</span>
-					{/snippet}
-					<div class="space-y-4 border-t border-border px-3 py-3">
-						<div class="grid grid-cols-2 gap-3">
-							<label class="flex flex-col gap-1.5">
-								<span class="text-sm font-medium text-foreground">Loopback port</span>
-								<Input bind:value={port} inputmode="numeric" />
-								<p class="text-xs leading-5 text-muted-foreground">
-									Bound to 127.0.0.1, so no firewall rule is needed. Change it only if this port is
-									already taken on the server.
-								</p>
-							</label>
-							<label class="flex flex-col gap-1.5">
-								<span class="text-sm font-medium text-foreground">Retention days</span>
-								<Input bind:value={retentionDays} inputmode="numeric" />
-							</label>
+							{#if portLocked}
+								<button
+									type="button"
+									class="absolute inset-y-0 right-0 grid w-8 cursor-pointer place-items-center rounded-r-md text-muted-foreground transition-colors group-hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+									aria-label="Edit agent port"
+									title="Edit agent port"
+									onclick={() => void editPort()}
+								>
+									<Icon src={Pencil} theme="outline" class="h-3.5 w-3.5" />
+								</button>
+							{/if}
 						</div>
-						<label class="flex flex-col gap-1.5">
-							<span class="text-sm font-medium text-foreground"
-								>Public FQDN <span class="font-normal text-muted-foreground">(optional)</span></span
-							>
-							<Input bind:value={fqdn} placeholder="metrics.example.com" autocomplete="off" />
-						</label>
 					</div>
-				</Collapsible>
+				</div>
+
+				<div class="flex flex-col gap-3">
+					<label class="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+						<input
+							type="checkbox"
+							class="publish-toggle"
+							bind:checked={exposePublicly}
+							onchange={() => void revealDomain()}
+						/>
+						Expose metrics for external scrapers (Prometheus)
+					</label>
+					{#if exposePublicly}
+						<FormField label="Public domain">
+							<Input
+								bind:value={fqdn}
+								bind:ref={fqdnInput}
+								placeholder="metrics.example.com"
+								size="sm"
+								autocomplete="off"
+								spellcheck="false"
+							/>
+						</FormField>
+					{/if}
+				</div>
+
 				<div class="flex justify-end gap-2 border-t border-border pt-4">
 					<Button type="button" variant="ghost" size="sm" onclick={onClose}>Cancel</Button>
-					<Button type="submit" size="sm" loading={saving}>Save monitoring</Button>
+					<Button type="submit" size="sm" loading={saving}>Save</Button>
 				</div>
 			</form>
 		{/if}
 	</DialogContent>
 </Dialog>
+
+<style>
+	/* Matches the publish toggle in ServiceWorkspace: the same decision, so the same
+	   control. Worth extracting into the ui kit once a third surface needs it. */
+	.publish-toggle {
+		width: 1rem;
+		height: 1rem;
+		accent-color: var(--primary);
+		cursor: pointer;
+	}
+</style>
