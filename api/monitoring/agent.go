@@ -122,7 +122,10 @@ func Enable(ctx context.Context, client *ssh.Client, serverID string, cfg Config
 		return err
 	}
 
-	if _, err := client.Run(ctx, buildRunCommand(docker, cfg)); err != nil {
+	if out, err := client.Run(ctx, buildRunCommand(docker, cfg)); err != nil {
+		if trimmed := strings.TrimSpace(out); trimmed != "" {
+			return fmt.Errorf("start monitoring agent: %s", trimmed)
+		}
 		return fmt.Errorf("start monitoring agent: %w", err)
 	}
 	state.newStarted = true
@@ -146,10 +149,16 @@ func prepareMonitoringHost(ctx context.Context, client *ssh.Client, cfg Config) 
 		}
 	}
 	docker := client.DockerBin()
-	if _, err := client.Run(ctx, docker+" pull "+ssh.ShellQuote(cfg.Image)); err != nil {
+	if out, err := client.Run(ctx, docker+" pull "+ssh.ShellQuote(cfg.Image)); err != nil {
+		if trimmed := strings.TrimSpace(out); trimmed != "" {
+			return fmt.Errorf("pull monitoring image: %s", trimmed)
+		}
 		return fmt.Errorf("pull monitoring image: %w", err)
 	}
-	if _, err := client.RunElevated(ctx, "mkdir -p "+dataDir); err != nil {
+	if out, err := client.RunElevated(ctx, "mkdir -p "+dataDir); err != nil {
+		if trimmed := strings.TrimSpace(out); trimmed != "" {
+			return fmt.Errorf("prepare monitoring data: %s", trimmed)
+		}
 		return fmt.Errorf("prepare monitoring data: %w", err)
 	}
 	return nil
@@ -205,12 +214,18 @@ func (s *enableState) prepareOld(ctx context.Context, client dockerapi.CommandRu
 	s.oldWasRunning = running
 	docker := client.DockerBin()
 	if running {
-		if _, err := client.Run(ctx, docker+" stop "+ContainerName); err != nil {
+		if out, err := client.Run(ctx, docker+" stop "+ContainerName); err != nil {
+			if trimmed := strings.TrimSpace(out); trimmed != "" {
+				return fmt.Errorf("stop existing monitoring agent: %s", trimmed)
+			}
 			return fmt.Errorf("stop existing monitoring agent: %w", err)
 		}
 		s.oldStopped = true
 	}
-	if _, err := client.Run(ctx, docker+" rename "+ContainerName+" "+s.rollbackName); err != nil {
+	if out, err := client.Run(ctx, docker+" rename "+ContainerName+" "+s.rollbackName); err != nil {
+		if trimmed := strings.TrimSpace(out); trimmed != "" {
+			return fmt.Errorf("rename existing monitoring agent: %s", trimmed)
+		}
 		return fmt.Errorf("rename existing monitoring agent: %w", err)
 	}
 	s.oldMoved = true
