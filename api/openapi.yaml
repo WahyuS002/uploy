@@ -588,9 +588,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/servers/{id}/observability:
+  /api/servers/{id}/metrics:
     get:
-      operationId: getServerObservability
+      operationId: getServerMetrics
       summary: Get current server health metrics
       security:
         - cookieAuth: []
@@ -606,7 +606,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServerObservabilityResponse"
+                $ref: "#/components/schemas/ServerMetricsResponse"
         "401":
           description: Not authenticated
           content:
@@ -632,9 +632,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/servers/{id}/observability/history:
+  /api/servers/{id}/metrics/history:
     get:
-      operationId: getServerObservabilityHistory
+      operationId: getServerMetricsHistory
       summary: Get retained server health metrics
       security:
         - cookieAuth: []
@@ -665,7 +665,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ServerObservabilityHistoryResponse"
+                $ref: "#/components/schemas/ServerMetricsHistoryResponse"
         "400":
           description: Invalid history parameters
           content:
@@ -1628,9 +1628,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/projects/{id}/observability:
+  /api/projects/{id}/metrics:
     get:
-      operationId: getProjectObservability
+      operationId: getProjectMetrics
       summary: Get current project container metrics
       security:
         - cookieAuth: []
@@ -1646,7 +1646,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProjectObservabilityResponse"
+                $ref: "#/components/schemas/ProjectMetricsResponse"
         "401":
           description: Not authenticated
           content:
@@ -1666,9 +1666,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /api/projects/{id}/observability/history:
+  /api/projects/{id}/metrics/history:
     get:
-      operationId: getProjectObservabilityHistory
+      operationId: getProjectMetricsHistory
       summary: Get retained metrics grouped by service deployment
       security:
         - cookieAuth: []
@@ -1699,7 +1699,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProjectObservabilityHistoryResponse"
+                $ref: "#/components/schemas/ProjectMetricsHistoryResponse"
         "401":
           description: Not authenticated
           content:
@@ -3101,7 +3101,7 @@ components:
           type: string
           format: date-time
 
-    ServerObservabilityResponse:
+    ServerMetricsResponse:
       type: object
       required:
         - sampled_at
@@ -3175,7 +3175,7 @@ components:
           type: number
           format: double
 
-    ServerObservabilityHistoryResponse:
+    ServerMetricsHistoryResponse:
       type: object
       required:
         - points
@@ -3183,7 +3183,7 @@ components:
         points:
           type: array
           items:
-            $ref: "#/components/schemas/ServerObservabilityResponse"
+            $ref: "#/components/schemas/ServerMetricsResponse"
 
     LogEntry:
       type: object
@@ -3470,7 +3470,7 @@ components:
             will be created on its server from one that will be updated.
             Derived per request, never stored.
 
-    ProjectObservabilityResponse:
+    ProjectMetricsResponse:
       type: object
       required:
         - sampled_at
@@ -3486,11 +3486,11 @@ components:
           type: integer
           description: Recommended client refresh interval.
         summary:
-          $ref: "#/components/schemas/ProjectObservabilitySummary"
+          $ref: "#/components/schemas/ProjectMetricsSummary"
         services:
           type: array
           items:
-            $ref: "#/components/schemas/ServiceObservability"
+            $ref: "#/components/schemas/ServiceMetrics"
         unmonitored_servers:
           type: array
           description: >-
@@ -3515,7 +3515,7 @@ components:
           type: integer
           description: Services in this project whose active deployment runs on this server.
 
-    ProjectObservabilityHistoryResponse:
+    ProjectMetricsHistoryResponse:
       type: object
       required:
         - services
@@ -3524,7 +3524,7 @@ components:
         services:
           type: array
           items:
-            $ref: "#/components/schemas/ServiceObservabilityHistory"
+            $ref: "#/components/schemas/ServiceMetricsHistory"
         deployment_markers:
           type: array
           description: Deployments created within the requested history window, including failed attempts.
@@ -3565,7 +3565,7 @@ components:
           type: string
           description: Commit-like image tag or digest when the image reference encodes one; empty otherwise.
 
-    ServiceObservabilityHistory:
+    ServiceMetricsHistory:
       type: object
       required:
         - service_id
@@ -3579,9 +3579,9 @@ components:
         deployments:
           type: array
           items:
-            $ref: "#/components/schemas/DeploymentObservabilityHistory"
+            $ref: "#/components/schemas/DeploymentMetricsHistory"
 
-    DeploymentObservabilityHistory:
+    DeploymentMetricsHistory:
       type: object
       required:
         - deployment_id
@@ -3592,9 +3592,9 @@ components:
         points:
           type: array
           items:
-            $ref: "#/components/schemas/ContainerObservabilitySample"
+            $ref: "#/components/schemas/ContainerMetricsSample"
 
-    ContainerObservabilitySample:
+    ContainerMetricsSample:
       type: object
       required:
         - sampled_at
@@ -3636,7 +3636,7 @@ components:
           type: integer
           format: int64
 
-    ProjectObservabilitySummary:
+    ProjectMetricsSummary:
       type: object
       required:
         - total_services
@@ -3670,7 +3670,7 @@ components:
           type: integer
           format: int64
 
-    ServiceObservability:
+    ServiceMetrics:
       type: object
       required:
         - service_id
@@ -3706,9 +3706,9 @@ components:
         error:
           type: string
         container:
-          $ref: "#/components/schemas/ContainerObservability"
+          $ref: "#/components/schemas/ContainerMetrics"
 
-    ContainerObservability:
+    ContainerMetrics:
       type: object
       required:
         - id

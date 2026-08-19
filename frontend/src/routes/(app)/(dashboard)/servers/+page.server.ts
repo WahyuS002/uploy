@@ -18,8 +18,8 @@ export const load: PageServerLoad = async ({ fetch }) => {
 	}
 
 	type ServerHealth = {
-		latest: components['schemas']['ServerObservabilityResponse'] | null;
-		history: components['schemas']['ServerObservabilityResponse'][];
+		latest: components['schemas']['ServerMetricsResponse'] | null;
+		history: components['schemas']['ServerMetricsResponse'][];
 	};
 	const healthEntries = await Promise.all(
 		serversRes.data.map(async (server) => {
@@ -27,8 +27,8 @@ export const load: PageServerLoad = async ({ fetch }) => {
 				return [server.id, null] as const;
 			}
 			const [latestRes, historyRes] = await Promise.all([
-				api.GET('/api/servers/{id}/observability', { params: { path: { id: server.id } } }),
-				api.GET('/api/servers/{id}/observability/history', {
+				api.GET('/api/servers/{id}/metrics', { params: { path: { id: server.id } } }),
+				api.GET('/api/servers/{id}/metrics/history', {
 					params: { path: { id: server.id }, query: { since: '24h', max_points: 48 } }
 				})
 			]);

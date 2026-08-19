@@ -11,7 +11,7 @@ import (
 	"github.com/WahyuS002/uploy/respond"
 )
 
-func (s *Server) GetServerObservability(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) GetServerMetrics(w http.ResponseWriter, r *http.Request, id string) {
 	sc, _ := auth.GetSessionContext(r)
 	server, ok := s.workspaceServerWithKey(w, r, id, sc.WorkspaceID)
 	if !ok {
@@ -26,10 +26,10 @@ func (s *Server) GetServerObservability(w http.ResponseWriter, r *http.Request, 
 		respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{Error: "could not reach monitoring agent"})
 		return
 	}
-	respond.JSON(w, http.StatusOK, serverObservabilityResponse(latest))
+	respond.JSON(w, http.StatusOK, serverMetricsResponse(latest))
 }
 
-func (s *Server) GetServerObservabilityHistory(w http.ResponseWriter, r *http.Request, id string, params gen.GetServerObservabilityHistoryParams) {
+func (s *Server) GetServerMetricsHistory(w http.ResponseWriter, r *http.Request, id string, params gen.GetServerMetricsHistoryParams) {
 	sc, _ := auth.GetSessionContext(r)
 	server, ok := s.workspaceServerWithKey(w, r, id, sc.WorkspaceID)
 	if !ok {
@@ -39,7 +39,7 @@ func (s *Server) GetServerObservabilityHistory(w http.ResponseWriter, r *http.Re
 		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "monitoring is not enabled on this server"})
 		return
 	}
-	from, err := serverObservabilityHistorySince(params.Since)
+	from, err := serverMetricsHistorySince(params.Since)
 	if err != nil {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: err.Error()})
 		return
@@ -58,14 +58,14 @@ func (s *Server) GetServerObservabilityHistory(w http.ResponseWriter, r *http.Re
 		respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{Error: "could not reach monitoring agent"})
 		return
 	}
-	points := make([]gen.ServerObservabilityResponse, len(history.Points))
+	points := make([]gen.ServerMetricsResponse, len(history.Points))
 	for index, point := range history.Points {
-		points[index] = serverObservabilityResponse(point)
+		points[index] = serverMetricsResponse(point)
 	}
-	respond.JSON(w, http.StatusOK, gen.ServerObservabilityHistoryResponse{Points: points})
+	respond.JSON(w, http.StatusOK, gen.ServerMetricsHistoryResponse{Points: points})
 }
 
-func serverObservabilityResponse(point monitoring.ServerLatestResponse) gen.ServerObservabilityResponse {
+func serverMetricsResponse(point monitoring.ServerLatestResponse) gen.ServerMetricsResponse {
 	partitions := make([]gen.ServerDiskPartition, len(point.Partitions))
 	for index, partition := range point.Partitions {
 		partitions[index] = gen.ServerDiskPartition{
@@ -75,7 +75,7 @@ func serverObservabilityResponse(point monitoring.ServerLatestResponse) gen.Serv
 			UsedPercent: partition.UsedPercent,
 		}
 	}
-	return gen.ServerObservabilityResponse{
+	return gen.ServerMetricsResponse{
 		SampledAt:           time.UnixMilli(point.SampledAt).UTC(),
 		DiskUsedBytes:       point.DiskUsedBytes,
 		DiskTotalBytes:      point.DiskTotalBytes,
@@ -91,7 +91,7 @@ func serverObservabilityResponse(point monitoring.ServerLatestResponse) gen.Serv
 	}
 }
 
-func serverObservabilityHistorySince(value *gen.GetServerObservabilityHistoryParamsSince) (time.Time, error) {
+func serverMetricsHistorySince(value *gen.GetServerMetricsHistoryParamsSince) (time.Time, error) {
 	if value == nil {
 		return time.Now().UTC().Add(-7 * 24 * time.Hour), nil
 	}

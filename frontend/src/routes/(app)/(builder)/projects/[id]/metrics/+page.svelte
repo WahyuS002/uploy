@@ -17,13 +17,13 @@
 	} from '@steeze-ui/heroicons';
 	import { untrack } from 'svelte';
 
-	type ObservabilityResponse = components['schemas']['ProjectObservabilityResponse'];
-	type ServiceObservability = components['schemas']['ServiceObservability'];
+	type MetricsResponse = components['schemas']['ProjectMetricsResponse'];
+	type ServiceMetrics = components['schemas']['ServiceMetrics'];
 	type DeploymentMarker = components['schemas']['DeploymentMarker'];
-	type Status = ServiceObservability['status'];
+	type Status = ServiceMetrics['status'];
 	type HistoryRange = NonNullable<
 		NonNullable<
-			paths['/api/projects/{id}/observability/history']['get']['parameters']['query']
+			paths['/api/projects/{id}/metrics/history']['get']['parameters']['query']
 		>['since']
 	>;
 	type HistoryPoint = {
@@ -58,7 +58,7 @@
 	];
 
 	let projectId = $derived(page.params.id as string);
-	let snapshot = $state<ObservabilityResponse | null>(null);
+	let snapshot = $state<MetricsResponse | null>(null);
 	let history = $state<HistoryPoint[]>([]);
 	let markers = $state<DeploymentMarker[]>([]);
 	let historyRange = $state<HistoryRange>('7d');
@@ -173,7 +173,7 @@
 
 		async function fetchHistory() {
 			try {
-				const { data } = await api.GET('/api/projects/{id}/observability/history', {
+				const { data } = await api.GET('/api/projects/{id}/metrics/history', {
 					params: { path: { id }, query: { since: range, max_points: MAX_HISTORY_POINTS } }
 				});
 				if (cancelled || !data) return;
@@ -191,7 +191,7 @@
 			refreshError = '';
 			try {
 				const previous = snapshot;
-				const { data, error } = await api.GET('/api/projects/{id}/observability', {
+				const { data, error } = await api.GET('/api/projects/{id}/metrics', {
 					params: { path: { id } }
 				});
 				if (cancelled) return;
@@ -345,7 +345,7 @@
 	}
 
 	function retainedTimeline(
-		response: components['schemas']['ProjectObservabilityHistoryResponse']
+		response: components['schemas']['ProjectMetricsHistoryResponse']
 	): HistoryPoint[] {
 		type Aggregate = {
 			at: string;
@@ -502,7 +502,7 @@
 			.join(' ');
 	}
 
-	function serviceNetworkRate(service: ServiceObservability): number {
+	function serviceNetworkRate(service: ServiceMetrics): number {
 		return serviceRates[service.service_id] ?? 0;
 	}
 </script>
@@ -516,7 +516,7 @@
 {/snippet}
 
 <svelte:head>
-	<title>Project observability · Uploy</title>
+	<title>Project metrics · Uploy</title>
 </svelte:head>
 
 <div class="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border bg-card">
@@ -524,7 +524,7 @@
 		<header class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 			<div class="max-w-2xl">
 				<h1 class="text-2xl font-semibold tracking-[-0.02em] text-foreground">
-					Project observability
+					Project metrics
 				</h1>
 				<p class="mt-2 text-sm leading-relaxed text-muted-foreground">
 					Live health and resource usage for active deployment containers across every environment.
@@ -553,7 +553,7 @@
 		</header>
 
 		{#if pageState === 'loading'}
-			<div class="space-y-5" aria-label="Loading observability" aria-busy="true">
+			<div class="space-y-5" aria-label="Loading metrics" aria-busy="true">
 				<div
 					class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3"
 				>

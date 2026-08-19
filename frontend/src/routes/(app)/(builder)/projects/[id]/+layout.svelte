@@ -7,10 +7,10 @@
 
 	let projectId = $derived(page.params.id as string);
 	let builderHref = $derived(`/projects/${projectId}`);
-	let observabilityHref = $derived(`/projects/${projectId}/observability`);
+	let metricsHref = $derived(`/projects/${projectId}/metrics`);
 	let settingsHref = $derived(`/projects/${projectId}/settings`);
 	let builderActive = $derived(page.url.pathname === builderHref);
-	let observabilityActive = $derived(page.url.pathname === observabilityHref);
+	let metricsActive = $derived(page.url.pathname === metricsHref);
 	let settingsActive = $derived(page.url.pathname === settingsHref);
 </script>
 
@@ -32,14 +32,14 @@
 				<span>Builder</span>
 			</a>
 			<a
-				href={observabilityHref}
-				aria-current={observabilityActive ? 'page' : undefined}
-				class="-mb-px inline-flex items-center gap-2 border-b-2 py-3 text-sm transition-colors duration-150 outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 {observabilityActive
+				href={metricsHref}
+				aria-current={metricsActive ? 'page' : undefined}
+				class="-mb-px inline-flex items-center gap-2 border-b-2 py-3 text-sm transition-colors duration-150 outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 {metricsActive
 					? 'border-foreground font-medium text-foreground'
 					: 'border-transparent text-muted-foreground hover:text-foreground'}"
 			>
 				<Icon src={ChartBar} theme="outline" class="h-4 w-4" />
-				<span>Observability</span>
+				<span>Metrics</span>
 			</a>
 			<a
 				href={settingsHref}

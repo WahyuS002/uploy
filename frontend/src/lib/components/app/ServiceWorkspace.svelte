@@ -72,7 +72,7 @@
 		 * in, and a child cannot draw outside its own parent's edge.
 		 */
 		openDeployment?: DeploymentResponse | null;
-		/** A deployment selected from an observability marker deep link. */
+		/** A deployment selected from an metrics marker deep link. */
 		initialDeploymentId?: string | null;
 	};
 

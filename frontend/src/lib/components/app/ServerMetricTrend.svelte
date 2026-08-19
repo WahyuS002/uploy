@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { components } from '$lib/api/v1';
 
-	type Point = components['schemas']['ServerObservabilityResponse'];
+	type Point = components['schemas']['ServerMetricsResponse'];
 	type Metric = 'disk' | 'io' | 'load' | 'swap';
 
 	let {

@@ -65,12 +65,12 @@
 		return 'border-border/70 bg-muted/30 text-foreground';
 	}
 
-	function diskActivityPerSecond(points: components['schemas']['ServerObservabilityResponse'][]) {
+	function diskActivityPerSecond(points: components['schemas']['ServerMetricsResponse'][]) {
 		const rates = diskActivityRates(points);
 		return rates.read + rates.write;
 	}
 
-	function diskActivityRates(points: components['schemas']['ServerObservabilityResponse'][]) {
+	function diskActivityRates(points: components['schemas']['ServerMetricsResponse'][]) {
 		if (points.length < 2) return { read: 0, write: 0 };
 		const current = points[points.length - 1];
 		const previous = points[points.length - 2];

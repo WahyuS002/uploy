@@ -251,7 +251,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/servers/{id}/observability': {
+	'/api/servers/{id}/metrics': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -259,7 +259,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get current server health metrics */
-		get: operations['getServerObservability'];
+		get: operations['getServerMetrics'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -268,7 +268,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/servers/{id}/observability/history': {
+	'/api/servers/{id}/metrics/history': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -276,7 +276,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get retained server health metrics */
-		get: operations['getServerObservabilityHistory'];
+		get: operations['getServerMetricsHistory'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -550,7 +550,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/projects/{id}/observability': {
+	'/api/projects/{id}/metrics': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -558,7 +558,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get current project container metrics */
-		get: operations['getProjectObservability'];
+		get: operations['getProjectMetrics'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -567,7 +567,7 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
-	'/api/projects/{id}/observability/history': {
+	'/api/projects/{id}/metrics/history': {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -575,7 +575,7 @@ export interface paths {
 			cookie?: never;
 		};
 		/** Get retained metrics grouped by service deployment */
-		get: operations['getProjectObservabilityHistory'];
+		get: operations['getProjectMetricsHistory'];
 		put?: never;
 		post?: never;
 		delete?: never;
@@ -1034,7 +1034,7 @@ export interface components {
 			/** Format: date-time */
 			cleanup_at?: string;
 		};
-		ServerObservabilityResponse: {
+		ServerMetricsResponse: {
 			/** Format: date-time */
 			sampled_at: string;
 			/** Format: int64 */
@@ -1068,8 +1068,8 @@ export interface components {
 			/** Format: double */
 			used_percent: number;
 		};
-		ServerObservabilityHistoryResponse: {
-			points: components['schemas']['ServerObservabilityResponse'][];
+		ServerMetricsHistoryResponse: {
+			points: components['schemas']['ServerMetricsResponse'][];
 		};
 		LogEntry: {
 			/** Format: int64 */
@@ -1185,13 +1185,13 @@ export interface components {
 			/** @description True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored. */
 			has_deployed: boolean;
 		};
-		ProjectObservabilityResponse: {
+		ProjectMetricsResponse: {
 			/** Format: date-time */
 			sampled_at: string;
 			/** @description Recommended client refresh interval. */
 			refresh_after_seconds: number;
-			summary: components['schemas']['ProjectObservabilitySummary'];
-			services: components['schemas']['ServiceObservability'][];
+			summary: components['schemas']['ProjectMetricsSummary'];
+			services: components['schemas']['ServiceMetrics'][];
 			/** @description Servers that host an active deployment in this project but run no monitoring agent, deduplicated and sorted by name so a client can render one call to action per server rather than one per affected service. */
 			unmonitored_servers: components['schemas']['UnmonitoredServer'][];
 		};
@@ -1201,8 +1201,8 @@ export interface components {
 			/** @description Services in this project whose active deployment runs on this server. */
 			service_count: number;
 		};
-		ProjectObservabilityHistoryResponse: {
-			services: components['schemas']['ServiceObservabilityHistory'][];
+		ProjectMetricsHistoryResponse: {
+			services: components['schemas']['ServiceMetricsHistory'][];
 			/** @description Deployments created within the requested history window, including failed attempts. */
 			deployment_markers: components['schemas']['DeploymentMarker'][];
 		};
@@ -1220,16 +1220,16 @@ export interface components {
 			/** @description Commit-like image tag or digest when the image reference encodes one; empty otherwise. */
 			commit: string;
 		};
-		ServiceObservabilityHistory: {
+		ServiceMetricsHistory: {
 			service_id: string;
 			name: string;
-			deployments: components['schemas']['DeploymentObservabilityHistory'][];
+			deployments: components['schemas']['DeploymentMetricsHistory'][];
 		};
-		DeploymentObservabilityHistory: {
+		DeploymentMetricsHistory: {
 			deployment_id: string;
-			points: components['schemas']['ContainerObservabilitySample'][];
+			points: components['schemas']['ContainerMetricsSample'][];
 		};
-		ContainerObservabilitySample: {
+		ContainerMetricsSample: {
 			/** Format: date-time */
 			sampled_at: string;
 			container_id: string;
@@ -1248,7 +1248,7 @@ export interface components {
 			/** Format: int64 */
 			uptime_seconds: number;
 		};
-		ProjectObservabilitySummary: {
+		ProjectMetricsSummary: {
 			total_services: number;
 			running_services: number;
 			degraded_services: number;
@@ -1263,7 +1263,7 @@ export interface components {
 			/** Format: int64 */
 			network_out_bytes_total: number;
 		};
-		ServiceObservability: {
+		ServiceMetrics: {
 			service_id: string;
 			name: string;
 			environment_name: string;
@@ -1283,9 +1283,9 @@ export interface components {
 			server_id?: string;
 			server_name?: string;
 			error?: string;
-			container?: components['schemas']['ContainerObservability'];
+			container?: components['schemas']['ContainerMetrics'];
 		};
-		ContainerObservability: {
+		ContainerMetrics: {
 			id: string;
 			name: string;
 			state: string;
@@ -2143,7 +2143,7 @@ export interface operations {
 			};
 		};
 	};
-	getServerObservability: {
+	getServerMetrics: {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -2160,7 +2160,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ServerObservabilityResponse'];
+					'application/json': components['schemas']['ServerMetricsResponse'];
 				};
 			};
 			/** @description Not authenticated */
@@ -2201,7 +2201,7 @@ export interface operations {
 			};
 		};
 	};
-	getServerObservabilityHistory: {
+	getServerMetricsHistory: {
 		parameters: {
 			query?: {
 				since?: '1h' | '6h' | '24h' | '7d' | '30d';
@@ -2221,7 +2221,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ServerObservabilityHistoryResponse'];
+					'application/json': components['schemas']['ServerMetricsHistoryResponse'];
 				};
 			};
 			/** @description Invalid history parameters */
@@ -3474,7 +3474,7 @@ export interface operations {
 			};
 		};
 	};
-	getProjectObservability: {
+	getProjectMetrics: {
 		parameters: {
 			query?: never;
 			header?: never;
@@ -3491,7 +3491,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProjectObservabilityResponse'];
+					'application/json': components['schemas']['ProjectMetricsResponse'];
 				};
 			};
 			/** @description Not authenticated */
@@ -3523,7 +3523,7 @@ export interface operations {
 			};
 		};
 	};
-	getProjectObservabilityHistory: {
+	getProjectMetricsHistory: {
 		parameters: {
 			query?: {
 				since?: '1h' | '6h' | '24h' | '7d' | '30d';
@@ -3543,7 +3543,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					'application/json': components['schemas']['ProjectObservabilityHistoryResponse'];
+					'application/json': components['schemas']['ProjectMetricsHistoryResponse'];
 				};
 			};
 			/** @description Not authenticated */

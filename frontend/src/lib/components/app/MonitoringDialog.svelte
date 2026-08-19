@@ -47,7 +47,7 @@
 		return days.map((day) => ({ value: String(day), label: `${day} days` }));
 	});
 
-	// Loaded rather than passed in: the observability page knows only which server is
+	// Loaded rather than passed in: the metrics page knows only which server is
 	// unmonitored, not its host or current monitoring settings, and one request when a
 	// modal opens is cheaper than widening the summary shape it does have.
 	$effect(() => {
