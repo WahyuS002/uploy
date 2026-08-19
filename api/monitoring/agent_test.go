@@ -20,27 +20,8 @@ func TestPinnedImage(t *testing.T) {
 	}
 }
 
-func TestPrivateURL(t *testing.T) {
-	if got := PrivateURL("10.0.0.4", 9184); got != "http://10.0.0.4:9184" {
-		t.Fatalf("PrivateURL = %q", got)
-	}
-}
-
-func TestPrivateIP(t *testing.T) {
-	for _, value := range []string{"10.0.0.4", "192.168.1.4", "100.64.0.2", "fd00::2"} {
-		if !privateIP(value) {
-			t.Fatalf("expected private IP: %s", value)
-		}
-	}
-	for _, value := range []string{"127.0.0.1", "0.0.0.0", "8.8.8.8", "example.com"} {
-		if privateIP(value) {
-			t.Fatalf("expected rejected IP: %s", value)
-		}
-	}
-}
-
 func TestValidateConfigRequiresBothTokens(t *testing.T) {
-	config := Config{Image: "ghcr.io/acme/monitor:v1", PrivateAddress: "10.0.0.4", HostPort: 9184, RetentionDays: 7, ControlToken: "control"}
+	config := Config{Image: "ghcr.io/acme/monitor:v1", HostPort: 9184, RetentionDays: 7, ControlToken: "control"}
 	if err := ValidateConfig(config); err == nil {
 		t.Fatal("expected missing reader token error")
 	}
@@ -48,17 +29,16 @@ func TestValidateConfigRequiresBothTokens(t *testing.T) {
 
 func TestBuildRunCommand(t *testing.T) {
 	command := buildRunCommand("sudo -n docker", Config{
-		Image:          "ghcr.io/acme/monitor:v1",
-		PrivateAddress: "10.0.0.4",
-		HostPort:       9184,
-		RetentionDays:  7,
-		ControlToken:   "control's token",
-		ReaderToken:    "reader token",
+		Image:         "ghcr.io/acme/monitor:v1",
+		HostPort:      9184,
+		RetentionDays: 7,
+		ControlToken:  "control's token",
+		ReaderToken:   "reader token",
 	})
 
 	for _, want := range []string{
 		"sudo -n docker run -d --name uploy-monitor",
-		"-p 10.0.0.4:9184:9184",
+		"-p 127.0.0.1:9184:9184",
 		"-v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /:/host:ro",
 		"UPLOY_MONITOR_RETENTION_DAYS=7 -e HOST_PROC=/host/proc -e HOST_SYS=/host/sys -e HOST_ROOT=/host",
 		"UPLOY_MONITOR_CONTROL_TOKEN='control'\\''s token'",
@@ -172,4 +152,22 @@ func TestEnableStateCleanup(t *testing.T) {
 			t.Fatalf("cleanup() error = %v; want wrapped %v", err, runErr)
 		}
 	})
+}
+
+// The agent must never be published on a routable address: loopback plus the SSH
+// tunnel is the whole reason no firewall rule is needed to run it.
+func TestBuildRunCommandPublishesOnLoopbackOnly(t *testing.T) {
+	command := buildRunCommand("docker", Config{
+		Image:         "ghcr.io/acme/monitor:v1",
+		HostPort:      9500,
+		RetentionDays: 7,
+		ControlToken:  "control",
+		ReaderToken:   "reader",
+	})
+	if !strings.Contains(command, "-p 127.0.0.1:9500:9184") {
+		t.Fatalf("buildRunCommand() = %q; want loopback publish on the configured port", command)
+	}
+	if strings.Contains(command, "-p 0.0.0.0:") {
+		t.Fatalf("buildRunCommand() = %q; must not bind a routable address", command)
+	}
 }

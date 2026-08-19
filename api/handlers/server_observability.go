@@ -21,7 +21,7 @@ func (s *Server) GetServerObservability(w http.ResponseWriter, r *http.Request, 
 		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "monitoring is not enabled on this server"})
 		return
 	}
-	latest, err := monitoring.GetServerLatest(r.Context(), monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken)
+	latest, err := monitoring.GetServerLatest(r.Context(), monitoringTarget(server), server.ControlToken)
 	if err != nil {
 		respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{Error: "could not reach monitoring agent"})
 		return
@@ -53,7 +53,7 @@ func (s *Server) GetServerObservabilityHistory(w http.ResponseWriter, r *http.Re
 		return
 	}
 	to := time.Now().UTC()
-	history, err := monitoring.GetServerHistory(r.Context(), monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken, from, to, maxPoints)
+	history, err := monitoring.GetServerHistory(r.Context(), monitoringTarget(server), server.ControlToken, from, to, maxPoints)
 	if err != nil {
 		respond.JSON(w, http.StatusBadGateway, gen.ErrorResponse{Error: "could not reach monitoring agent"})
 		return

@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,18 +22,21 @@ import (
 const (
 	ContainerName        = "uploy-monitor"
 	AgentPort            = 9184
+	loopbackAddress      = "127.0.0.1"
 	dataDir              = "/data/uploy/monitoring"
 	enableCleanupTimeout = 30 * time.Second
 )
 
 type Config struct {
-	Image          string
-	PrivateAddress string
-	HostPort       int
-	RetentionDays  int
-	FQDN           string
-	ControlToken   string
-	ReaderToken    string
+	Image string
+	// HostPort is the loopback port the agent is published on. It is
+	// configurable only so a server that already uses the default can move it
+	// out of the way; nothing outside the machine can reach it either way.
+	HostPort      int
+	RetentionDays int
+	FQDN          string
+	ControlToken  string
+	ReaderToken   string
 }
 
 type HistoryPoint struct {
@@ -151,8 +155,12 @@ func prepareMonitoringHost(ctx context.Context, client *ssh.Client, cfg Config) 
 	return nil
 }
 
+// buildRunCommand publishes the agent on loopback only. The control plane
+// reaches it by tunneling through the server's SSH connection, and a public
+// FQDN reaches it over the uploy network by container name, so binding the port
+// to a routable address would expose it without anything asking for that.
 func buildRunCommand(docker string, cfg Config) string {
-	publishedAddress := net.JoinHostPort(cfg.PrivateAddress, strconv.Itoa(cfg.HostPort))
+	publishedAddress := net.JoinHostPort(loopbackAddress, strconv.Itoa(cfg.HostPort))
 	return fmt.Sprintf(
 		"%s run -d --name %s --restart unless-stopped --network uploy -p %s:%d "+
 			"-v /var/run/docker.sock:/var/run/docker.sock:ro -v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /:/host:ro -v %s:/data "+
@@ -258,9 +266,6 @@ func ValidateConfig(cfg Config) error {
 	if cfg.HostPort < 1 || cfg.HostPort > 65535 {
 		return errors.New("monitoring port is invalid")
 	}
-	if !privateIP(cfg.PrivateAddress) {
-		return errors.New("monitoring private address must be an RFC1918, ULA, or CGNAT IP")
-	}
 	if cfg.RetentionDays < 1 || cfg.RetentionDays > 30 {
 		return errors.New("monitoring retention must be between 1 and 30 days")
 	}
@@ -284,27 +289,27 @@ func DeleteLocalData(ctx context.Context, client *ssh.Client) error {
 	return err
 }
 
-func PrivateURL(address string, port int) string {
-	return "http://" + net.JoinHostPort(address, strconv.Itoa(port))
-}
+// Timeouts are per call rather than per transport: a read of the current sample
+// sits in front of a polling dashboard and should give up quickly, while a read
+// that scans stored samples is allowed to take its time.
+const (
+	liveTimeout    = 5 * time.Second
+	historyTimeout = 15 * time.Second
+)
 
-func privateIP(value string) bool {
-	ip := net.ParseIP(value)
-	if ip == nil || ip.IsUnspecified() || ip.IsLoopback() || ip.IsMulticast() {
-		return false
-	}
-	if ip.IsPrivate() {
-		return true
-	}
-	ipv4 := ip.To4()
-	return ipv4 != nil && ipv4[0] == 100 && ipv4[1] >= 64 && ipv4[1] <= 127
-}
+// Response body limits. The agent is trusted but not unbounded — a runaway
+// history query should fail rather than exhaust the control plane's memory.
+const (
+	historyLimit      = 16 << 20
+	latestLimit       = 8 << 20
+	serverLatestLimit = 1 << 20
+)
 
-func GetHistories(ctx context.Context, baseURL, controlToken string, deploymentIDs []string, from, to time.Time, maxPoints int) (HistoriesResponse, error) {
+func GetHistories(ctx context.Context, target Target, controlToken string, deploymentIDs []string, from, to time.Time, maxPoints int) (HistoriesResponse, error) {
 	if len(deploymentIDs) == 0 {
 		return HistoriesResponse{Deployments: map[string]HistoryResponse{}}, nil
 	}
-	body, err := json.Marshal(struct {
+	payload, err := json.Marshal(struct {
 		DeploymentIDs []string `json:"deployment_ids"`
 		From          string   `json:"from"`
 		To            string   `json:"to"`
@@ -318,23 +323,19 @@ func GetHistories(ctx context.Context, baseURL, controlToken string, deploymentI
 	if err != nil {
 		return HistoriesResponse{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/v1/history", strings.NewReader(string(body)))
+	histories, err := withTransport(target, func(tr Transport) (HistoriesResponse, error) {
+		var histories HistoriesResponse
+		err := fetch(ctx, tr, agentCall{
+			method:  http.MethodPost,
+			path:    "/v1/history",
+			token:   controlToken,
+			payload: payload,
+			timeout: historyTimeout,
+			limit:   historyLimit,
+		}, &histories)
+		return histories, err
+	})
 	if err != nil {
-		return HistoriesResponse{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+controlToken)
-	response, err := httpClient.Do(req)
-	if err != nil {
-		return HistoriesResponse{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return HistoriesResponse{}, fmt.Errorf("monitoring agent HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var histories HistoriesResponse
-	if err := json.NewDecoder(io.LimitReader(response.Body, 16<<20)).Decode(&histories); err != nil {
 		return HistoriesResponse{}, err
 	}
 	if histories.Deployments == nil {
@@ -343,23 +344,19 @@ func GetHistories(ctx context.Context, baseURL, controlToken string, deploymentI
 	return histories, nil
 }
 
-func GetLatestAll(ctx context.Context, baseURL, controlToken string) (LatestResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/v1/latest", nil)
+func GetLatestAll(ctx context.Context, target Target, controlToken string) (LatestResponse, error) {
+	latest, err := withTransport(target, func(tr Transport) (LatestResponse, error) {
+		var latest LatestResponse
+		err := fetch(ctx, tr, agentCall{
+			method:  http.MethodGet,
+			path:    "/v1/latest",
+			token:   controlToken,
+			timeout: liveTimeout,
+			limit:   latestLimit,
+		}, &latest)
+		return latest, err
+	})
 	if err != nil {
-		return LatestResponse{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+controlToken)
-	response, err := liveHTTPClient.Do(req)
-	if err != nil {
-		return LatestResponse{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return LatestResponse{}, fmt.Errorf("monitoring agent HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var latest LatestResponse
-	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(&latest); err != nil {
 		return LatestResponse{}, err
 	}
 	if latest.Points == nil {
@@ -368,74 +365,107 @@ func GetLatestAll(ctx context.Context, baseURL, controlToken string) (LatestResp
 	return latest, nil
 }
 
-func GetServerLatest(ctx context.Context, baseURL, controlToken string) (ServerLatestResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/v1/server/latest", nil)
-	if err != nil {
-		return ServerLatestResponse{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+controlToken)
-	response, err := liveHTTPClient.Do(req)
-	if err != nil {
-		return ServerLatestResponse{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return ServerLatestResponse{}, fmt.Errorf("monitoring agent HTTP %d", response.StatusCode)
-	}
-	var latest ServerLatestResponse
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&latest); err != nil {
-		return ServerLatestResponse{}, err
-	}
-	return latest, nil
+func GetServerLatest(ctx context.Context, target Target, controlToken string) (ServerLatestResponse, error) {
+	return withTransport(target, func(tr Transport) (ServerLatestResponse, error) {
+		var latest ServerLatestResponse
+		err := fetch(ctx, tr, agentCall{
+			method:  http.MethodGet,
+			path:    "/v1/server/latest",
+			token:   controlToken,
+			timeout: liveTimeout,
+			limit:   serverLatestLimit,
+		}, &latest)
+		return latest, err
+	})
 }
 
-func GetServerHistory(ctx context.Context, baseURL, controlToken string, from, to time.Time, maxPoints int) (ServerHistoryResponse, error) {
-	requestURL := strings.TrimRight(baseURL, "/") + "/v1/server/history?from=" +
-		url.QueryEscape(from.UTC().Format(time.RFC3339)) + "&to=" + url.QueryEscape(to.UTC().Format(time.RFC3339)) +
+func GetServerHistory(ctx context.Context, target Target, controlToken string, from, to time.Time, maxPoints int) (ServerHistoryResponse, error) {
+	path := "/v1/server/history?from=" + url.QueryEscape(from.UTC().Format(time.RFC3339)) +
+		"&to=" + url.QueryEscape(to.UTC().Format(time.RFC3339)) +
 		"&max_points=" + strconv.Itoa(maxPoints)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
-	if err != nil {
-		return ServerHistoryResponse{}, err
+	return withTransport(target, func(tr Transport) (ServerHistoryResponse, error) {
+		var history ServerHistoryResponse
+		err := fetch(ctx, tr, agentCall{
+			method:  http.MethodGet,
+			path:    path,
+			token:   controlToken,
+			timeout: historyTimeout,
+			limit:   historyLimit,
+		}, &history)
+		return history, err
+	})
+}
+
+func DeleteHistory(ctx context.Context, target Target, controlToken string) error {
+	_, err := withTransport(target, func(tr Transport) (struct{}, error) {
+		return struct{}{}, fetch(ctx, tr, agentCall{
+			method:  http.MethodDelete,
+			path:    "/v1/history",
+			token:   controlToken,
+			timeout: historyTimeout,
+		}, nil)
+	})
+	return err
+}
+
+// agentCall describes one request to the agent.
+type agentCall struct {
+	method  string
+	path    string
+	token   string
+	payload []byte
+	timeout time.Duration
+	// limit caps how much of the response body is decoded. Ignored when the
+	// call expects no content.
+	limit int64
+}
+
+// fetch sends call and decodes its JSON response into dest. A nil dest means the
+// endpoint answers 204 with no body.
+func fetch(ctx context.Context, tr Transport, call agentCall, dest any) error {
+	ctx, cancel := context.WithTimeout(ctx, call.timeout)
+	defer cancel()
+
+	var body io.Reader
+	if call.payload != nil {
+		body = bytes.NewReader(call.payload)
 	}
-	req.Header.Set("Authorization", "Bearer "+controlToken)
-	response, err := httpClient.Do(req)
+	req, err := http.NewRequestWithContext(ctx, call.method, tr.BaseURL()+call.path, body)
 	if err != nil {
-		return ServerHistoryResponse{}, err
+		return err
+	}
+	if call.payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("Authorization", "Bearer "+call.token)
+
+	response, err := tr.Do(req)
+	if err != nil {
+		return err
 	}
 	defer response.Body.Close()
+
+	if dest == nil {
+		if response.StatusCode != http.StatusNoContent {
+			return agentStatusError(response)
+		}
+		return nil
+	}
 	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return ServerHistoryResponse{}, fmt.Errorf("monitoring agent HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return agentStatusError(response)
 	}
-	var history ServerHistoryResponse
-	if err := json.NewDecoder(io.LimitReader(response.Body, 16<<20)).Decode(&history); err != nil {
-		return ServerHistoryResponse{}, err
-	}
-	if history.Points == nil {
-		history.Points = []ServerLatestResponse{}
-	}
-	return history, nil
+	return json.NewDecoder(io.LimitReader(response.Body, call.limit)).Decode(dest)
 }
 
-func DeleteHistory(ctx context.Context, baseURL, controlToken string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, strings.TrimRight(baseURL, "/")+"/v1/history", nil)
-	if err != nil {
-		return err
+// agentStatusError quotes whatever the agent said about the failure. Its own
+// message is usually the half worth reading.
+func agentStatusError(response *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+	if detail := strings.TrimSpace(string(body)); detail != "" {
+		return fmt.Errorf("monitoring agent HTTP %d: %s", response.StatusCode, detail)
 	}
-	req.Header.Set("Authorization", "Bearer "+controlToken)
-	response, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("monitoring agent HTTP %d", response.StatusCode)
-	}
-	return nil
+	return fmt.Errorf("monitoring agent HTTP %d", response.StatusCode)
 }
-
-var httpClient = &http.Client{Timeout: 15 * time.Second}
-var liveHTTPClient = &http.Client{Timeout: 5 * time.Second}
 
 func routeID(serverID string) string { return "monitoring-" + serverID }
 

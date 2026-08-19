@@ -297,7 +297,7 @@ func serverToResponse(srv db.AppServer) gen.ServerResponse {
 		ProxyLastError:        srv.ProxyLastError,
 		Monitoring: gen.ServerMonitoringResponse{
 			Enabled: srv.Monitoring.Enabled, Port: int(srv.Monitoring.Port), RetentionDays: int(srv.Monitoring.RetentionDays),
-			PrivateAddress: srv.Monitoring.PrivateAddress, Fqdn: srv.Monitoring.FQDN, Status: gen.ServerMonitoringResponseStatus(srv.Monitoring.Status),
+			Fqdn: srv.Monitoring.FQDN, Status: gen.ServerMonitoringResponseStatus(srv.Monitoring.Status),
 			LastReconciledAt: srv.Monitoring.LastReconciledAt, LastError: srv.Monitoring.LastError, CleanupAt: srv.Monitoring.CleanupAt,
 		},
 		CreatedAt: srv.CreatedAt,

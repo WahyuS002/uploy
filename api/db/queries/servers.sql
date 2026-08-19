@@ -2,18 +2,18 @@
 INSERT INTO servers (name, host, port, ssh_user, ssh_key_id, workspace_id)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at,
-          monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_private_address, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
+          monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
           monitoring_status, monitoring_last_reconciled_at, monitoring_last_error, monitoring_cleanup_at;
 
 -- name: GetServerByID :one
 SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at,
-       monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_private_address, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
+       monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
        monitoring_status, monitoring_last_reconciled_at, monitoring_last_error, monitoring_cleanup_at
 FROM servers WHERE id = $1;
 
 -- name: ListServersByWorkspace :many
 SELECT id, name, host, port, ssh_user, ssh_key_id, workspace_id, proxy_status, proxy_last_reconciled_at, proxy_last_error, created_at,
-       monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_private_address, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
+       monitoring_enabled, monitoring_port, monitoring_retention_days, monitoring_fqdn, monitoring_control_token, monitoring_reader_token,
        monitoring_status, monitoring_last_reconciled_at, monitoring_last_error, monitoring_cleanup_at
 FROM servers WHERE workspace_id = $1
 ORDER BY created_at DESC;
@@ -30,7 +30,7 @@ WHERE id = $1;
 
 -- name: GetServerWithKey :one
 SELECT s.id, s.name, s.host, s.port, s.ssh_user, s.ssh_key_id, s.workspace_id, s.created_at,
-       s.monitoring_enabled, s.monitoring_port, s.monitoring_retention_days, s.monitoring_private_address, s.monitoring_fqdn, s.monitoring_control_token, s.monitoring_reader_token,
+       s.monitoring_enabled, s.monitoring_port, s.monitoring_retention_days, s.monitoring_fqdn, s.monitoring_control_token, s.monitoring_reader_token,
        s.monitoring_status, s.monitoring_last_reconciled_at, s.monitoring_last_error, s.monitoring_cleanup_at, k.private_key
 FROM servers s
 JOIN ssh_keys k ON k.id = s.ssh_key_id
@@ -41,7 +41,6 @@ UPDATE servers
 SET monitoring_enabled = sqlc.arg(monitoring_enabled)::boolean,
     monitoring_port = sqlc.arg(monitoring_port)::integer,
     monitoring_retention_days = sqlc.arg(monitoring_retention_days)::integer,
-    monitoring_private_address = sqlc.arg(monitoring_private_address)::text,
     monitoring_fqdn = NULLIF(sqlc.arg(monitoring_fqdn)::text, ''),
     monitoring_control_token = sqlc.arg(monitoring_control_token)::text,
     monitoring_reader_token = sqlc.arg(monitoring_reader_token)::text,
@@ -53,7 +52,7 @@ WHERE id = sqlc.arg(id)::text;
 
 -- name: ListMonitoringCleanupDue :many
 SELECT s.id, s.name, s.host, s.port, s.ssh_user, s.ssh_key_id, s.workspace_id, s.created_at,
-       s.monitoring_enabled, s.monitoring_port, s.monitoring_retention_days, s.monitoring_private_address, s.monitoring_fqdn, s.monitoring_control_token, s.monitoring_reader_token,
+       s.monitoring_enabled, s.monitoring_port, s.monitoring_retention_days, s.monitoring_fqdn, s.monitoring_control_token, s.monitoring_reader_token,
        s.monitoring_status, s.monitoring_last_reconciled_at, s.monitoring_last_error, s.monitoring_cleanup_at, k.private_key
 FROM servers s
 JOIN ssh_keys k ON k.id = s.ssh_key_id

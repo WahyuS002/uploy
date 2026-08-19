@@ -17,6 +17,7 @@ import (
 	"github.com/WahyuS002/uploy/handlers"
 	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
+	"github.com/WahyuS002/uploy/ssh"
 	"github.com/joho/godotenv"
 )
 
@@ -36,6 +37,10 @@ func main() {
 		telemetry.Println("closing database")
 		db.Close()
 	}()
+
+	// Monitoring reads tunnel through pooled SSH connections. Dropping them on
+	// the way out keeps a restart from leaving sessions open on every server.
+	defer ssh.DefaultPool.Close()
 
 	s := &handlers.Server{}
 

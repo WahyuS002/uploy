@@ -117,6 +117,15 @@ func (c *Client) Dial(network, address string) (net.Conn, error) {
 	return c.client.Dial(network, address)
 }
 
+// alive reports whether the underlying connection still answers. An unknown
+// global request is refused rather than honoured, but the refusal itself proves
+// the transport works — which is what tells a severed tunnel apart from a
+// perfectly healthy connection carrying a failed request.
+func (c *Client) alive() bool {
+	_, _, err := c.client.SendRequest("keepalive@openssh.com", true, nil)
+	return err == nil
+}
+
 func (c *Client) Run(ctx context.Context, command string) (string, error) {
 	session, err := c.client.NewSession()
 	if err != nil {

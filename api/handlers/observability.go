@@ -172,7 +172,7 @@ func (s *Server) collectServerObservability(ctx context.Context, serverID string
 }
 
 func (s *Server) collectAgentObservability(ctx context.Context, server db.ServerWithKey, targets []serverObservationTarget, services []gen.ServiceObservability) {
-	latest, err := monitoring.GetLatestAll(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken)
+	latest, err := monitoring.GetLatestAll(ctx, monitoringTarget(server), server.ControlToken)
 	if err != nil {
 		telemetry.Printf("observability agent server=%s error: %v", server.ID, err)
 		setServerObservabilityStatus(targets, services, gen.ServiceObservabilityStatusUnreachable, "Could not reach monitoring agent")
@@ -344,7 +344,7 @@ func (s *Server) collectServerHistory(ctx context.Context, serverID string, obse
 	if pointsPerDeployment < 1 {
 		pointsPerDeployment = 1
 	}
-	histories, err := monitoring.GetHistories(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken, ids, from, to, pointsPerDeployment)
+	histories, err := monitoring.GetHistories(ctx, monitoringTarget(server), server.ControlToken, ids, from, to, pointsPerDeployment)
 	if err != nil {
 		telemetry.Printf("observability history agent server=%s error: %v", server.ID, err)
 		return

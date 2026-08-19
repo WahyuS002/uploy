@@ -76,13 +76,12 @@ func (s *Server) ConfigureServerMonitoring(w http.ResponseWriter, r *http.Reques
 	}
 
 	agentConfig := monitoring.Config{
-		Image:          config.C.MonitoringImage,
-		PrivateAddress: strings.TrimSpace(req.PrivateAddress),
-		HostPort:       port,
-		RetentionDays:  retentionDays,
-		FQDN:           fqdn,
-		ControlToken:   controlToken,
-		ReaderToken:    readerToken,
+		Image:         config.C.MonitoringImage,
+		HostPort:      port,
+		RetentionDays: retentionDays,
+		FQDN:          fqdn,
+		ControlToken:  controlToken,
+		ReaderToken:   readerToken,
 	}
 	if err := monitoring.ValidateConfig(agentConfig); err != nil {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: err.Error()})
@@ -101,7 +100,7 @@ func (s *Server) ConfigureServerMonitoring(w http.ResponseWriter, r *http.Reques
 	}
 
 	desired := db.MonitoringConfig{
-		Enabled: true, Port: int32(port), RetentionDays: int32(retentionDays), PrivateAddress: agentConfig.PrivateAddress,
+		Enabled: true, Port: int32(port), RetentionDays: int32(retentionDays),
 		FQDN: fqdn, Status: "provisioning",
 	}
 	previous := monitoringDBConfig(server)
@@ -199,7 +198,7 @@ func (s *Server) DeleteServerMonitoringHistory(w http.ResponseWriter, r *http.Re
 	}
 	var err error
 	if server.Monitoring.Enabled {
-		err = monitoring.DeleteHistory(r.Context(), monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ControlToken)
+		err = monitoring.DeleteHistory(r.Context(), monitoringTarget(server), server.ControlToken)
 	} else {
 		var client *ssh.Client
 		client, err = monitoringClient(server)
@@ -250,6 +249,16 @@ func monitoringClient(server db.ServerWithKey) (*ssh.Client, error) {
 	return client, nil
 }
 
+// monitoringTarget describes how to reach a server's agent: through the SSH
+// connection Uploy already uses for that server, to the loopback port the agent
+// publishes on.
+func monitoringTarget(server db.ServerWithKey) monitoring.Target {
+	return monitoring.Target{
+		SSH:  ssh.ServerConfig{Host: server.Host, Port: int(server.Port), User: server.SSHUser, PrivateKey: server.PrivateKey},
+		Port: int(server.Monitoring.Port),
+	}
+}
+
 func monitoringFQDN(server db.ServerWithKey) string {
 	if server.Monitoring.FQDN == nil {
 		return ""
@@ -260,7 +269,7 @@ func monitoringFQDN(server db.ServerWithKey) string {
 func monitoringDBConfig(server db.ServerWithKey) db.MonitoringConfig {
 	return db.MonitoringConfig{
 		Enabled: server.Monitoring.Enabled, Port: server.Monitoring.Port, RetentionDays: server.Monitoring.RetentionDays,
-		PrivateAddress: server.Monitoring.PrivateAddress, FQDN: monitoringFQDN(server), Status: server.Monitoring.Status,
+		FQDN: monitoringFQDN(server), Status: server.Monitoring.Status,
 		CleanupAt: server.Monitoring.CleanupAt,
 	}
 }

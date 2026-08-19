@@ -315,8 +315,7 @@
 									</div>
 									{#if server.monitoring.enabled}
 										<p class="mt-1 font-mono text-xs text-muted-foreground">
-											{server.monitoring.fqdn ??
-												`${server.monitoring.private_address}:${server.monitoring.port}`}
+											{server.monitoring.fqdn ?? `127.0.0.1:${server.monitoring.port}`}
 										</p>
 									{/if}
 									{#if server.monitoring.cleanup_at}

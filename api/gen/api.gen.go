@@ -586,10 +586,9 @@ type ConfigChangeType string
 type ConfigureServerMonitoringRequest struct {
 	// Fqdn Optional public FQDN. Uploy routes it through Traefik with HTTPS.
 	Fqdn *string `json:"fqdn,omitempty"`
-	Port *int    `json:"port,omitempty"`
 
-	// PrivateAddress RFC1918, IPv6 ULA, or CGNAT address reachable by the control plane.
-	PrivateAddress string `json:"private_address"`
+	// Port Loopback port the agent is published on. Uploy reaches it by tunneling through the server's SSH connection, so nothing outside the machine can.
+	Port *int `json:"port,omitempty"`
 
 	// ReaderToken Optional external read token. Omit only when updating an already configured server.
 	ReaderToken   *string `json:"reader_token,omitempty"`
@@ -924,7 +923,6 @@ type ServerMonitoringResponse struct {
 	LastError        *string                        `json:"last_error,omitempty"`
 	LastReconciledAt *time.Time                     `json:"last_reconciled_at,omitempty"`
 	Port             int                            `json:"port"`
-	PrivateAddress   string                         `json:"private_address"`
 	RetentionDays    int                            `json:"retention_days"`
 	Status           ServerMonitoringResponseStatus `json:"status"`
 }

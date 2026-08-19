@@ -2946,17 +2946,13 @@ components:
 
     ConfigureServerMonitoringRequest:
       type: object
-      required:
-        - private_address
       properties:
-        private_address:
-          type: string
-          description: RFC1918, IPv6 ULA, or CGNAT address reachable by the control plane.
         port:
           type: integer
           minimum: 1
           maximum: 65535
           default: 9184
+          description: Loopback port the agent is published on. Uploy reaches it by tunneling through the server's SSH connection, so nothing outside the machine can.
         retention_days:
           type: integer
           minimum: 1
@@ -2977,7 +2973,6 @@ components:
         - enabled
         - port
         - retention_days
-        - private_address
         - status
       properties:
         enabled:
@@ -2986,8 +2981,6 @@ components:
           type: integer
         retention_days:
           type: integer
-        private_address:
-          type: string
         fqdn:
           type: string
         status:

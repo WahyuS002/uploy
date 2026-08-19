@@ -114,7 +114,6 @@ type Server struct {
 	MonitoringEnabled          bool               `json:"monitoring_enabled"`
 	MonitoringPort             int32              `json:"monitoring_port"`
 	MonitoringRetentionDays    int32              `json:"monitoring_retention_days"`
-	MonitoringPrivateAddress   string             `json:"monitoring_private_address"`
 	MonitoringFqdn             pgtype.Text        `json:"monitoring_fqdn"`
 	MonitoringControlToken     pgtype.Text        `json:"monitoring_control_token"`
 	MonitoringReaderToken      pgtype.Text        `json:"monitoring_reader_token"`

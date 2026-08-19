@@ -106,6 +106,16 @@ func observeRuleTarget(ctx context.Context, rule db.AlertRule) (alerts.Observati
 	return alerts.Observation{}, fmt.Errorf("rule has no valid target")
 }
 
+// monitoringTarget describes how to reach a server's agent: through the SSH
+// connection Uploy already uses for that server, to the loopback port the agent
+// publishes on.
+func monitoringTarget(server db.ServerWithKey) monitoring.Target {
+	return monitoring.Target{
+		SSH:  ssh.ServerConfig{Host: server.Host, Port: int(server.Port), User: server.SSHUser, PrivateKey: server.PrivateKey},
+		Port: int(server.Monitoring.Port),
+	}
+}
+
 func observeServer(ctx context.Context, serverID string) (alerts.Observation, error) {
 	server, err := db.GetServerWithKey(ctx, serverID)
 	if err != nil {
@@ -113,7 +123,7 @@ func observeServer(ctx context.Context, serverID string) (alerts.Observation, er
 	}
 	observation := alerts.Observation{TargetID: server.ID, TargetName: server.Name, Reachable: true, ObservedAt: time.Now().UTC()}
 	if server.Monitoring.Enabled {
-		latest, err := monitoring.GetServerLatest(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ReaderToken)
+		latest, err := monitoring.GetServerLatest(ctx, monitoringTarget(server), server.ReaderToken)
 		if err != nil {
 			observation.Reachable = false
 		} else {
@@ -165,7 +175,7 @@ func observeService(ctx context.Context, serviceID string) (alerts.Observation, 
 	}
 	containerName := ContainerNameForDeployment(config, deployment.ID)
 	if server.Monitoring.Enabled {
-		latest, err := monitoring.GetLatestAll(ctx, monitoring.PrivateURL(server.Monitoring.PrivateAddress, int(server.Monitoring.Port)), server.ReaderToken)
+		latest, err := monitoring.GetLatestAll(ctx, monitoringTarget(server), server.ReaderToken)
 		if err != nil {
 			observation.Reachable = false
 			return observation, nil

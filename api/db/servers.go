@@ -29,7 +29,6 @@ type ServerMonitoring struct {
 	Enabled          bool       `json:"enabled"`
 	Port             int32      `json:"port"`
 	RetentionDays    int32      `json:"retention_days"`
-	PrivateAddress   string     `json:"private_address"`
 	FQDN             *string    `json:"fqdn"`
 	Status           string     `json:"status"`
 	LastReconciledAt *time.Time `json:"last_reconciled_at"`
@@ -45,14 +44,13 @@ type ServerWithKey struct {
 }
 
 type MonitoringConfig struct {
-	Enabled        bool
-	Port           int32
-	RetentionDays  int32
-	PrivateAddress string
-	FQDN           string
-	Status         string
-	LastError      string
-	CleanupAt      *time.Time
+	Enabled       bool
+	Port          int32
+	RetentionDays int32
+	FQDN          string
+	Status        string
+	LastError     string
+	CleanupAt     *time.Time
 }
 
 func CreateServer(ctx context.Context, name, host string, port int32, sshUser, sshKeyID, workspaceID string) (AppServer, error) {
@@ -65,7 +63,7 @@ func CreateServer(ctx context.Context, name, host string, port int32, sshUser, s
 	return newAppServer(
 		row.ID, row.Name, row.Host, row.Port, row.SshUser, row.SshKeyID, row.WorkspaceID,
 		row.ProxyStatus, row.ProxyLastReconciledAt, row.ProxyLastError, row.CreatedAt,
-		row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays, row.MonitoringPrivateAddress,
+		row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays,
 		row.MonitoringFqdn, row.MonitoringStatus, row.MonitoringLastReconciledAt, row.MonitoringLastError, row.MonitoringCleanupAt,
 	), nil
 }
@@ -78,7 +76,7 @@ func GetServerByID(ctx context.Context, id string) (AppServer, error) {
 	return newAppServer(
 		row.ID, row.Name, row.Host, row.Port, row.SshUser, row.SshKeyID, row.WorkspaceID,
 		row.ProxyStatus, row.ProxyLastReconciledAt, row.ProxyLastError, row.CreatedAt,
-		row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays, row.MonitoringPrivateAddress,
+		row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays,
 		row.MonitoringFqdn, row.MonitoringStatus, row.MonitoringLastReconciledAt, row.MonitoringLastError, row.MonitoringCleanupAt,
 	), nil
 }
@@ -93,7 +91,7 @@ func ListServersByWorkspace(ctx context.Context, workspaceID string) ([]AppServe
 		servers[index] = newAppServer(
 			row.ID, row.Name, row.Host, row.Port, row.SshUser, row.SshKeyID, row.WorkspaceID,
 			row.ProxyStatus, row.ProxyLastReconciledAt, row.ProxyLastError, row.CreatedAt,
-			row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays, row.MonitoringPrivateAddress,
+			row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays,
 			row.MonitoringFqdn, row.MonitoringStatus, row.MonitoringLastReconciledAt, row.MonitoringLastError, row.MonitoringCleanupAt,
 		)
 	}
@@ -131,7 +129,7 @@ func GetServerWithKey(ctx context.Context, id string) (ServerWithKey, error) {
 		AppServer: newAppServer(
 			row.ID, row.Name, row.Host, row.Port, row.SshUser, row.SshKeyID, row.WorkspaceID,
 			"", pgtype.Timestamptz{}, pgtype.Text{}, row.CreatedAt,
-			row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays, row.MonitoringPrivateAddress,
+			row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays,
 			row.MonitoringFqdn, row.MonitoringStatus, row.MonitoringLastReconciledAt, row.MonitoringLastError, row.MonitoringCleanupAt,
 		),
 		PrivateKey: privateKey, ControlToken: controlToken, ReaderToken: readerToken,
@@ -153,7 +151,7 @@ func SetServerMonitoring(ctx context.Context, serverID string, config Monitoring
 	}
 	return Queries.SetServerMonitoring(ctx, sqlcgen.SetServerMonitoringParams{
 		MonitoringEnabled: config.Enabled, MonitoringPort: config.Port, MonitoringRetentionDays: config.RetentionDays,
-		MonitoringPrivateAddress: config.PrivateAddress, MonitoringFqdn: config.FQDN,
+		MonitoringFqdn:         config.FQDN,
 		MonitoringControlToken: controlCiphertext, MonitoringReaderToken: readerCiphertext,
 		MonitoringStatus: config.Status, MonitoringLastError: config.LastError, MonitoringCleanupAt: cleanupAt, ID: serverID,
 	})
@@ -178,7 +176,7 @@ func ListMonitoringCleanupDue(ctx context.Context) ([]ServerWithKey, error) {
 			AppServer: newAppServer(
 				row.ID, row.Name, row.Host, row.Port, row.SshUser, row.SshKeyID, row.WorkspaceID,
 				"", pgtype.Timestamptz{}, pgtype.Text{}, row.CreatedAt,
-				row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays, row.MonitoringPrivateAddress,
+				row.MonitoringEnabled, row.MonitoringPort, row.MonitoringRetentionDays,
 				row.MonitoringFqdn, row.MonitoringStatus, row.MonitoringLastReconciledAt, row.MonitoringLastError, row.MonitoringCleanupAt,
 			),
 			PrivateKey: privateKey,
@@ -193,7 +191,7 @@ func ClearServerMonitoringData(ctx context.Context, serverID string) error {
 
 func newAppServer(id, name, host string, port int32, sshUser, sshKeyID, workspaceID, proxyStatus string,
 	proxyReconciledAt pgtype.Timestamptz, proxyLastError pgtype.Text, createdAt time.Time,
-	monitoringEnabled bool, monitoringPort, retentionDays int32, privateAddress string, fqdn pgtype.Text,
+	monitoringEnabled bool, monitoringPort, retentionDays int32, fqdn pgtype.Text,
 	monitoringStatus string, monitoringReconciledAt pgtype.Timestamptz, monitoringLastError pgtype.Text,
 	monitoringCleanupAt pgtype.Timestamptz) AppServer {
 	return AppServer{
@@ -201,7 +199,7 @@ func newAppServer(id, name, host string, port int32, sshUser, sshKeyID, workspac
 		ProxyStatus: proxyStatus, ProxyLastReconciledAt: timePtrFromPgTimestamptz(proxyReconciledAt),
 		ProxyLastError: stringPtrFromPgText(proxyLastError), CreatedAt: createdAt,
 		Monitoring: ServerMonitoring{
-			Enabled: monitoringEnabled, Port: monitoringPort, RetentionDays: retentionDays, PrivateAddress: privateAddress,
+			Enabled: monitoringEnabled, Port: monitoringPort, RetentionDays: retentionDays,
 			FQDN: stringPtrFromPgText(fqdn), Status: monitoringStatus,
 			LastReconciledAt: timePtrFromPgTimestamptz(monitoringReconciledAt),
 			LastError:        stringPtrFromPgText(monitoringLastError), CleanupAt: timePtrFromPgTimestamptz(monitoringCleanupAt),

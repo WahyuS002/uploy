@@ -23,7 +23,6 @@
 	let loadError = $state('');
 	let saving = $state(false);
 	let advancedOpen = $state(false);
-	let privateAddress = $state('');
 	let port = $state('9184');
 	let retentionDays = $state('7');
 	let fqdn = $state('');
@@ -60,10 +59,6 @@
 
 	function seed(target: ServerResponse) {
 		advancedOpen = false;
-		// A server being set up for the first time has no recorded private address. The
-		// host Uploy already reaches it on is right for the usual single-network box,
-		// and wrong in a way the user can see and correct.
-		privateAddress = target.monitoring.private_address || target.host;
 		port = String(target.monitoring.port || 9184);
 		retentionDays = String(target.monitoring.retention_days || 7);
 		fqdn = target.monitoring.fqdn ?? '';
@@ -83,17 +78,9 @@
 
 	async function save() {
 		if (!server || saving) return;
-		const address = privateAddress.trim();
 		const portValue = Number(port);
 		const retentionValue = Number(retentionDays);
 		const token = readerToken.trim();
-		if (!address) {
-			toast.error({
-				title: 'Private address required',
-				description: 'Use the address reachable from Uploy.'
-			});
-			return;
-		}
 		// Required on first setup, and validated whenever it is being replaced.
 		if ((isFirstSetup(server) || token.length > 0) && (token.length < 32 || token.length > 512)) {
 			toast.error({
@@ -124,7 +111,6 @@
 			const { error } = await api.POST('/api/servers/{id}/monitoring', {
 				params: { path: { id: server.id } },
 				body: {
-					private_address: address,
 					port: portValue,
 					retention_days: retentionValue,
 					fqdn: fqdn.trim(),
@@ -188,17 +174,10 @@
 				}}
 			>
 				<p class="text-sm leading-6 text-muted-foreground">
-					Stores container metrics locally on this server. Uploy reads the private HTTP API; a
-					public FQDN is optional for external scrapers.
+					Stores container metrics locally on this server. Uploy reads them over the SSH connection
+					it already has, so nothing new is exposed to the network; a public FQDN is optional for
+					external scrapers.
 				</p>
-				<label class="flex flex-col gap-1.5">
-					<span class="text-sm font-medium text-foreground">Private address</span>
-					<Input bind:value={privateAddress} placeholder="10.0.0.4" autocomplete="off" />
-					<p class="text-xs leading-5 text-muted-foreground">
-						The address Uploy reaches this server on. Change it if the agent should listen on a
-						private interface instead.
-					</p>
-				</label>
 				<div class="flex flex-col gap-1.5">
 					<div class="flex items-center justify-between gap-2">
 						<label for="monitoring-reader-token" class="text-sm font-medium text-foreground">
@@ -247,8 +226,12 @@
 					<div class="space-y-4 border-t border-border px-3 py-3">
 						<div class="grid grid-cols-2 gap-3">
 							<label class="flex flex-col gap-1.5">
-								<span class="text-sm font-medium text-foreground">Port</span>
+								<span class="text-sm font-medium text-foreground">Loopback port</span>
 								<Input bind:value={port} inputmode="numeric" />
+								<p class="text-xs leading-5 text-muted-foreground">
+									Bound to 127.0.0.1, so no firewall rule is needed. Change it only if this port is
+									already taken on the server.
+								</p>
 							</label>
 							<label class="flex flex-col gap-1.5">
 								<span class="text-sm font-medium text-foreground">Retention days</span>

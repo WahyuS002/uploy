@@ -966,9 +966,10 @@ export interface components {
 			created_at: string;
 		};
 		ConfigureServerMonitoringRequest: {
-			/** @description RFC1918, IPv6 ULA, or CGNAT address reachable by the control plane. */
-			private_address: string;
-			/** @default 9184 */
+			/**
+			 * @description Loopback port the agent is published on. Uploy reaches it by tunneling through the server's SSH connection, so nothing outside the machine can.
+			 * @default 9184
+			 */
 			port: number;
 			/** @default 7 */
 			retention_days: number;
@@ -984,7 +985,6 @@ export interface components {
 			enabled: boolean;
 			port: number;
 			retention_days: number;
-			private_address: string;
 			fqdn?: string;
 			/** @enum {string} */
 			status: 'disabled' | 'provisioning' | 'ready' | 'error';
