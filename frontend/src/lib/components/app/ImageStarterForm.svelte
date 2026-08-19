@@ -11,7 +11,8 @@
 		nginx: 80,
 		caddy: 80,
 		httpd: 80,
-		traefik: 80
+		traefik: 80,
+		beszel: 8090
 	};
 
 	// Images nobody should be putting on the open internet by accident. Publishing
@@ -84,6 +85,7 @@
 		'redis:7-alpine',
 		'postgres:16',
 		'caddy:2',
+		'henrygd/beszel:latest',
 		'ghcr.io/owner/repo:tag'
 	];
 
