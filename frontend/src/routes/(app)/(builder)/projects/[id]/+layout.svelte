@@ -1,16 +1,14 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { ChartBar, Cog6Tooth, Squares2x2 } from '@steeze-ui/heroicons';
+	import { Cog6Tooth, Squares2x2 } from '@steeze-ui/heroicons';
 
 	let { children } = $props();
 
 	let projectId = $derived(page.params.id as string);
 	let builderHref = $derived(`/projects/${projectId}`);
-	let observabilityHref = $derived(`/projects/${projectId}/observability`);
 	let settingsHref = $derived(`/projects/${projectId}/settings`);
 	let builderActive = $derived(page.url.pathname === builderHref);
-	let observabilityActive = $derived(page.url.pathname === observabilityHref);
 	let settingsActive = $derived(page.url.pathname === settingsHref);
 </script>
 
@@ -30,16 +28,6 @@
 			>
 				<Icon src={Squares2x2} theme="outline" class="h-4 w-4" />
 				<span>Builder</span>
-			</a>
-			<a
-				href={observabilityHref}
-				aria-current={observabilityActive ? 'page' : undefined}
-				class="-mb-px inline-flex items-center gap-2 border-b-2 py-3 text-sm transition-colors duration-150 outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring/40 {observabilityActive
-					? 'border-foreground font-medium text-foreground'
-					: 'border-transparent text-muted-foreground hover:text-foreground'}"
-			>
-				<Icon src={ChartBar} theme="outline" class="h-4 w-4" />
-				<span>Observability</span>
 			</a>
 			<a
 				href={settingsHref}
