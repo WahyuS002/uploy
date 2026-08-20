@@ -3,10 +3,11 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import IconButton from '$lib/components/ui/IconButton.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
+	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import StatusBadge from '$lib/components/app/StatusBadge.svelte';
 	import RadioList from '$lib/components/ui/RadioList.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
-	import { Plus } from '@steeze-ui/heroicons';
+	import { Plus, Server } from '@steeze-ui/heroicons';
 
 	type ServerResponse = components['schemas']['ServerResponse'];
 
@@ -70,21 +71,15 @@
 			{/if}
 		</div>
 	{:else if servers.length === 0}
-		<div class="flex flex-col items-start gap-2.5 px-3 py-3">
-			<p class="text-sm text-muted-foreground">
-				{#if canConnect}
-					Uploy deploys to machines you own. Connect one to deploy images here.
-				{:else}
-					Ask a workspace owner to connect a server before deploying images.
-				{/if}
-			</p>
-			{#if canConnect}
-				<Button type="button" size="xs" variant="secondary" onclick={onConnect}>
-					<Icon src={Plus} theme="outline" class="h-3 w-3" />
-					Connect a server
-				</Button>
-			{/if}
-		</div>
+		<!-- The snippet is passed only when it has something to render: an empty
+		     actions block would still open a 20px gap under the title. -->
+		<EmptyState
+			icon={Server}
+			title="No servers connected"
+			description={canConnect ? undefined : 'Ask a workspace owner to connect one.'}
+			actions={canConnect ? connect : undefined}
+			class="px-4 py-8"
+		/>
 	{:else}
 		<RadioList
 			items={servers}
@@ -108,6 +103,13 @@
 		</RadioList>
 	{/if}
 </section>
+
+{#snippet connect()}
+	<Button type="button" size="xs" variant="secondary" onclick={onConnect}>
+		<Icon src={Plus} theme="outline" class="h-3 w-3" />
+		Connect a server
+	</Button>
+{/snippet}
 
 <style>
 	.panel {
