@@ -289,7 +289,7 @@ func extractTarball(tarPath, root string) error {
 			if mode == 0 {
 				mode = 0o644
 			}
-			out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, mode)
+			out, err := createExclusive(target, mode)
 			if err != nil {
 				return err
 			}
@@ -301,12 +301,62 @@ func extractTarball(tarPath, root string) error {
 			if closeErr != nil {
 				return closeErr
 			}
-		case tar.TypeSymlink, tar.TypeLink:
-			return fmt.Errorf("repository tarball contains unsupported link %q", hdr.Name)
+		case tar.TypeSymlink:
+			// Symlinks are ordinary in real repositories, so refusing them
+			// refuses the repository. They are recreated only when they stay
+			// inside the extracted tree; a link that stays inside cannot be
+			// used to write outside it later in the same archive.
+			resolved := filepath.FromSlash(hdr.Linkname)
+			if !filepath.IsAbs(resolved) {
+				resolved = filepath.Join(filepath.Dir(target), resolved)
+			}
+			if !within(root, resolved) {
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			if err := os.Symlink(filepath.FromSlash(hdr.Linkname), target); err != nil {
+				return err
+			}
+		case tar.TypeLink:
+			// A hard link names an earlier entry relative to the archive root.
+			linkSource := filepath.Join(root, filepath.Clean(filepath.FromSlash(hdr.Linkname)))
+			if !within(root, linkSource) {
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			if err := os.Remove(target); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			if err := os.Link(linkSource, target); err != nil {
+				// A dangling hard link is not worth failing an import over.
+				continue
+			}
 		default:
 			return fmt.Errorf("repository tarball contains unsupported entry %q", hdr.Name)
 		}
 	}
+}
+
+// createExclusive never writes through an existing path. O_EXCL is what stops
+// an archive from planting a symlink and then writing a file through it, so a
+// duplicate entry is handled by unlinking what is there and creating again --
+// removing the link itself, never its target.
+func createExclusive(target string, mode os.FileMode) (*os.File, error) {
+	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, mode)
+	if err == nil || !errors.Is(err, os.ErrExist) {
+		return out, err
+	}
+	if err := os.Remove(target); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, mode)
 }
 
 func within(root, path string) bool {

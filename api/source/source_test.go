@@ -180,3 +180,132 @@ func TestSuggestedPort(t *testing.T) {
 		}
 	}
 }
+
+// entry describes one tar record for tarWith.
+type entry struct {
+	name     string
+	typeflag byte
+	body     string
+	linkname string
+}
+
+func tarWith(t *testing.T, entries []entry) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for _, e := range entries {
+		hdr := &tar.Header{Name: e.name, Typeflag: e.typeflag, Linkname: e.linkname, Mode: 0o644}
+		if e.typeflag == tar.TypeDir {
+			hdr.Mode = 0o755
+		}
+		if e.typeflag == tar.TypeReg {
+			hdr.Size = int64(len(e.body))
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+		if e.typeflag == tar.TypeReg {
+			if _, err := tw.Write([]byte(e.body)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func writeTar(t *testing.T, root string, data []byte) string {
+	t.Helper()
+	path := filepath.Join(root, "archive.tar.gz")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// Real repositories carry symlinks: sveltejs/kit, vitejs/vite and
+// prisma/prisma all do. Refusing them refused the repository.
+func TestExtractTarballKeepsInTreeSymlinks(t *testing.T) {
+	root := t.TempDir()
+	data := tarWith(t, []entry{
+		{name: "repo/", typeflag: tar.TypeDir},
+		{name: "repo/real.txt", typeflag: tar.TypeReg, body: "hello"},
+		{name: "repo/link.txt", typeflag: tar.TypeSymlink, linkname: "real.txt"},
+		{name: "repo/nested/", typeflag: tar.TypeDir},
+		{name: "repo/nested/up.txt", typeflag: tar.TypeSymlink, linkname: "../real.txt"},
+	})
+	if err := extractTarball(writeTar(t, root, data), root); err != nil {
+		t.Fatalf("extractTarball() error = %v, want nil", err)
+	}
+	for _, name := range []string{"repo/link.txt", "repo/nested/up.txt"} {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if _, err := os.Lstat(path); err != nil {
+			t.Fatalf("%s was not created: %v", name, err)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("%s does not resolve: %v", name, err)
+		}
+		if string(body) != "hello" {
+			t.Fatalf("%s resolved to %q, want %q", name, body, "hello")
+		}
+	}
+}
+
+// An escaping link is dropped, not fatal. Every link that survives points
+// inside the tree, so nothing written later can leave it.
+func TestExtractTarballDropsEscapingLinks(t *testing.T) {
+	root := t.TempDir()
+	data := tarWith(t, []entry{
+		{name: "repo/", typeflag: tar.TypeDir},
+		{name: "repo/ok.txt", typeflag: tar.TypeReg, body: "kept"},
+		{name: "repo/escape", typeflag: tar.TypeSymlink, linkname: "../../../../etc/passwd"},
+		{name: "repo/absolute", typeflag: tar.TypeSymlink, linkname: "/etc/passwd"},
+		{name: "repo/hardescape", typeflag: tar.TypeLink, linkname: "../../../../etc/passwd"},
+	})
+	if err := extractTarball(writeTar(t, root, data), root); err != nil {
+		t.Fatalf("extractTarball() error = %v, want nil", err)
+	}
+	for _, name := range []string{"repo/escape", "repo/absolute", "repo/hardescape"} {
+		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(name))); !os.IsNotExist(err) {
+			t.Fatalf("%s should have been dropped, Lstat error = %v", name, err)
+		}
+	}
+	if body, err := os.ReadFile(filepath.Join(root, "repo", "ok.txt")); err != nil || string(body) != "kept" {
+		t.Fatalf("extraction did not continue past the dropped links: %q %v", body, err)
+	}
+}
+
+// A planted symlink must not become a hole to write through. The file entry
+// replaces the link instead of following it.
+func TestExtractTarballDoesNotWriteThroughPlantedLink(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data := tarWith(t, []entry{
+		{name: "repo/", typeflag: tar.TypeDir},
+		{name: "repo/hole", typeflag: tar.TypeSymlink, linkname: outside},
+		{name: "repo/hole", typeflag: tar.TypeReg, body: "overwritten"},
+	})
+	if err := extractTarball(writeTar(t, root, data), root); err != nil {
+		t.Fatalf("extractTarball() error = %v, want nil", err)
+	}
+	body, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "original" {
+		t.Fatalf("archive wrote through a symlink: outside file = %q", body)
+	}
+	if body, err := os.ReadFile(filepath.Join(root, "repo", "hole")); err != nil || string(body) != "overwritten" {
+		t.Fatalf("duplicate entry did not replace the link in place: %q %v", body, err)
+	}
+}
