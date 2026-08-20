@@ -235,6 +235,27 @@ func (e GetServiceLogsParamsSince) Valid() bool {
 	}
 }
 
+// AnalyzeSourceRequest defines model for AnalyzeSourceRequest.
+type AnalyzeSourceRequest struct {
+	Branch *string `json:"branch,omitempty"`
+
+	// RepoUrl Public GitHub repository URL.
+	RepoUrl string `json:"repo_url"`
+}
+
+// AnalyzeSourceResponse defines model for AnalyzeSourceResponse.
+type AnalyzeSourceResponse struct {
+	Branch          string            `json:"branch"`
+	Name            string            `json:"name"`
+	Owner           string            `json:"owner"`
+	Provider        string            `json:"provider"`
+	RuntimeVersions map[string]string `json:"runtime_versions"`
+	Sha             string            `json:"sha"`
+	StartCommand    *string           `json:"start_command,omitempty"`
+	SuggestedName   string            `json:"suggested_name"`
+	SuggestedPort   int               `json:"suggested_port"`
+}
+
 // AuthResponse defines model for AuthResponse.
 type AuthResponse struct {
 	User      User      `json:"user"`
@@ -639,6 +660,9 @@ type UpdateServiceDomainJSONRequestBody = UpdateDomainRequest
 // UpsertServiceEnvJSONRequestBody defines body for UpsertServiceEnv for application/json ContentType.
 type UpsertServiceEnvJSONRequestBody = UpsertEnvRequest
 
+// AnalyzeSourceJSONRequestBody defines body for AnalyzeSource for application/json ContentType.
+type AnalyzeSourceJSONRequestBody = AnalyzeSourceRequest
+
 // CreateSSHKeyJSONRequestBody defines body for CreateSSHKey for application/json ContentType.
 type CreateSSHKeyJSONRequestBody = CreateSSHKeyRequest
 
@@ -761,6 +785,9 @@ type ServerInterface interface {
 	// List the changes waiting to be deployed for a service
 	// (GET /api/services/{id}/pending-changes)
 	GetServicePendingChanges(w http.ResponseWriter, r *http.Request, id string)
+	// Analyze a public GitHub repository with Railpack
+	// (POST /api/source/analyze)
+	AnalyzeSource(w http.ResponseWriter, r *http.Request)
 	// List stored SSH keys
 	// (GET /api/ssh-keys)
 	ListSSHKeys(w http.ResponseWriter, r *http.Request)
@@ -1891,6 +1918,20 @@ func (siw *ServerInterfaceWrapper) GetServicePendingChanges(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// AnalyzeSource operation middleware
+func (siw *ServerInterfaceWrapper) AnalyzeSource(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AnalyzeSource(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSSHKeys operation middleware
 func (siw *ServerInterfaceWrapper) ListSSHKeys(w http.ResponseWriter, r *http.Request) {
 
@@ -2109,6 +2150,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}/envs/{key}", wrapper.DeleteServiceEnv)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/logs", wrapper.GetServiceLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}/pending-changes", wrapper.GetServicePendingChanges)
+	m.HandleFunc("POST "+options.BaseURL+"/api/source/analyze", wrapper.AnalyzeSource)
 	m.HandleFunc("GET "+options.BaseURL+"/api/ssh-keys", wrapper.ListSSHKeys)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys", wrapper.CreateSSHKey)
 	m.HandleFunc("POST "+options.BaseURL+"/api/ssh-keys/generate", wrapper.GenerateSSHKey)

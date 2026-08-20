@@ -56,6 +56,38 @@ type Info struct {
 	StartCommand    string            `json:"start_command,omitempty"`
 }
 
+type Analysis struct {
+	Repo Repo
+	SHA  string
+	Plan Plan
+	Info Info
+}
+
+// Analyzer makes the HTTP layer testable without substituting source analysis
+// results supplied by a client. Production uses DefaultAnalyzer.
+type Analyzer interface {
+	Analyze(ctx context.Context, repo Repo) (Analysis, error)
+}
+
+type DefaultAnalyzer struct{}
+
+func (DefaultAnalyzer) Analyze(ctx context.Context, repo Repo) (Analysis, error) {
+	sha, err := ResolveSHA(ctx, repo)
+	if err != nil {
+		return Analysis{}, err
+	}
+	dir, cleanup, err := Fetch(ctx, repo, sha)
+	if err != nil {
+		return Analysis{}, err
+	}
+	defer cleanup()
+	plan, info, err := Prepare(ctx, dir, nil)
+	if err != nil {
+		return Analysis{}, err
+	}
+	return Analysis{Repo: repo, SHA: sha, Plan: plan, Info: info}, nil
+}
+
 type commandError struct {
 	name   string
 	output string
@@ -271,7 +303,7 @@ func within(root, path string) bool {
 // Prepare runs Railpack's analysis phase and parses only the fields used by
 // the API. The raw plan is retained verbatim for the later build phase.
 func Prepare(ctx context.Context, dir string, env map[string]string) (Plan, Info, error) {
-	planFile, err := os.CreateTemp(dir, ".uploy-plan-*.json")
+	planFile, err := os.CreateTemp("", "uploy-plan-*.json")
 	if err != nil {
 		return Plan{}, Info{}, err
 	}
@@ -281,7 +313,7 @@ func Prepare(ctx context.Context, dir string, env map[string]string) (Plan, Info
 	}
 	defer os.Remove(planPath)
 
-	infoFile, err := os.CreateTemp(dir, ".uploy-info-*.json")
+	infoFile, err := os.CreateTemp("", "uploy-info-*.json")
 	if err != nil {
 		return Plan{}, Info{}, err
 	}

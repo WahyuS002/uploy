@@ -191,6 +191,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/source/analyze:
+    post:
+      operationId: analyzeSource
+      summary: Analyze a public GitHub repository with Railpack
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeSourceRequest"
+      responses:
+        "200":
+          description: Repository analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeSourceResponse"
+        "400":
+          description: Invalid repository URL or branch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Railpack could not determine how to build the repository
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: GitHub could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/deployments/{id}/logs:
     get:
       operationId: getDeploymentLogs
@@ -1833,6 +1875,53 @@ components:
       properties:
         deployment_id:
           type: string
+
+    AnalyzeSourceRequest:
+      type: object
+      required:
+        - repo_url
+      properties:
+        repo_url:
+          type: string
+          description: Public GitHub repository URL.
+        branch:
+          type: string
+          default: main
+
+    AnalyzeSourceResponse:
+      type: object
+      required:
+        - owner
+        - name
+        - branch
+        - sha
+        - provider
+        - runtime_versions
+        - suggested_name
+        - suggested_port
+      properties:
+        owner:
+          type: string
+        name:
+          type: string
+        branch:
+          type: string
+        sha:
+          type: string
+          minLength: 40
+          maxLength: 40
+        provider:
+          type: string
+        runtime_versions:
+          type: object
+          additionalProperties:
+            type: string
+        start_command:
+          type: string
+        suggested_name:
+          type: string
+        suggested_port:
+          type: integer
 
     DeploymentResponse:
       type: object

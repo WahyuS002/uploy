@@ -89,6 +89,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/source/analyze': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Analyze a public GitHub repository with Railpack */
+		post: operations['analyzeSource'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/deployments/{id}/logs': {
 		parameters: {
 			query?: never;
@@ -549,6 +566,25 @@ export interface components {
 		};
 		DeployResponse: {
 			deployment_id: string;
+		};
+		AnalyzeSourceRequest: {
+			/** @description Public GitHub repository URL. */
+			repo_url: string;
+			/** @default main */
+			branch: string;
+		};
+		AnalyzeSourceResponse: {
+			owner: string;
+			name: string;
+			branch: string;
+			sha: string;
+			provider: string;
+			runtime_versions: {
+				[key: string]: string;
+			};
+			start_command?: string;
+			suggested_name: string;
+			suggested_port: number;
 		};
 		DeploymentResponse: {
 			id: string;
@@ -1055,6 +1091,66 @@ export interface operations {
 			};
 			/** @description Internal server error */
 			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	analyzeSource: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['AnalyzeSourceRequest'];
+			};
+		};
+		responses: {
+			/** @description Repository analysis */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['AnalyzeSourceResponse'];
+				};
+			};
+			/** @description Invalid repository URL or branch */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Railpack could not determine how to build the repository */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description GitHub could not be reached */
+			502: {
 				headers: {
 					[name: string]: unknown;
 				};
