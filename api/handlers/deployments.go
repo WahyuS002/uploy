@@ -53,6 +53,14 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "only application services can be deployed"})
 		return
 	}
+	if _, err := db.GetServiceSource(r.Context(), svcWithServer.ID); err == nil {
+		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "source services cannot be deployed until source builds are supported"})
+		return
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("GetServiceSource id=%s error: %v", svcWithServer.ID, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to inspect service source"})
+		return
+	}
 
 	// The config is assembled once, here, and used for both things that follow:
 	// the job renders it into the `docker run`, and the deployment row stores it

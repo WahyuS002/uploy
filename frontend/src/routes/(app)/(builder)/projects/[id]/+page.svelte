@@ -124,7 +124,7 @@
 	let barDeploymentIds = $state<Record<string, string>>({});
 
 	let unfiredPending = $derived(
-		envServices.filter((s) => s.pending_change_count > 0 && !deployingIds.has(s.id))
+		envServices.filter((s) => s.pending_change_count > 0 && !s.source && !deployingIds.has(s.id))
 	);
 	// One primary action at a time: while the canvas is asking for an image, or a
 	// dialog is up, the bar stays out of the way rather than competing with it.

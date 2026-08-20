@@ -88,6 +88,7 @@
 	}: Props = $props();
 
 	let svcId = $derived(service.id);
+	let sourceService = $derived(service.source !== undefined);
 
 	// Deployments lands first, so it is what a freshly selected service opens on.
 	let activeTab = $state<Tab>('deployments');
@@ -349,7 +350,7 @@
 	 * request having been ignored.
 	 */
 	let awaitingDeploy = $derived(
-		service.has_deployed && service.pending_change_count > 0 && !deployInFlight
+		!sourceService && service.has_deployed && service.pending_change_count > 0 && !deployInFlight
 	);
 
 	/**
@@ -429,6 +430,7 @@
 	}
 
 	async function deploy() {
+		if (sourceService) return;
 		deployError = '';
 		deploying = true;
 		try {
@@ -698,11 +700,18 @@
 					{/if}
 				</div>
 				{#if canEdit}
-					<Button onclick={deploy} loading={deploying} size="sm">
+					<Button onclick={deploy} loading={deploying} disabled={sourceService} size="sm">
 						{deploying ? 'Deploying...' : 'Deploy'}
 					</Button>
 				{/if}
 			</div>
+
+			{#if sourceService}
+				<Alert tone="info" class="mt-3 text-[13px]">
+					Source services cannot be deployed yet. Build and deploy support arrives in the next
+					phase.
+				</Alert>
+			{/if}
 
 			<!-- Derived, not a session flag: the routing that is missing is missing
 			     after a reload too, and a warning that vanished when you refreshed was
