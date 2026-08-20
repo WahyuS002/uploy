@@ -2,12 +2,14 @@ package jobs
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/url"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -58,10 +60,31 @@ type DeployConfig struct {
 }
 
 type SourceDeployment struct {
-	Owner string
-	Repo  string
-	SHA   string
-	Plan  []byte
+	Owner       string
+	Repo        string
+	SHA         string
+	Plan        []byte
+	EnvVars     []db.EnvPair
+	SecretsHash string
+}
+
+// SecretsHash is the stable cache input for all build-time environment values.
+// Keys are sorted before concatenating KEY=VALUE entries so equivalent configs
+// produce the same hash regardless of database ordering.
+func SecretsHash(envVars []db.EnvPair) string {
+	entries := make([]string, len(envVars))
+	for i, env := range envVars {
+		entries[i] = env.Key + "=" + env.Value
+	}
+	sort.Strings(entries)
+	sum := sha256.Sum256([]byte(strings.Join(entries, "")))
+	return fmt.Sprintf("%x", sum)
+}
+
+func sortedEnvVars(envVars []db.EnvPair) []db.EnvPair {
+	sorted := append([]db.EnvPair(nil), envVars...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Key < sorted[j].Key })
+	return sorted
 }
 
 func appendLog(ctx context.Context, deploymentID, msg, logType, phase string) {
@@ -201,21 +224,21 @@ func runSourceBuild(ctx context.Context, client *ssh.Client, docker string, cfg 
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if _, err := client.Run(cleanupCtx, "rm -rf "+shellQuote(workdir)); err != nil {
+		if _, err := client.Run(cleanupCtx, "rm -rf "+ssh.ShellQuote(workdir)); err != nil {
 			log.Printf("remove source workdir deploymentID=%s: %v", cfg.DeploymentID, err)
 		}
 	}()
 
 	appendLog(ctx, cfg.DeploymentID, "fetching source...", "stdout", "fetch_source")
-	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, source), "fetch_source", "source fetch") {
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, source), "fetch_source", "source fetch", nil) {
 		return false
 	}
-	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), "fetch_source", "source plan upload") {
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), "fetch_source", "source plan upload", nil) {
 		return false
 	}
 
 	appendLog(ctx, cfg.DeploymentID, "building source image...", "stdout", "build")
-	return runSourceStep(ctx, client, cfg.DeploymentID, sourceBuildCommand(docker, workdir, cfg.ServiceID, cfg.Image, source), "build", "source build")
+	return runSourceStep(ctx, client, cfg.DeploymentID, sourceBuildCommand(docker, workdir, cfg.ServiceID, cfg.Image, source), "build", "source build", source.EnvVars)
 }
 
 func deploymentTimeout(cfg DeployConfig) time.Duration {
@@ -240,7 +263,24 @@ func (s SourceDeployment) validate() error {
 	if !json.Valid(s.Plan) {
 		return fmt.Errorf("Railpack plan is invalid")
 	}
+	for _, env := range s.EnvVars {
+		if !validEnvName(env.Key) {
+			return fmt.Errorf("environment variable name %q is invalid", env.Key)
+		}
+	}
 	return nil
+}
+
+func validEnvName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i, char := range name {
+		if !(char == '_' || char >= 'A' && char <= 'Z' || char >= 'a' && char <= 'z' || i > 0 && char >= '0' && char <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func validSourceSegment(value string) bool {
@@ -261,12 +301,12 @@ func sourceWorkdir(deploymentID string) string {
 
 func sourceFetchCommand(workdir string, source *SourceDeployment) string {
 	tarballURL := fmt.Sprintf("https://codeload.github.com/%s/%s/tar.gz/%s", url.PathEscape(source.Owner), url.PathEscape(source.Repo), source.SHA)
-	return fmt.Sprintf("rm -rf %s && mkdir -p %s && curl -sfL %s | tar xz -C %s", shellQuote(workdir), shellQuote(workdir), shellQuote(tarballURL), shellQuote(workdir))
+	return fmt.Sprintf("rm -rf %s && mkdir -p %s && curl -sfL %s | tar xz -C %s", ssh.ShellQuote(workdir), ssh.ShellQuote(workdir), ssh.ShellQuote(tarballURL), ssh.ShellQuote(workdir))
 }
 
 func sourcePlanCommand(workdir string, plan []byte) string {
 	delimiter := planDelimiter(plan)
-	return fmt.Sprintf("cat <<'%s' | tee %s >/dev/null\n%s\n%s", delimiter, shellQuote(workdir+"/railpack-plan.json"), plan, delimiter)
+	return fmt.Sprintf("cat <<'%s' | tee %s >/dev/null\n%s\n%s", delimiter, ssh.ShellQuote(workdir+"/railpack-plan.json"), plan, delimiter)
 }
 
 func planDelimiter(plan []byte) string {
@@ -286,12 +326,29 @@ func planDelimiter(plan []byte) string {
 
 func sourceBuildCommand(docker, workdir, serviceID, image string, source *SourceDeployment) string {
 	sourceDir := workdir + "/" + source.Repo + "-" + source.SHA
-	return fmt.Sprintf("%s buildx build --build-arg BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:%s -f %s --build-arg cache-key=%s --output type=docker,name=%s %s",
-		docker, railpackVersion, shellQuote(workdir+"/railpack-plan.json"), serviceID, image, shellQuote(sourceDir))
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+	envs := sortedEnvVars(source.EnvVars)
+	args := make([]string, 0, len(envs)*2+14)
+	for _, env := range envs {
+		args = append(args, env.Key+"="+ssh.ShellQuote(env.Value))
+	}
+	args = append(args,
+		docker, "buildx", "build",
+		"--build-arg", "BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:"+railpackVersion,
+		"-f", ssh.ShellQuote(workdir+"/railpack-plan.json"),
+		"--build-arg", "cache-key="+serviceID,
+	)
+	if len(envs) > 0 {
+		hash := source.SecretsHash
+		if hash == "" {
+			hash = SecretsHash(envs)
+		}
+		args = append(args, "--build-arg", "secrets-hash="+hash)
+		for _, env := range envs {
+			args = append(args, "--secret", "id="+env.Key+",env="+env.Key)
+		}
+	}
+	args = append(args, "--output", "type=docker,name="+image, ssh.ShellQuote(sourceDir))
+	return strings.Join(args, " ")
 }
 
 func runRollingDeploy(ctx context.Context, client *ssh.Client, docker string, cfg DeployConfig, oldDeployment db.Deployment, oldConfig db.ServiceConfig, hasOld bool) bool {
@@ -577,13 +634,11 @@ func buildDockerRunCmd(docker string, cfg DeployConfig) string {
 	// kills every deployed service until someone redeploys by hand.
 	args += " --restart unless-stopped"
 	if cfg.HealthcheckCommand != "" {
-		escaped := strings.ReplaceAll(cfg.HealthcheckCommand, "'", "'\\''")
-		args += fmt.Sprintf(" --health-cmd '%s' --health-interval 5s --health-timeout 5s --health-retries 10 --health-start-period 5s", escaped)
+		args += fmt.Sprintf(" --health-cmd %s --health-interval 5s --health-timeout 5s --health-retries 10 --health-start-period 5s", ssh.ShellQuote(cfg.HealthcheckCommand))
 	}
 
 	for _, env := range cfg.EnvVars {
-		escaped := strings.ReplaceAll(env.Value, "'", "'\\''")
-		args += fmt.Sprintf(" --env '%s=%s'", env.Key, escaped)
+		args += fmt.Sprintf(" --env %s", ssh.ShellQuote(env.Key+"="+env.Value))
 	}
 
 	args += " " + cfg.Image
@@ -636,7 +691,7 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 	return true
 }
 
-func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, command, phase, label string) bool {
+func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, command, phase, label string, envVars []db.EnvPair) bool {
 	stdoutCh, stderrCh, done := client.StreamCommandContext(ctx, command)
 
 	var wg sync.WaitGroup
@@ -644,13 +699,13 @@ func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, comman
 	go func() {
 		defer wg.Done()
 		for line := range stdoutCh {
-			appendLog(ctx, deploymentID, line, "stdout", phase)
+			appendLog(ctx, deploymentID, redactSecrets(line, envVars), "stdout", phase)
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		for line := range stderrCh {
-			appendLog(ctx, deploymentID, line, "stderr", phase)
+			appendLog(ctx, deploymentID, redactSecrets(line, envVars), "stderr", phase)
 		}
 	}()
 
@@ -664,10 +719,28 @@ func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, comman
 			failDeploy(deploymentID, label+" failed with retryable Railpack exit code 75; retrying may help")
 			return false
 		}
-		failDeploy(deploymentID, label+" failed: "+err.Error())
+		failDeploy(deploymentID, label+" failed: "+redactSecrets(err.Error(), envVars))
 		return false
 	}
 	return true
+}
+
+func redactSecrets(text string, envVars []db.EnvPair) string {
+	values := make([]string, 0, len(envVars)*2)
+	for _, env := range envVars {
+		if env.Value == "" {
+			continue
+		}
+		values = append(values, env.Value)
+		values = append(values, strings.Split(env.Value, "\n")...)
+	}
+	sort.Slice(values, func(i, j int) bool { return len(values[i]) > len(values[j]) })
+	for _, value := range values {
+		if value != "" {
+			text = strings.ReplaceAll(text, value, "[REDACTED]")
+		}
+	}
+	return text
 }
 
 func exitStatus(err error) int {

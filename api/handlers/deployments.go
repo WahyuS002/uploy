@@ -80,10 +80,12 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		}
 		cancel()
 		sourceDeploy = &jobs.SourceDeployment{
-			Owner: src.Owner,
-			Repo:  src.Repo,
-			SHA:   analysis.SHA,
-			Plan:  analysis.Plan.Raw,
+			Owner:       src.Owner,
+			Repo:        src.Repo,
+			SHA:         analysis.SHA,
+			Plan:        analysis.Plan.Raw,
+			EnvVars:     append([]db.EnvPair(nil), cfg.EnvVars...),
+			SecretsHash: jobs.SecretsHash(cfg.EnvVars),
 		}
 	} else if !errors.Is(sourceErr, pgx.ErrNoRows) {
 		log.Printf("GetServiceSource id=%s error: %v", svcWithServer.ID, sourceErr)
