@@ -2,13 +2,13 @@ package jobs
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/WahyuS002/uploy/db"
+	"github.com/WahyuS002/uploy/source"
 )
 
 // The port the image listens on and the port it is published as are two
@@ -155,7 +155,7 @@ func TestBuildDockerRunCmdSetsRestartPolicy(t *testing.T) {
 
 func TestSourceBuildCommandsUsePinnedPlanAndSHA(t *testing.T) {
 	sha := strings.Repeat("a", 40)
-	source := &SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, Plan: json.RawMessage(`{"deploy":{"startCommand":"node server.js"}}`)}
+	source := &SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha}
 	if err := source.validate(); err != nil {
 		t.Fatalf("source.validate() error = %v", err)
 	}
@@ -172,8 +172,9 @@ func TestSourceBuildCommandsUsePinnedPlanAndSHA(t *testing.T) {
 		}
 	}
 
-	plan := sourcePlanCommand(workdir, source.Plan)
-	if !strings.Contains(plan, "railpack-plan.json") || !strings.Contains(plan, string(source.Plan)) {
+	rawPlan := []byte(`{"deploy":{"startCommand":"node server.js"}}`)
+	plan := sourcePlanCommand(workdir, rawPlan)
+	if !strings.Contains(plan, "railpack-plan.json") || !strings.Contains(plan, string(rawPlan)) {
 		t.Errorf("plan command did not transfer plan: %s", plan)
 	}
 
@@ -217,7 +218,6 @@ func TestSourceBuildKeepsSecretsOutOfTheCommandLine(t *testing.T) {
 		Owner: "owner",
 		Repo:  "demo",
 		SHA:   sha,
-		Plan:  json.RawMessage(`{"deploy":{}}`),
 		EnvVars: []db.EnvPair{
 			{Key: "Z_LAST", Value: "line one\nline 'two' $three"},
 			{Key: "A_FIRST", Value: "plain value"},
@@ -251,7 +251,7 @@ func TestSourceBuildKeepsSecretsOutOfTheCommandLine(t *testing.T) {
 
 func TestSourceBuildWithoutEnvKeepsNormalBuild(t *testing.T) {
 	sha := strings.Repeat("c", 40)
-	source := &SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, Plan: json.RawMessage(`{"deploy":{}}`)}
+	source := &SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha}
 	_, script := sourceBuildInvocation("docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
 	if strings.Contains(string(script), "secrets-hash") || strings.Contains(string(script), "--secret") {
 		t.Fatalf("empty environment unexpectedly changed build script: %s", script)
@@ -268,7 +268,6 @@ func TestSourceBuildKeepsSecretsOutOfSudoCommandLine(t *testing.T) {
 	source := &SourceDeployment{
 		Repo:    "demo",
 		SHA:     sha,
-		Plan:    json.RawMessage(`{"deploy":{}}`),
 		EnvVars: []db.EnvPair{{Key: "TOKEN", Value: "secret value"}},
 	}
 	cmd, script := sourceBuildInvocation("sudo -n docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
@@ -296,7 +295,7 @@ func TestRedactSecretsHidesValuesAndMultilineFragments(t *testing.T) {
 
 func TestSourceDeploymentRejectsInvalidEnvironmentName(t *testing.T) {
 	sha := strings.Repeat("d", 40)
-	source := SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, Plan: json.RawMessage(`{"deploy":{}}`), EnvVars: []db.EnvPair{{Key: "BAD-NAME", Value: "secret"}}}
+	source := SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, EnvVars: []db.EnvPair{{Key: "BAD-NAME", Value: "secret"}}}
 	if err := source.validate(); err == nil {
 		t.Fatal("source.validate() accepted an invalid environment variable name")
 	}
@@ -308,5 +307,29 @@ func TestDeploymentTimeouts(t *testing.T) {
 	}
 	if got := deploymentTimeout(DeployConfig{Source: &SourceDeployment{}}); got != 30*time.Minute {
 		t.Fatalf("source deployment timeout = %v", got)
+	}
+}
+
+func TestDescribeSourceNamesTheRuntime(t *testing.T) {
+	got := describeSource(source.Info{Provider: "node", RuntimeVersions: map[string]string{"node": "22.11.0"}})
+	if got != "node (node 22.11.0)" {
+		t.Fatalf("describeSource() = %q", got)
+	}
+	// Ordering has to be stable or the deploy log reads differently run to run.
+	got = describeSource(source.Info{Provider: "node", RuntimeVersions: map[string]string{"node": "22", "bun": "1"}})
+	if got != "node (bun 1, node 22)" {
+		t.Fatalf("describeSource() = %q", got)
+	}
+	if got := describeSource(source.Info{Provider: "go"}); got != "go" {
+		t.Fatalf("describeSource() without versions = %q", got)
+	}
+}
+
+// The plan is produced by the deployment now, so a deployment is valid before
+// one exists.
+func TestSourceDeploymentIsValidWithoutAPlan(t *testing.T) {
+	src := SourceDeployment{Owner: "owner", Repo: "demo", SHA: strings.Repeat("a", 40)}
+	if err := src.validate(); err != nil {
+		t.Fatalf("validate() error = %v", err)
 	}
 }

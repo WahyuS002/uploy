@@ -71,19 +71,9 @@ type Analyzer interface {
 	Analyze(ctx context.Context, repo Repo) (Analysis, error)
 }
 
-// EnvAnalyzer is implemented by analyzers that can make build plans using the
-// service's decrypted environment values.
-type EnvAnalyzer interface {
-	AnalyzeWithEnv(ctx context.Context, repo Repo, env map[string]string) (Analysis, error)
-}
-
 type DefaultAnalyzer struct{}
 
-func (a DefaultAnalyzer) Analyze(ctx context.Context, repo Repo) (Analysis, error) {
-	return a.AnalyzeWithEnv(ctx, repo, nil)
-}
-
-func (DefaultAnalyzer) AnalyzeWithEnv(ctx context.Context, repo Repo, env map[string]string) (Analysis, error) {
+func (DefaultAnalyzer) Analyze(ctx context.Context, repo Repo) (Analysis, error) {
 	sha, err := ResolveSHA(ctx, repo)
 	if err != nil {
 		return Analysis{}, err
@@ -93,7 +83,7 @@ func (DefaultAnalyzer) AnalyzeWithEnv(ctx context.Context, repo Repo, env map[st
 		return Analysis{}, err
 	}
 	defer cleanup()
-	plan, info, err := Prepare(ctx, dir, env)
+	plan, info, err := Prepare(ctx, dir, nil)
 	if err != nil {
 		return Analysis{}, err
 	}

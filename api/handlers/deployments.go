@@ -64,26 +64,25 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only the commit is resolved here, because only the commit is needed before
+	// the deployment row exists: it is what the image tag is made of, and the
+	// tag is what the stored config compares against. Downloading the repository
+	// and running Railpack over it is the deployment's work, not the request's,
+	// and it happens in the fetch_source phase where it can be watched.
 	var sourceDeploy *jobs.SourceDeployment
 	if src, sourceErr := db.GetServiceSource(r.Context(), svcWithServer.ID); sourceErr == nil {
 		repo := source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch}
-		analysisCtx, cancel := context.WithTimeout(r.Context(), sourceAnalysisTimeout)
-		env := make(map[string]string, len(cfg.EnvVars))
-		for _, pair := range cfg.EnvVars {
-			env[pair.Key] = pair.Value
-		}
-		analysis, err := s.analyzeSourceWithEnv(analysisCtx, repo, env)
+		resolveCtx, cancel := context.WithTimeout(r.Context(), sourceResolveTimeout)
+		sha, err := source.ResolveSHA(resolveCtx, repo)
+		cancel()
 		if err != nil {
-			s.respondSourceAnalysisError(w, analysisCtx, repo, err)
-			cancel()
+			s.respondSourceAnalysisError(w, resolveCtx, repo, sourceResolveTimeout, err)
 			return
 		}
-		cancel()
 		sourceDeploy = &jobs.SourceDeployment{
 			Owner:       src.Owner,
 			Repo:        src.Repo,
-			SHA:         analysis.SHA,
-			Plan:        analysis.Plan.Raw,
+			SHA:         sha,
 			EnvVars:     append([]db.EnvPair(nil), cfg.EnvVars...),
 			SecretsHash: jobs.SecretsHash(cfg.EnvVars),
 		}

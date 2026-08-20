@@ -17,6 +17,11 @@ import (
 
 const sourceAnalysisTimeout = 90 * time.Second
 
+// sourceResolveTimeout bounds the one piece of source work a request still
+// does itself: turning a branch into the commit the deployment will build.
+// It is a single git wire-protocol round trip, so it is short.
+const sourceResolveTimeout = 15 * time.Second
+
 func (s *Server) AnalyzeSource(w http.ResponseWriter, r *http.Request) {
 	var req gen.AnalyzeSourceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
@@ -41,7 +46,7 @@ func (s *Server) AnalyzeSource(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	analysis, err := s.analyzeSource(ctx, repo)
 	if err != nil {
-		s.respondSourceAnalysisError(w, ctx, repo, err)
+		s.respondSourceAnalysisError(w, ctx, repo, sourceAnalysisTimeout, err)
 		return
 	}
 
@@ -70,20 +75,14 @@ func (s *Server) analyzeSource(ctx context.Context, repo source.Repo) (source.An
 	return analyzer.Analyze(ctx, repo)
 }
 
-func (s *Server) analyzeSourceWithEnv(ctx context.Context, repo source.Repo, env map[string]string) (source.Analysis, error) {
-	if s.SourceAnalyzer == nil {
-		return source.DefaultAnalyzer{}.AnalyzeWithEnv(ctx, repo, env)
-	}
-	if analyzer, ok := s.SourceAnalyzer.(source.EnvAnalyzer); ok {
-		return analyzer.AnalyzeWithEnv(ctx, repo, env)
-	}
-	return s.SourceAnalyzer.Analyze(ctx, repo)
-}
-
-func (s *Server) respondSourceAnalysisError(w http.ResponseWriter, ctx context.Context, repo source.Repo, err error) {
+// respondSourceAnalysisError is shared by the two callers that read a
+// repository, and they allow different amounts of time for it, so the limit is
+// passed in rather than assumed: a deadline message that names the wrong number
+// is worse than one that names none.
+func (s *Server) respondSourceAnalysisError(w http.ResponseWriter, ctx context.Context, repo source.Repo, limit time.Duration, err error) {
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		respond.JSON(w, http.StatusUnprocessableEntity, gen.ErrorResponse{Error: "source analysis exceeded the 90 second limit"})
+		respond.JSON(w, http.StatusUnprocessableEntity, gen.ErrorResponse{Error: fmt.Sprintf("reading the repository exceeded the %d second limit", int(limit.Seconds()))})
 	case errors.Is(err, source.ErrInvalidBranch):
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "invalid branch name"})
 	case errors.Is(err, source.ErrBranchNotFound):

@@ -3,7 +3,6 @@ package jobs
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -17,6 +16,7 @@ import (
 	"github.com/WahyuS002/uploy/broker"
 	"github.com/WahyuS002/uploy/db"
 	"github.com/WahyuS002/uploy/proxy"
+	"github.com/WahyuS002/uploy/source"
 	"github.com/WahyuS002/uploy/ssh"
 	"github.com/jackc/pgx/v5"
 	gossh "golang.org/x/crypto/ssh"
@@ -63,7 +63,6 @@ type SourceDeployment struct {
 	Owner       string
 	Repo        string
 	SHA         string
-	Plan        []byte
 	EnvVars     []db.EnvPair
 	SecretsHash string
 }
@@ -209,11 +208,11 @@ func RunDeploy(cfg DeployConfig) {
 }
 
 func runSourceBuild(ctx context.Context, client *ssh.Client, docker string, cfg DeployConfig) bool {
-	source := cfg.Source
-	if source == nil {
+	src := cfg.Source
+	if src == nil {
 		return true
 	}
-	if err := source.validate(); err != nil {
+	if err := src.validate(); err != nil {
 		failDeploy(cfg.DeploymentID, "Invalid source deployment: "+err.Error())
 		return false
 	}
@@ -229,17 +228,75 @@ func runSourceBuild(ctx context.Context, client *ssh.Client, docker string, cfg 
 		}
 	}()
 
-	appendLog(ctx, cfg.DeploymentID, "fetching source...", "stdout", "fetch_source")
-	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, source), nil, "fetch_source", "source fetch", nil) {
+	plan, ok := prepareSourcePlan(ctx, cfg, src)
+	if !ok {
 		return false
 	}
-	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), nil, "fetch_source", "source plan upload", nil) {
+
+	appendLog(ctx, cfg.DeploymentID, "fetching source...", "stdout", "fetch_source")
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, src), nil, "fetch_source", "source fetch", nil) {
+		return false
+	}
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, plan), nil, "fetch_source", "source plan upload", nil) {
 		return false
 	}
 
 	appendLog(ctx, cfg.DeploymentID, "building source image...", "stdout", "build")
-	buildCmd, buildScript := sourceBuildInvocation(docker, workdir, cfg.ServiceID, cfg.Image, source)
-	return runSourceStep(ctx, client, cfg.DeploymentID, buildCmd, buildScript, "build", "source build", source.EnvVars)
+	buildCmd, buildScript := sourceBuildInvocation(docker, workdir, cfg.ServiceID, cfg.Image, src)
+	return runSourceStep(ctx, client, cfg.DeploymentID, buildCmd, buildScript, "build", "source build", src.EnvVars)
+}
+
+// prepareSourcePlan analyses the commit on the Uploy host and returns the plan
+// the target server will build from.
+//
+// This runs inside the deployment rather than inside the request that asked
+// for it. Downloading a repository and running railpack over it takes as long
+// as it takes; done in the handler it left the Deploy button hanging with
+// nothing to show, and a client that gave up waiting cancelled the request
+// context and with it the deployment that was about to be created. Here the
+// same work has a phase, a log, and the deployment's own timeout.
+func prepareSourcePlan(ctx context.Context, cfg DeployConfig, src *SourceDeployment) ([]byte, bool) {
+	appendLog(ctx, cfg.DeploymentID, "analysing repository...", "stdout", "fetch_source")
+
+	dir, cleanup, err := source.Fetch(ctx, source.Repo{Owner: src.Owner, Name: src.Repo}, src.SHA)
+	if err != nil {
+		failDeploy(cfg.DeploymentID, "Could not download the repository: "+err.Error())
+		return nil, false
+	}
+	defer cleanup()
+
+	env := make(map[string]string, len(src.EnvVars))
+	for _, pair := range src.EnvVars {
+		env[pair.Key] = pair.Value
+	}
+	plan, info, err := source.Prepare(ctx, dir, env)
+	if err != nil {
+		// Railpack quotes the offending configuration back, and a build plan is
+		// shaped by the environment, so its diagnostic can carry values.
+		failDeploy(cfg.DeploymentID, "Could not prepare a build plan: "+redactSecrets(err.Error(), src.EnvVars))
+		return nil, false
+	}
+
+	appendLog(ctx, cfg.DeploymentID, "detected "+describeSource(info), "stdout", "fetch_source")
+	return plan.Raw, true
+}
+
+// describeSource renders what Railpack found so the log says which runtime is
+// about to be built, rather than only that something is being built.
+func describeSource(info source.Info) string {
+	if len(info.RuntimeVersions) == 0 {
+		return info.Provider
+	}
+	names := make([]string, 0, len(info.RuntimeVersions))
+	for name := range info.RuntimeVersions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		parts = append(parts, name+" "+info.RuntimeVersions[name])
+	}
+	return info.Provider + " (" + strings.Join(parts, ", ") + ")"
 }
 
 func deploymentTimeout(cfg DeployConfig) time.Duration {
@@ -260,9 +317,6 @@ func (s SourceDeployment) validate() error {
 	}
 	if !validSourceSegment(s.Owner) || !validSourceSegment(s.Repo) {
 		return fmt.Errorf("repository is missing")
-	}
-	if !json.Valid(s.Plan) {
-		return fmt.Errorf("Railpack plan is invalid")
 	}
 	for _, env := range s.EnvVars {
 		if !validEnvName(env.Key) {
@@ -300,8 +354,8 @@ func sourceWorkdir(deploymentID string) string {
 	return "/tmp/uploy-source-" + deploymentID
 }
 
-func sourceFetchCommand(workdir string, source *SourceDeployment) string {
-	tarballURL := fmt.Sprintf("https://codeload.github.com/%s/%s/tar.gz/%s", url.PathEscape(source.Owner), url.PathEscape(source.Repo), source.SHA)
+func sourceFetchCommand(workdir string, src *SourceDeployment) string {
+	tarballURL := fmt.Sprintf("https://codeload.github.com/%s/%s/tar.gz/%s", url.PathEscape(src.Owner), url.PathEscape(src.Repo), src.SHA)
 	return fmt.Sprintf("rm -rf %s && mkdir -p %s && curl -sfL %s | tar xz -C %s", ssh.ShellQuote(workdir), ssh.ShellQuote(workdir), ssh.ShellQuote(tarballURL), ssh.ShellQuote(workdir))
 }
 
@@ -340,9 +394,9 @@ func planDelimiter(plan []byte) string {
 // holds only "sh -s". That is what ps shows and what sudo records. Secret names
 // still appear -- buildx needs them to name the mounts -- but names are not
 // what has to stay hidden.
-func sourceBuildInvocation(docker, workdir, serviceID, image string, source *SourceDeployment) (string, []byte) {
+func sourceBuildInvocation(docker, workdir, serviceID, image string, src *SourceDeployment) (string, []byte) {
 	dockerBin := strings.TrimPrefix(docker, "sudo -n ")
-	envs := sortedEnvVars(source.EnvVars)
+	envs := sortedEnvVars(src.EnvVars)
 
 	args := []string{
 		dockerBin, "buildx", "build",
@@ -351,7 +405,7 @@ func sourceBuildInvocation(docker, workdir, serviceID, image string, source *Sou
 		"--build-arg", ssh.ShellQuote("cache-key=" + serviceID),
 	}
 	if len(envs) > 0 {
-		hash := source.SecretsHash
+		hash := src.SecretsHash
 		if hash == "" {
 			hash = SecretsHash(envs)
 		}
@@ -362,7 +416,7 @@ func sourceBuildInvocation(docker, workdir, serviceID, image string, source *Sou
 	}
 	args = append(args,
 		"--output", ssh.ShellQuote("type=docker,name="+image),
-		ssh.ShellQuote(workdir+"/"+source.Repo+"-"+source.SHA),
+		ssh.ShellQuote(workdir+"/"+src.Repo+"-"+src.SHA),
 	)
 
 	var script strings.Builder

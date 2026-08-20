@@ -94,7 +94,7 @@ func (s *Server) CreateServiceFromSource(w http.ResponseWriter, r *http.Request)
 	defer cancel()
 	analysis, err := s.analyzeSource(ctx, repo)
 	if err != nil {
-		s.respondSourceAnalysisError(w, ctx, repo, err)
+		s.respondSourceAnalysisError(w, ctx, repo, sourceAnalysisTimeout, err)
 		return
 	}
 	detected, err := json.Marshal(analysis.Info)
