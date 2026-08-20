@@ -112,12 +112,6 @@
 		Back to quick setup
 	</button>
 {:else}
-	<p class="mb-4 text-sm text-muted-foreground">
-		Generate an SSH key to connect Uploy to your servers. You'll add the public key to
-		<code class="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">~/.ssh/authorized_keys</code>
-		on your remote server after generating.
-	</p>
-
 	{#if error}
 		<p class="mb-3 text-sm text-destructive">{error}</p>
 	{/if}
