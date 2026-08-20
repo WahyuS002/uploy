@@ -419,11 +419,11 @@ func intPtrFromInt32Ptr(v *int32) *int {
 // service. The canvas asks for every service in an environment at once, so the
 // per-service form in a loop is exactly what this exists to avoid.
 func serviceResponses(ctx context.Context, svcs []db.Service) ([]gen.ServiceResponse, error) {
-	counts, err := db.PendingChangeCounts(ctx, svcs)
+	sources, err := db.ListServiceSources(ctx, serviceIDs(svcs))
 	if err != nil {
 		return nil, err
 	}
-	sources, err := db.ListServiceSources(ctx, serviceIDs(svcs))
+	counts, err := db.PendingChangeCounts(ctx, svcs, sources)
 	if err != nil {
 		return nil, err
 	}

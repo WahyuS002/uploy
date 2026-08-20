@@ -309,3 +309,64 @@ func TestExtractTarballDoesNotWriteThroughPlantedLink(t *testing.T) {
 		t.Fatalf("duplicate entry did not replace the link in place: %q %v", body, err)
 	}
 }
+
+// The dashboard asks for a branch head every time it renders. Without a memo
+// each render was one network round trip per repository service.
+func TestResolveSHACachedReusesRecentAnswers(t *testing.T) {
+	dir := t.TempDir()
+	countPath := filepath.Join(dir, "calls")
+	stub := filepath.Join(dir, "fake-git")
+	script := "#!/bin/sh\nprintf x >> " + countPath + "\nprintf '%s\\t%s\\n' " + strings.Repeat("a", 40) + " refs/heads/main\n"
+	if err := os.WriteFile(stub, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	oldBinary := gitBinary
+	gitBinary = stub
+	t.Cleanup(func() { gitBinary = oldBinary })
+
+	branchSHACache.Lock()
+	branchSHACache.entries = map[string]branchSHAEntry{}
+	branchSHACache.Unlock()
+
+	repo := Repo{Owner: "owner", Name: "demo", Branch: "main"}
+	for range 3 {
+		if _, err := ResolveSHACached(context.Background(), repo); err != nil {
+			t.Fatalf("ResolveSHACached() error = %v", err)
+		}
+	}
+	calls, err := os.ReadFile(countPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 {
+		t.Fatalf("resolved the branch %d times, want 1", len(calls))
+	}
+
+	// A different branch of the same repository is a different question.
+	if _, err := ResolveSHACached(context.Background(), Repo{Owner: "owner", Name: "demo", Branch: "next"}); err != nil {
+		t.Fatalf("ResolveSHACached() error = %v", err)
+	}
+	if calls, _ = os.ReadFile(countPath); len(calls) != 2 {
+		t.Fatalf("a second branch reused the first branch's answer: %d calls", len(calls))
+	}
+
+	// An expired entry is resolved again, and expired neighbours are dropped.
+	branchSHACache.Lock()
+	for key, entry := range branchSHACache.entries {
+		entry.resolved = entry.resolved.Add(-2 * BranchSHATTL)
+		branchSHACache.entries[key] = entry
+	}
+	branchSHACache.Unlock()
+	if _, err := ResolveSHACached(context.Background(), repo); err != nil {
+		t.Fatalf("ResolveSHACached() error = %v", err)
+	}
+	if calls, _ = os.ReadFile(countPath); len(calls) != 3 {
+		t.Fatalf("expired entry was not resolved again: %d calls", len(calls))
+	}
+	branchSHACache.Lock()
+	remaining := len(branchSHACache.entries)
+	branchSHACache.Unlock()
+	if remaining != 1 {
+		t.Fatalf("expired entries were not pruned: %d remain", remaining)
+	}
+}

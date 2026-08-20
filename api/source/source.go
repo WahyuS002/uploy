@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 )
 
 const MaxTarballSize int64 = 500 * 1024 * 1024
@@ -176,6 +178,64 @@ func ResolveSHA(ctx context.Context, r Repo) (string, error) {
 		return "", fmt.Errorf("%w: %s", ErrBranchNotFound, branch)
 	}
 	return strings.ToLower(fields[0]), nil
+}
+
+// BranchSHATTL is how long a resolved branch head is reused.
+//
+// Resolution costs a network round trip to GitHub, and the dashboard asks for
+// it on every render to decide whether a source service has commits waiting.
+// Without a window, opening a project with a dozen services opened a dozen
+// connections, and refreshing the page opened them again.
+//
+// The window only ever affects that badge. A deployment resolves the branch
+// itself, uncached, so what actually gets built is never a minute old.
+const BranchSHATTL = time.Minute
+
+type branchSHAEntry struct {
+	sha      string
+	resolved time.Time
+}
+
+var branchSHACache = struct {
+	sync.Mutex
+	entries map[string]branchSHAEntry
+}{entries: map[string]branchSHAEntry{}}
+
+// ResolveSHACached is ResolveSHA with a BranchSHATTL memo, for callers that
+// ask repeatedly about the same branch and can live with a slightly old
+// answer. Callers that cannot must use ResolveSHA.
+func ResolveSHACached(ctx context.Context, r Repo) (string, error) {
+	branch, err := r.branch()
+	if err != nil {
+		return "", err
+	}
+	key := r.Owner + "/" + r.Name + "#" + branch
+
+	branchSHACache.Lock()
+	entry, ok := branchSHACache.entries[key]
+	branchSHACache.Unlock()
+	if ok && time.Since(entry.resolved) < BranchSHATTL {
+		return entry.sha, nil
+	}
+
+	sha, err := ResolveSHA(ctx, r)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	branchSHACache.Lock()
+	// Services get deleted and branches get renamed; without this the map only
+	// ever grows. Pruning on write keeps it the size of what is actually asked
+	// about, and the map is never large enough for the sweep to matter.
+	for k, e := range branchSHACache.entries {
+		if now.Sub(e.resolved) >= BranchSHATTL {
+			delete(branchSHACache.entries, k)
+		}
+	}
+	branchSHACache.entries[key] = branchSHAEntry{sha: sha, resolved: now}
+	branchSHACache.Unlock()
+	return sha, nil
 }
 
 // Fetch downloads and safely extracts the SHA-addressed GitHub tarball. The

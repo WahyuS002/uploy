@@ -19,6 +19,13 @@ import (
 // integer now is cheaper than that.
 const configSchemaVersion = 2
 
+const (
+	// sourceResolveConcurrency caps how many branch heads are resolved at once
+	// while diffing a list of services.
+	sourceResolveConcurrency = 8
+	sourceResolveTimeout     = 10 * time.Second
+)
+
 // ServiceConfig is everything about a service that a deploy actually puts on the
 // server, and nothing else.
 //
@@ -338,8 +345,11 @@ func strPtr(s string) *string { return &s }
 // shipped), but there is no honest itemised answer to give, so the count says
 // "something" rather than inventing a list.
 //
-// Three queries for a list of any length, none of them per service.
-func PendingChangeCounts(ctx context.Context, svcs []Service) (map[string]int, error) {
+// Three queries for a list of any length, none of them per service. Services
+// built from a repository additionally need the branch head, which is a
+// network call — sources are passed in so the caller's copy is reused, and the
+// resolution itself is memoised and bounded in sourceAwareConfigs.
+func PendingChangeCounts(ctx context.Context, svcs []Service, sources map[string]ServiceSource) (map[string]int, error) {
 	counts := make(map[string]int, len(svcs))
 	if len(svcs) == 0 {
 		return counts, nil
@@ -349,7 +359,7 @@ func PendingChangeCounts(ctx context.Context, svcs []Service) (map[string]int, e
 	if err != nil {
 		return nil, err
 	}
-	current = sourceAwareConfigs(ctx, svcs, current)
+	current = sourceAwareConfigs(ctx, svcs, sources, current)
 	ids := make([]string, len(svcs))
 	for i, s := range svcs {
 		ids[i] = s.ID
@@ -381,7 +391,11 @@ func PendingChanges(ctx context.Context, svc Service) (changes []ConfigChange, h
 	if err != nil {
 		return nil, false, err
 	}
-	current = sourceAwareConfigs(ctx, []Service{svc}, map[string]ServiceConfig{svc.ID: current})[svc.ID]
+	sources, err := ListServiceSources(ctx, []string{svc.ID})
+	if err != nil {
+		return nil, false, err
+	}
+	current = sourceAwareConfigs(ctx, []Service{svc}, sources, map[string]ServiceConfig{svc.ID: current})[svc.ID]
 	deployed, err := DeployedConfigs(ctx, []string{svc.ID})
 	if err != nil {
 		return nil, false, err
@@ -397,17 +411,13 @@ func PendingChanges(ctx context.Context, svc Service) (changes []ConfigChange, h
 // branch SHA for diffing. Resolution failures leave the conservative base
 // config in place, which keeps a deployed source service pending rather than
 // falsely reporting it as current.
-func sourceAwareConfigs(ctx context.Context, svcs []Service, configs map[string]ServiceConfig) map[string]ServiceConfig {
-	if len(svcs) == 0 {
-		return configs
-	}
-	ids := make([]string, len(svcs))
-	for i, svc := range svcs {
-		ids[i] = svc.ID
-	}
-	sources, err := ListServiceSources(ctx, ids)
-	if err != nil {
-		log.Printf("list service sources for diff: %v", err)
+//
+// Every resolution is a network call, so two things bound it: the answers are
+// memoised for source.BranchSHATTL, and no more than sourceResolveConcurrency
+// of them are in flight at once. A project with many repository services must
+// not open one connection per service every time its canvas renders.
+func sourceAwareConfigs(ctx context.Context, svcs []Service, sources map[string]ServiceSource, configs map[string]ServiceConfig) map[string]ServiceConfig {
+	if len(svcs) == 0 || len(sources) == 0 {
 		return configs
 	}
 	type result struct {
@@ -416,6 +426,7 @@ func sourceAwareConfigs(ctx context.Context, svcs []Service, configs map[string]
 		err       error
 	}
 	results := make(chan result, len(sources))
+	slots := make(chan struct{}, sourceResolveConcurrency)
 	var wg sync.WaitGroup
 	for _, svc := range svcs {
 		src, ok := sources[svc.ID]
@@ -425,9 +436,11 @@ func sourceAwareConfigs(ctx context.Context, svcs []Service, configs map[string]
 		wg.Add(1)
 		go func(serviceID string, src ServiceSource) {
 			defer wg.Done()
-			resolveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			resolveCtx, cancel := context.WithTimeout(ctx, sourceResolveTimeout)
 			defer cancel()
-			sha, err := source.ResolveSHA(resolveCtx, source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch})
+			sha, err := source.ResolveSHACached(resolveCtx, source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch})
 			results <- result{serviceID: serviceID, sha: sha, err: err}
 		}(svc.ID, src)
 	}
