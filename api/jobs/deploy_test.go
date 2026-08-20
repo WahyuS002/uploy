@@ -1,10 +1,14 @@
 package jobs
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/WahyuS002/uploy/db"
 )
 
 // The port the image listens on and the port it is published as are two
@@ -184,6 +188,80 @@ func TestSourceBuildCommandsUsePinnedPlanAndSHA(t *testing.T) {
 		if !strings.Contains(build, want) {
 			t.Errorf("build command missing %q: %s", want, build)
 		}
+	}
+}
+
+func TestSecretsHashUsesStableSortedKeyValueEntries(t *testing.T) {
+	envs := []db.EnvPair{
+		{Key: "B", Value: "two"},
+		{Key: "A", Value: "one"},
+	}
+	want := sha256.Sum256([]byte("A=oneB=two"))
+	if got := SecretsHash(envs); got != fmt.Sprintf("%x", want) {
+		t.Fatalf("SecretsHash() = %q, want %x", got, want)
+	}
+	if got := SecretsHash([]db.EnvPair{{Key: "A", Value: "one"}, {Key: "B", Value: "two"}}); got != SecretsHash(envs) {
+		t.Fatal("SecretsHash changed when environment order changed")
+	}
+	if got := SecretsHash([]db.EnvPair{{Key: "A", Value: "changed"}, {Key: "B", Value: "two"}}); got == SecretsHash(envs) {
+		t.Fatal("SecretsHash did not change when an environment value changed")
+	}
+}
+
+func TestSourceBuildCommandInjectsQuotedSecrets(t *testing.T) {
+	sha := strings.Repeat("b", 40)
+	source := &SourceDeployment{
+		Owner: "owner",
+		Repo:  "demo",
+		SHA:   sha,
+		Plan:  json.RawMessage(`{"deploy":{}}`),
+		EnvVars: []db.EnvPair{
+			{Key: "Z_LAST", Value: "line one\nline 'two' $three"},
+			{Key: "A_FIRST", Value: "plain value"},
+		},
+	}
+	cmd := sourceBuildCommand("docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
+	for _, want := range []string{
+		`A_FIRST='plain value' Z_LAST='line one
+line '\''two'\'' $three' docker buildx build`,
+		"--build-arg secrets-hash=" + SecretsHash(source.EnvVars),
+		"--secret id=A_FIRST,env=A_FIRST",
+		"--secret id=Z_LAST,env=Z_LAST",
+	} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("source build command missing %q: %s", want, cmd)
+		}
+	}
+	if strings.Contains(cmd, "src=") {
+		t.Errorf("source build command writes secrets through a file: %s", cmd)
+	}
+}
+
+func TestSourceBuildCommandWithoutEnvKeepsNormalBuild(t *testing.T) {
+	sha := strings.Repeat("c", 40)
+	source := &SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, Plan: json.RawMessage(`{"deploy":{}}`)}
+	cmd := sourceBuildCommand("docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
+	if strings.Contains(cmd, "secrets-hash") || strings.Contains(cmd, "--secret") {
+		t.Fatalf("empty environment unexpectedly changed build command: %s", cmd)
+	}
+	if !strings.Contains(cmd, "docker buildx build") {
+		t.Fatalf("normal source build command is missing: %s", cmd)
+	}
+}
+
+func TestRedactSecretsHidesValuesAndMultilineFragments(t *testing.T) {
+	envs := []db.EnvPair{{Key: "TOKEN", Value: "first\nsecond"}, {Key: "URL", Value: "https://example.test"}}
+	got := redactSecrets("TOKEN=first\nsecond URL=https://example.test", envs)
+	if strings.Contains(got, "first") || strings.Contains(got, "second") || strings.Contains(got, "https://example.test") {
+		t.Fatalf("redacted output still contains a secret: %q", got)
+	}
+}
+
+func TestSourceDeploymentRejectsInvalidEnvironmentName(t *testing.T) {
+	sha := strings.Repeat("d", 40)
+	source := SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, Plan: json.RawMessage(`{"deploy":{}}`), EnvVars: []db.EnvPair{{Key: "BAD-NAME", Value: "secret"}}}
+	if err := source.validate(); err == nil {
+		t.Fatal("source.validate() accepted an invalid environment variable name")
 	}
 }
 
