@@ -45,6 +45,14 @@ type DeployConfig struct {
 	Domains       []string
 	ServerID      string
 	Server        ssh.ServerConfig
+	Source        *SourceDeployment
+}
+
+type SourceDeployment struct {
+	Owner string
+	Repo  string
+	SHA   string
+	Plan  []byte
 }
 
 func appendLog(ctx context.Context, deploymentID, msg, logType, phase string) {

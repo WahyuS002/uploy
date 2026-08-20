@@ -15,6 +15,7 @@ import (
 	"github.com/WahyuS002/uploy/gen"
 	"github.com/WahyuS002/uploy/jobs"
 	"github.com/WahyuS002/uploy/respond"
+	"github.com/WahyuS002/uploy/source"
 	"github.com/WahyuS002/uploy/ssh"
 
 	"github.com/jackc/pgx/v5"
@@ -53,11 +54,25 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "only application services can be deployed"})
 		return
 	}
-	if _, err := db.GetServiceSource(r.Context(), svcWithServer.ID); err == nil {
-		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "source services cannot be deployed until source builds are supported"})
-		return
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("GetServiceSource id=%s error: %v", svcWithServer.ID, err)
+	var sourceDeploy *jobs.SourceDeployment
+	if src, sourceErr := db.GetServiceSource(r.Context(), svcWithServer.ID); sourceErr == nil {
+		repo := source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch}
+		analysisCtx, cancel := context.WithTimeout(r.Context(), sourceAnalysisTimeout)
+		analysis, err := s.analyzeSource(analysisCtx, repo)
+		if err != nil {
+			s.respondSourceAnalysisError(w, analysisCtx, repo, err)
+			cancel()
+			return
+		}
+		cancel()
+		sourceDeploy = &jobs.SourceDeployment{
+			Owner: src.Owner,
+			Repo:  src.Repo,
+			SHA:   analysis.SHA,
+			Plan:  analysis.Plan.Raw,
+		}
+	} else if !errors.Is(sourceErr, pgx.ErrNoRows) {
+		log.Printf("GetServiceSource id=%s error: %v", svcWithServer.ID, sourceErr)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to inspect service source"})
 		return
 	}
@@ -72,6 +87,9 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ServiceConfigOf id=%s error: %v", svcWithServer.ID, err)
 		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load service configuration"})
 		return
+	}
+	if sourceDeploy != nil {
+		cfg.Image = fmt.Sprintf("uploy/%s:%s", svcWithServer.ID, sourceDeploy.SHA)
 	}
 	if len(cfg.Domains) > 0 && svcWithServer.ProxyStatus != "ready" {
 		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "rolling deployment requires a ready proxy; upgrade the server proxy first"})
@@ -104,6 +122,7 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 			User:       svcWithServer.SSHUser,
 			PrivateKey: svcWithServer.PrivateKey,
 		},
+		Source: sourceDeploy,
 	})
 
 	respond.JSON(w, http.StatusOK, gen.DeployResponse{
