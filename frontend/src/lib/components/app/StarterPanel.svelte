@@ -1,5 +1,5 @@
 <script lang="ts" module>
-	export type Starter = 'docker-image' | 'empty-project';
+	export type Starter = 'github-repo' | 'docker-image' | 'empty-project';
 
 	export type StarterEnabled = Partial<Record<Starter, boolean>>;
 </script>
@@ -8,7 +8,7 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { ChevronRight } from '@steeze-ui/heroicons';
-	import { Container, SquareTerminal } from 'lucide-svelte';
+	import { Container, GitFork, SquareTerminal } from 'lucide-svelte';
 
 	type Props = {
 		busyStarter?: Starter | null;
@@ -19,7 +19,7 @@
 
 	let {
 		busyStarter = null,
-		enabled = { 'docker-image': true, 'empty-project': true },
+		enabled = { 'github-repo': true, 'docker-image': true, 'empty-project': true },
 		title = 'Start with',
 		onSelect
 	}: Props = $props();
@@ -36,6 +36,7 @@
 	};
 
 	const rows: StarterRow[] = [
+		{ id: 'github-repo', title: 'GitHub Repository', icon: GitFork, showsChevron: true },
 		{ id: 'docker-image', title: 'Docker Image', icon: Container, showsChevron: true },
 		{ id: 'empty-project', title: 'Empty Project', icon: SquareTerminal, showsChevron: false }
 	];

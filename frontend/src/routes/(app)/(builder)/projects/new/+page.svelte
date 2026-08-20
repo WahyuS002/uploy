@@ -40,7 +40,9 @@
 	// Captured once at init rather than derived: SvelteKit clears `navigating`
 	// as soon as the navigation settles, and a reactive read would strip the
 	// class out from under the animation while it is still running.
-	const steppedBack = navigating.from?.url.pathname === '/projects/new/image';
+	const steppedBack = ['/projects/new/image', '/projects/new/repo'].includes(
+		navigating.from?.url.pathname ?? ''
+	);
 
 	let busyStarter = $state<Starter | null>(null);
 	let error = $state('');
@@ -181,6 +183,18 @@
 			return;
 		}
 
+		if (starter === 'github-repo') {
+			try {
+				if (activeServerId) {
+					// eslint-disable-next-line svelte/no-navigation-without-resolve
+					await goto(`/projects/new/repo?server_id=${encodeURIComponent(activeServerId)}`);
+				}
+			} finally {
+				busyStarter = null;
+			}
+			return;
+		}
+
 		busyStarter = null;
 	}
 
@@ -246,7 +260,11 @@
 						<StarterPanel
 							{busyStarter}
 							title="Start with"
-							enabled={{ 'docker-image': activeServerId !== '', 'empty-project': true }}
+							enabled={{
+								'github-repo': activeServerId !== '',
+								'docker-image': activeServerId !== '',
+								'empty-project': true
+							}}
 							onSelect={launch}
 						/>
 
