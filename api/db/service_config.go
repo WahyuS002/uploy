@@ -68,8 +68,8 @@ func (e *EnvPair) UnmarshalJSON(data []byte) error {
 }
 
 // ServiceConfigs builds the current config for a set of services with batched
-// metadata queries. Source-backed services additionally resolve their current
-// branch SHA in parallel so commit changes participate in config diffs.
+// metadata queries. Source SHA resolution is layered on only where pending
+// changes are calculated, so creating a deployment can use its prepared plan.
 func ServiceConfigs(ctx context.Context, svcs []Service) (map[string]ServiceConfig, error) {
 	configs := make(map[string]ServiceConfig, len(svcs))
 	if len(svcs) == 0 {
@@ -104,45 +104,6 @@ func ServiceConfigs(ctx context.Context, svcs []Service) (map[string]ServiceConf
 
 	for _, s := range svcs {
 		configs[s.ID] = serviceConfig(s, domains[s.ID], envs[s.ID])
-	}
-	sources, err := ListServiceSources(ctx, ids)
-	if err != nil {
-		// Older databases and transient source-table failures must not break
-		// image-backed service listings; their static image config is still valid.
-		log.Printf("list service sources: %v", err)
-		return configs, nil
-	}
-	type sourceResolution struct {
-		serviceID string
-		sha       string
-		err       error
-	}
-	resolved := make(chan sourceResolution, len(sources))
-	var wg sync.WaitGroup
-	for _, s := range svcs {
-		src, ok := sources[s.ID]
-		if !ok {
-			continue
-		}
-		wg.Add(1)
-		go func(serviceID string, src ServiceSource) {
-			defer wg.Done()
-			resolveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			sha, err := source.ResolveSHA(resolveCtx, source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch})
-			resolved <- sourceResolution{serviceID: serviceID, sha: sha, err: err}
-		}(s.ID, src)
-	}
-	wg.Wait()
-	close(resolved)
-	for result := range resolved {
-		if result.err != nil {
-			log.Printf("resolve source %s: %v", result.serviceID, result.err)
-			continue
-		}
-		cfg := configs[result.serviceID]
-		cfg.Image = fmt.Sprintf("uploy/%s:%s", result.serviceID, result.sha)
-		configs[result.serviceID] = cfg
 	}
 	return configs, nil
 }
@@ -388,6 +349,7 @@ func PendingChangeCounts(ctx context.Context, svcs []Service) (map[string]int, e
 	if err != nil {
 		return nil, err
 	}
+	current = sourceAwareConfigs(ctx, svcs, current)
 	ids := make([]string, len(svcs))
 	for i, s := range svcs {
 		ids[i] = s.ID
@@ -419,6 +381,7 @@ func PendingChanges(ctx context.Context, svc Service) (changes []ConfigChange, h
 	if err != nil {
 		return nil, false, err
 	}
+	current = sourceAwareConfigs(ctx, []Service{svc}, map[string]ServiceConfig{svc.ID: current})[svc.ID]
 	deployed, err := DeployedConfigs(ctx, []string{svc.ID})
 	if err != nil {
 		return nil, false, err
@@ -428,6 +391,58 @@ func PendingChanges(ctx context.Context, svc Service) (changes []ConfigChange, h
 		return []ConfigChange{}, false, nil
 	}
 	return DiffConfigs(base, current), true, nil
+}
+
+// sourceAwareConfigs replaces the stable source image prefix with the current
+// branch SHA for diffing. Resolution failures leave the conservative base
+// config in place, which keeps a deployed source service pending rather than
+// falsely reporting it as current.
+func sourceAwareConfigs(ctx context.Context, svcs []Service, configs map[string]ServiceConfig) map[string]ServiceConfig {
+	if len(svcs) == 0 {
+		return configs
+	}
+	ids := make([]string, len(svcs))
+	for i, svc := range svcs {
+		ids[i] = svc.ID
+	}
+	sources, err := ListServiceSources(ctx, ids)
+	if err != nil {
+		log.Printf("list service sources for diff: %v", err)
+		return configs
+	}
+	type result struct {
+		serviceID string
+		sha       string
+		err       error
+	}
+	results := make(chan result, len(sources))
+	var wg sync.WaitGroup
+	for _, svc := range svcs {
+		src, ok := sources[svc.ID]
+		if !ok {
+			continue
+		}
+		wg.Add(1)
+		go func(serviceID string, src ServiceSource) {
+			defer wg.Done()
+			resolveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			sha, err := source.ResolveSHA(resolveCtx, source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch})
+			results <- result{serviceID: serviceID, sha: sha, err: err}
+		}(svc.ID, src)
+	}
+	wg.Wait()
+	close(results)
+	for result := range results {
+		if result.err != nil {
+			log.Printf("resolve source %s for diff: %v", result.serviceID, result.err)
+			continue
+		}
+		cfg := configs[result.serviceID]
+		cfg.Image = fmt.Sprintf("uploy/%s:%s", result.serviceID, result.sha)
+		configs[result.serviceID] = cfg
+	}
+	return configs
 }
 
 // encodeSnapshot renders a config for storage on the deployment row.
