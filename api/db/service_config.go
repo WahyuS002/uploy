@@ -67,10 +67,9 @@ func (e *EnvPair) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ServiceConfigs builds the current config for a set of services in two queries,
-// however many services there are. The canvas asks for every service in an
-// environment at once, and a query per service is what that turns into if the
-// per-service loaders are used in a loop.
+// ServiceConfigs builds the current config for a set of services with batched
+// metadata queries. Source-backed services additionally resolve their current
+// branch SHA in parallel so commit changes participate in config diffs.
 func ServiceConfigs(ctx context.Context, svcs []Service) (map[string]ServiceConfig, error) {
 	configs := make(map[string]ServiceConfig, len(svcs))
 	if len(svcs) == 0 {
