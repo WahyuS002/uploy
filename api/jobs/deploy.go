@@ -17,10 +17,16 @@ import (
 	"github.com/WahyuS002/uploy/proxy"
 	"github.com/WahyuS002/uploy/ssh"
 	"github.com/jackc/pgx/v5"
+	gossh "golang.org/x/crypto/ssh"
 )
 
 const proxyContainerName = "uploy-proxy"
 const railpackVersion = "0.37.0"
+
+const (
+	imageDeploymentTimeout  = 10 * time.Minute
+	sourceDeploymentTimeout = 30 * time.Minute
+)
 
 // TLS foreground polling: check immediately, then retry up to
 // tlsForegroundAttempts−1 more times with tlsRetryInterval pauses
@@ -101,7 +107,7 @@ func RunDeploy(cfg DeployConfig) {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), deploymentTimeout(cfg))
 	defer cancel()
 
 	hasDomains := len(cfg.Domains) > 0
@@ -210,6 +216,13 @@ func runSourceBuild(ctx context.Context, client *ssh.Client, docker string, cfg 
 
 	appendLog(ctx, cfg.DeploymentID, "building source image...", "stdout", "build")
 	return runSourceStep(ctx, client, cfg.DeploymentID, sourceBuildCommand(docker, workdir, cfg.ServiceID, cfg.Image, source), "build", "source build")
+}
+
+func deploymentTimeout(cfg DeployConfig) time.Duration {
+	if cfg.Source != nil {
+		return sourceDeploymentTimeout
+	}
+	return imageDeploymentTimeout
 }
 
 func (s SourceDeployment) validate() error {
@@ -597,7 +610,7 @@ func RemoveService(server ssh.ServerConfig, serviceID, containerName string) err
 }
 
 func runStep(ctx context.Context, client *ssh.Client, deploymentID, command string) bool {
-	stdoutCh, stderrCh, done := client.StreamCommand(command)
+	stdoutCh, stderrCh, done := client.StreamCommandContext(ctx, command)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -617,6 +630,10 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 	wg.Wait()
 
 	if err := <-done; err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			failDeploy(deploymentID, "command exceeded the deployment time limit")
+			return false
+		}
 		failDeploy(deploymentID, fmt.Sprintf("command failed: %v", err))
 		return false
 	}
@@ -643,10 +660,26 @@ func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, comman
 
 	wg.Wait()
 	if err := <-done; err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && phase == "build" {
+			failDeploy(deploymentID, "source build exceeded the 30 minute limit")
+			return false
+		}
+		if phase == "build" && exitStatus(err) == 75 {
+			failDeploy(deploymentID, label+" failed with retryable Railpack exit code 75; retrying may help")
+			return false
+		}
 		failDeploy(deploymentID, label+" failed: "+err.Error())
 		return false
 	}
 	return true
+}
+
+func exitStatus(err error) int {
+	var exitErr *gossh.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitStatus()
+	}
+	return -1
 }
 
 func stopAndRemoveContainer(ctx context.Context, client *ssh.Client, deploymentID, containerName string) bool {

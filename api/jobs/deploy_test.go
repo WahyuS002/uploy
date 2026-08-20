@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The port the image listens on and the port it is published as are two
@@ -183,5 +184,14 @@ func TestSourceBuildCommandsUsePinnedPlanAndSHA(t *testing.T) {
 		if !strings.Contains(build, want) {
 			t.Errorf("build command missing %q: %s", want, build)
 		}
+	}
+}
+
+func TestDeploymentTimeouts(t *testing.T) {
+	if got := deploymentTimeout(DeployConfig{}); got != 10*time.Minute {
+		t.Fatalf("image deployment timeout = %v", got)
+	}
+	if got := deploymentTimeout(DeployConfig{Source: &SourceDeployment{}}); got != 30*time.Minute {
+		t.Fatalf("source deployment timeout = %v", got)
 	}
 }
