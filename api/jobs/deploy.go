@@ -743,6 +743,7 @@ func redactSecrets(text string, envVars []db.EnvPair) string {
 			continue
 		}
 		values = append(values, env.Value)
+		values = append(values, ssh.ShellQuote(env.Value))
 		values = append(values, strings.Split(env.Value, "\n")...)
 	}
 	sort.Slice(values, func(i, j int) bool { return len(values[i]) > len(values[j]) })

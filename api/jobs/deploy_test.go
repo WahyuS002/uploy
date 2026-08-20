@@ -265,7 +265,7 @@ func TestSourceBuildCommandPassesSecretsThroughSudoEnv(t *testing.T) {
 
 func TestRedactSecretsHidesValuesAndMultilineFragments(t *testing.T) {
 	envs := []db.EnvPair{{Key: "TOKEN", Value: "first\nsecond"}, {Key: "URL", Value: "https://example.test"}}
-	got := redactSecrets("TOKEN=first\nsecond URL=https://example.test", envs)
+	got := redactSecrets("TOKEN=first\nsecond URL=https://example.test QUOTED='first'\\''second'", envs)
 	if strings.Contains(got, "first") || strings.Contains(got, "second") || strings.Contains(got, "https://example.test") {
 		t.Fatalf("redacted output still contains a secret: %q", got)
 	}
