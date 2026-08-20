@@ -89,7 +89,7 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if sourceDeploy != nil {
-		cfg.Image = fmt.Sprintf("uploy/%s:%s", svcWithServer.ID, sourceDeploy.SHA)
+		cfg.Image = sourceImageTag(svcWithServer.ID, sourceDeploy.SHA)
 	}
 	if len(cfg.Domains) > 0 && svcWithServer.ProxyStatus != "ready" {
 		respond.JSON(w, http.StatusConflict, gen.ErrorResponse{Error: "rolling deployment requires a ready proxy; upgrade the server proxy first"})

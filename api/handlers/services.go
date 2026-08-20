@@ -440,6 +440,10 @@ func serviceResponses(ctx context.Context, svcs []db.Service) ([]gen.ServiceResp
 	return resp, nil
 }
 
+func sourceImageTag(serviceID, sha string) string {
+	return "uploy/" + serviceID + ":" + sha
+}
+
 func serviceIDs(svcs []db.Service) []string {
 	ids := make([]string, len(svcs))
 	for i, svc := range svcs {

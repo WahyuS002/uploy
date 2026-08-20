@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"sync"
+	"time"
 
 	"github.com/WahyuS002/uploy/crypto"
+	"github.com/WahyuS002/uploy/source"
 )
 
 // configSchemaVersion rides along in every snapshot so a stored one can still be
@@ -102,6 +105,45 @@ func ServiceConfigs(ctx context.Context, svcs []Service) (map[string]ServiceConf
 
 	for _, s := range svcs {
 		configs[s.ID] = serviceConfig(s, domains[s.ID], envs[s.ID])
+	}
+	sources, err := ListServiceSources(ctx, ids)
+	if err != nil {
+		// Older databases and transient source-table failures must not break
+		// image-backed service listings; their static image config is still valid.
+		log.Printf("list service sources: %v", err)
+		return configs, nil
+	}
+	type sourceResolution struct {
+		serviceID string
+		sha       string
+		err       error
+	}
+	resolved := make(chan sourceResolution, len(sources))
+	var wg sync.WaitGroup
+	for _, s := range svcs {
+		src, ok := sources[s.ID]
+		if !ok {
+			continue
+		}
+		wg.Add(1)
+		go func(serviceID string, src ServiceSource) {
+			defer wg.Done()
+			resolveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			sha, err := source.ResolveSHA(resolveCtx, source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch})
+			resolved <- sourceResolution{serviceID: serviceID, sha: sha, err: err}
+		}(s.ID, src)
+	}
+	wg.Wait()
+	close(resolved)
+	for result := range resolved {
+		if result.err != nil {
+			log.Printf("resolve source %s: %v", result.serviceID, result.err)
+			continue
+		}
+		cfg := configs[result.serviceID]
+		cfg.Image = fmt.Sprintf("uploy/%s:%s", result.serviceID, result.sha)
+		configs[result.serviceID] = cfg
 	}
 	return configs, nil
 }
