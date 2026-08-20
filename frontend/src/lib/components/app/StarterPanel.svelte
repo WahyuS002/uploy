@@ -8,7 +8,7 @@
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
 	import { ChevronRight } from '@steeze-ui/heroicons';
-	import { Container, GitFork, SquareTerminal } from 'lucide-svelte';
+	import { Container, GitFork as Github, SquareTerminal } from 'lucide-svelte';
 
 	type Props = {
 		busyStarter?: Starter | null;
@@ -36,7 +36,7 @@
 	};
 
 	const rows: StarterRow[] = [
-		{ id: 'github-repo', title: 'GitHub Repository', icon: GitFork, showsChevron: true },
+		{ id: 'github-repo', title: 'GitHub Repository', icon: Github, showsChevron: true },
 		{ id: 'docker-image', title: 'Docker Image', icon: Container, showsChevron: true },
 		{ id: 'empty-project', title: 'Empty Project', icon: SquareTerminal, showsChevron: false }
 	];

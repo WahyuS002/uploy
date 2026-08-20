@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, Check, GitFork, LoaderCircle } from 'lucide-svelte';
+	import { ArrowLeft, Check, GitFork as Github, LoaderCircle } from 'lucide-svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
@@ -137,7 +137,7 @@
 		<div class="border-b border-border/70 px-4 py-3">
 			<div class="flex items-center gap-2.5">
 				<span class="grid h-7 w-7 place-content-center rounded-md bg-muted text-foreground">
-					<GitFork class="h-4 w-4" strokeWidth={1.75} />
+					<Github class="h-4 w-4" strokeWidth={1.75} />
 				</span>
 				<div>
 					<h2 class="text-sm font-medium text-foreground">Import a GitHub repository</h2>
