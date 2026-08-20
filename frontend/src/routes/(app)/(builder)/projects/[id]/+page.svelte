@@ -638,6 +638,27 @@
 	</div>
 {/snippet}
 
+<!-- One definition for the starter menu, because it is reachable two ways: as
+	 the empty environment's own content, and as the first step of Add service.
+	 Drawn twice it drifted, and it did — one copy carried a back button the
+	 other did not, so stepping back out of a form landed on a screen that was
+	 not the one you left. -->
+{#snippet starterMenu()}
+	<StarterPanel
+		enabled={{ 'github-repo': true, 'docker-image': true }}
+		title="Add a service"
+		onSelect={handleStarterSelect}
+	/>
+	<!-- Leaving only leads somewhere when the environment has services to go
+	     back to. In an empty one the menu is what the canvas shows, so the
+	     button would redraw the screen it is already on. -->
+	{#if envServices.length > 0}
+		<Button type="button" variant="ghost" size="sm" class="self-start" onclick={closeAddService}>
+			Back to canvas
+		</Button>
+	{/if}
+{/snippet}
+
 {#snippet actionSnippet()}
 	<Button size="sm" onclick={startAddService}>
 		<Icon src={Plus} theme="outline" class="h-3.5 w-3.5" />
@@ -763,20 +784,7 @@
 								</EmptyState>
 							{:else if serviceStarter === null}
 								<div class="flex flex-col gap-2">
-									<StarterPanel
-										enabled={{ 'github-repo': true, 'docker-image': true }}
-										title="Add a service"
-										onSelect={handleStarterSelect}
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										class="self-start"
-										onclick={closeAddService}
-									>
-										Back to canvas
-									</Button>
+									{@render starterMenu()}
 								</div>
 							{:else if serviceStarter === 'github-repo'}
 								<RepoStarterForm
@@ -840,11 +848,7 @@
 							data-no-pan
 						>
 							{#if canEdit}
-								<StarterPanel
-									enabled={{ 'github-repo': true, 'docker-image': true }}
-									title="Add a service"
-									onSelect={handleStarterSelect}
-								/>
+								{@render starterMenu()}
 							{:else}
 								<EmptyState
 									icon={Cube}
