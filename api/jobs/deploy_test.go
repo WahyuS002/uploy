@@ -177,16 +177,19 @@ func TestSourceBuildCommandsUsePinnedPlanAndSHA(t *testing.T) {
 		t.Errorf("plan command did not transfer plan: %s", plan)
 	}
 
-	build := sourceBuildCommand("docker", workdir, "svc-1", "uploy/svc-1:"+sha, source)
+	buildCmd, buildScript := sourceBuildInvocation("docker", workdir, "svc-1", "uploy/svc-1:"+sha, source)
+	if buildCmd != "sh -s" {
+		t.Errorf("build command = %q, want %q", buildCmd, "sh -s")
+	}
 	for _, want := range []string{
 		"docker buildx build",
 		"BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:" + railpackVersion,
-		"--build-arg cache-key=svc-1",
-		"--output type=docker,name=uploy/svc-1:" + sha,
+		"cache-key=svc-1",
+		"type=docker,name=uploy/svc-1:" + sha,
 		workdir + "/demo-" + sha,
 	} {
-		if !strings.Contains(build, want) {
-			t.Errorf("build command missing %q: %s", want, build)
+		if !strings.Contains(string(buildScript), want) {
+			t.Errorf("build script missing %q: %s", want, buildScript)
 		}
 	}
 }
@@ -208,7 +211,7 @@ func TestSecretsHashUsesStableSortedKeyValueEntries(t *testing.T) {
 	}
 }
 
-func TestSourceBuildCommandInjectsQuotedSecrets(t *testing.T) {
+func TestSourceBuildKeepsSecretsOutOfTheCommandLine(t *testing.T) {
 	sha := strings.Repeat("b", 40)
 	source := &SourceDeployment{
 		Owner: "owner",
@@ -220,36 +223,47 @@ func TestSourceBuildCommandInjectsQuotedSecrets(t *testing.T) {
 			{Key: "A_FIRST", Value: "plain value"},
 		},
 	}
-	cmd := sourceBuildCommand("docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
-	for _, want := range []string{
-		`A_FIRST='plain value' Z_LAST='line one
-line '\''two'\'' $three' docker buildx build`,
-		"--build-arg secrets-hash=" + SecretsHash(source.EnvVars),
-		"--secret id=A_FIRST,env=A_FIRST",
-		"--secret id=Z_LAST,env=Z_LAST",
-	} {
-		if !strings.Contains(cmd, want) {
-			t.Errorf("source build command missing %q: %s", want, cmd)
+	cmd, script := sourceBuildInvocation("docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
+
+	// The command line is the argv of the remote shell: ps shows it and sudo
+	// logs it. Nothing secret may appear there.
+	for _, secret := range []string{"plain value", "line one", "$three"} {
+		if strings.Contains(cmd, secret) {
+			t.Errorf("command line leaks %q: %s", secret, cmd)
 		}
 	}
-	if strings.Contains(cmd, "src=") {
-		t.Errorf("source build command writes secrets through a file: %s", cmd)
+
+	for _, want := range []string{
+		"A_FIRST='plain value'\nexport A_FIRST\n",
+		"Z_LAST='line one\nline '\\''two'\\'' $three'\nexport Z_LAST\n",
+		"secrets-hash=" + SecretsHash(source.EnvVars),
+		"id=A_FIRST,env=A_FIRST",
+		"id=Z_LAST,env=Z_LAST",
+	} {
+		if !strings.Contains(string(script), want) {
+			t.Errorf("build script missing %q: %s", want, script)
+		}
+	}
+	if strings.Contains(string(script), "src=") {
+		t.Errorf("source build writes secrets through a file: %s", script)
 	}
 }
 
-func TestSourceBuildCommandWithoutEnvKeepsNormalBuild(t *testing.T) {
+func TestSourceBuildWithoutEnvKeepsNormalBuild(t *testing.T) {
 	sha := strings.Repeat("c", 40)
 	source := &SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, Plan: json.RawMessage(`{"deploy":{}}`)}
-	cmd := sourceBuildCommand("docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
-	if strings.Contains(cmd, "secrets-hash") || strings.Contains(cmd, "--secret") {
-		t.Fatalf("empty environment unexpectedly changed build command: %s", cmd)
+	_, script := sourceBuildInvocation("docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
+	if strings.Contains(string(script), "secrets-hash") || strings.Contains(string(script), "--secret") {
+		t.Fatalf("empty environment unexpectedly changed build script: %s", script)
 	}
-	if !strings.Contains(cmd, "docker buildx build") {
-		t.Fatalf("normal source build command is missing: %s", cmd)
+	if !strings.Contains(string(script), "docker buildx build") {
+		t.Fatalf("normal source build is missing: %s", script)
 	}
 }
 
-func TestSourceBuildCommandPassesSecretsThroughSudoEnv(t *testing.T) {
+// sudo writes the command line it ran into the system log by default, so the
+// sudo path is the one where a leak would be permanent rather than transient.
+func TestSourceBuildKeepsSecretsOutOfSudoCommandLine(t *testing.T) {
 	sha := strings.Repeat("e", 40)
 	source := &SourceDeployment{
 		Repo:    "demo",
@@ -257,9 +271,18 @@ func TestSourceBuildCommandPassesSecretsThroughSudoEnv(t *testing.T) {
 		Plan:    json.RawMessage(`{"deploy":{}}`),
 		EnvVars: []db.EnvPair{{Key: "TOKEN", Value: "secret value"}},
 	}
-	cmd := sourceBuildCommand("sudo -n docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
-	if !strings.Contains(cmd, "sudo -n env TOKEN='secret value' docker buildx build") {
-		t.Fatalf("sudo build command did not pass env through sudo env: %s", cmd)
+	cmd, script := sourceBuildInvocation("sudo -n docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
+	if cmd != "sudo -n sh -s" {
+		t.Fatalf("sudo build command = %q, want %q", cmd, "sudo -n sh -s")
+	}
+	if strings.Contains(cmd, "secret value") || strings.Contains(cmd, "TOKEN=") {
+		t.Fatalf("sudo command line leaks the secret: %s", cmd)
+	}
+	if !strings.Contains(string(script), "TOKEN='secret value'\nexport TOKEN\n") {
+		t.Fatalf("sudo build script did not export the secret: %s", script)
+	}
+	if strings.Contains(string(script), "sudo") {
+		t.Fatalf("script re-enters sudo instead of running wholly under it: %s", script)
 	}
 }
 

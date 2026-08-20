@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -191,6 +192,18 @@ func (c *Client) StreamCommand(command string) (<-chan string, <-chan string, <-
 // On cancellation done carries ctx.Err(), so callers can tell "the caller left"
 // apart from "the command failed".
 func (c *Client) StreamCommandContext(ctx context.Context, command string) (<-chan string, <-chan string, <-chan error) {
+	return c.StreamCommandStdinContext(ctx, command, nil)
+}
+
+// StreamCommandStdinContext is StreamCommandContext with a payload written to
+// the remote command's standard input.
+//
+// Whatever goes in the command string becomes the argv of the shell sshd
+// starts for it, which every user on that machine can read out of `ps`, and
+// which sudo copies verbatim into the system log. Values that must not appear
+// in either place travel through here instead: stdin is a pipe, not an
+// argument, so it is never listed and never logged.
+func (c *Client) StreamCommandStdinContext(ctx context.Context, command string, stdin []byte) (<-chan string, <-chan string, <-chan error) {
 	stdout := make(chan string)
 	stderr := make(chan string)
 	done := make(chan error, 1)
@@ -209,6 +222,9 @@ func (c *Client) StreamCommandContext(ctx context.Context, command string) (<-ch
 
 		outPipe, _ := session.StdoutPipe()
 		errPipe, _ := session.StderrPipe()
+		if stdin != nil {
+			session.Stdin = bytes.NewReader(stdin)
+		}
 
 		// TODO: Do not ignore the error from StdoutPipe().
 		// TODO: Do not ignore the error from StderrPipe().

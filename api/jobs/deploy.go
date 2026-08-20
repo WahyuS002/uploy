@@ -230,15 +230,16 @@ func runSourceBuild(ctx context.Context, client *ssh.Client, docker string, cfg 
 	}()
 
 	appendLog(ctx, cfg.DeploymentID, "fetching source...", "stdout", "fetch_source")
-	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, source), "fetch_source", "source fetch", nil) {
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, source), nil, "fetch_source", "source fetch", nil) {
 		return false
 	}
-	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), "fetch_source", "source plan upload", nil) {
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), nil, "fetch_source", "source plan upload", nil) {
 		return false
 	}
 
 	appendLog(ctx, cfg.DeploymentID, "building source image...", "stdout", "build")
-	return runSourceStep(ctx, client, cfg.DeploymentID, sourceBuildCommand(docker, workdir, cfg.ServiceID, cfg.Image, source), "build", "source build", source.EnvVars)
+	buildCmd, buildScript := sourceBuildInvocation(docker, workdir, cfg.ServiceID, cfg.Image, source)
+	return runSourceStep(ctx, client, cfg.DeploymentID, buildCmd, buildScript, "build", "source build", source.EnvVars)
 }
 
 func deploymentTimeout(cfg DeployConfig) time.Duration {
@@ -324,42 +325,60 @@ func planDelimiter(plan []byte) string {
 	}
 }
 
-func sourceBuildCommand(docker, workdir, serviceID, image string, source *SourceDeployment) string {
-	sourceDir := workdir + "/" + source.Repo + "-" + source.SHA
+// sourceBuildInvocation renders the build as a script delivered over stdin
+// rather than as a command line.
+//
+// Build-time environment values are secrets. Spelling them as
+// "KEY=value docker ..." puts them in the argv of the shell sshd starts, which
+// every user on that machine can read out of `ps` for as long as the build
+// runs. Spelling them as "sudo -n env KEY=value docker ..." additionally hands
+// them to sudo, which writes the command line it ran into the system log by
+// default and leaves it there. Redacting Uploy's own deployment log does
+// nothing about either.
+//
+// So the script holds the values, stdin holds the script, and the command line
+// holds only "sh -s". That is what ps shows and what sudo records. Secret names
+// still appear -- buildx needs them to name the mounts -- but names are not
+// what has to stay hidden.
+func sourceBuildInvocation(docker, workdir, serviceID, image string, source *SourceDeployment) (string, []byte) {
+	dockerBin := strings.TrimPrefix(docker, "sudo -n ")
 	envs := sortedEnvVars(source.EnvVars)
-	args := make([]string, 0, len(envs)*2+14)
-	assignments := make([]string, 0, len(envs))
-	for _, env := range envs {
-		assignments = append(assignments, env.Key+"="+ssh.ShellQuote(env.Value))
+
+	args := []string{
+		dockerBin, "buildx", "build",
+		"--build-arg", ssh.ShellQuote("BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:" + railpackVersion),
+		"-f", ssh.ShellQuote(workdir + "/railpack-plan.json"),
+		"--build-arg", ssh.ShellQuote("cache-key=" + serviceID),
 	}
-	if len(assignments) > 0 && strings.HasPrefix(docker, "sudo -n ") {
-		// sudo filters ordinary inherited variables, so use its env subcommand
-		// to pass the same in-memory values to Docker without creating a file.
-		args = append(args, "sudo", "-n", "env")
-		args = append(args, assignments...)
-		args = append(args, strings.TrimPrefix(docker, "sudo -n "))
-	} else {
-		args = append(args, assignments...)
-		args = append(args, docker)
-	}
-	args = append(args,
-		"buildx", "build",
-		"--build-arg", "BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:"+railpackVersion,
-		"-f", ssh.ShellQuote(workdir+"/railpack-plan.json"),
-		"--build-arg", "cache-key="+serviceID,
-	)
 	if len(envs) > 0 {
 		hash := source.SecretsHash
 		if hash == "" {
 			hash = SecretsHash(envs)
 		}
-		args = append(args, "--build-arg", "secrets-hash="+hash)
+		args = append(args, "--build-arg", ssh.ShellQuote("secrets-hash="+hash))
 		for _, env := range envs {
-			args = append(args, "--secret", "id="+env.Key+",env="+env.Key)
+			args = append(args, "--secret", ssh.ShellQuote("id="+env.Key+",env="+env.Key))
 		}
 	}
-	args = append(args, "--output", "type=docker,name="+image, ssh.ShellQuote(sourceDir))
-	return strings.Join(args, " ")
+	args = append(args,
+		"--output", ssh.ShellQuote("type=docker,name="+image),
+		ssh.ShellQuote(workdir+"/"+source.Repo+"-"+source.SHA),
+	)
+
+	var script strings.Builder
+	for _, env := range envs {
+		script.WriteString(env.Key + "=" + ssh.ShellQuote(env.Value) + "\n")
+		script.WriteString("export " + env.Key + "\n")
+	}
+	script.WriteString("exec " + strings.Join(args, " ") + "\n")
+
+	command := "sh -s"
+	if strings.HasPrefix(docker, "sudo -n ") {
+		// Running the whole script under one sudo beats invoking sudo per
+		// command, and keeps the values off sudo's argv either way.
+		command = "sudo -n sh -s"
+	}
+	return command, []byte(script.String())
 }
 
 func runRollingDeploy(ctx context.Context, client *ssh.Client, docker string, cfg DeployConfig, oldDeployment db.Deployment, oldConfig db.ServiceConfig, hasOld bool) bool {
@@ -702,8 +721,8 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 	return true
 }
 
-func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, command, phase, label string, envVars []db.EnvPair) bool {
-	stdoutCh, stderrCh, done := client.StreamCommandContext(ctx, command)
+func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, command string, stdin []byte, phase, label string, envVars []db.EnvPair) bool {
+	stdoutCh, stderrCh, done := client.StreamCommandStdinContext(ctx, command, stdin)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
