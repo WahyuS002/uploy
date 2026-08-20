@@ -346,6 +346,24 @@ type CreateServerRequest struct {
 	SshUser  string `json:"ssh_user"`
 }
 
+// CreateServiceFromSourceRequest defines model for CreateServiceFromSourceRequest.
+type CreateServiceFromSourceRequest struct {
+	Branch        *string `json:"branch,omitempty"`
+	ContainerName string  `json:"container_name"`
+
+	// ContainerPort Container port the built image listens on.
+	ContainerPort int    `json:"container_port"`
+	EnvironmentId string `json:"environment_id"`
+
+	// HostPort Port published directly on the server. Omit for an internal-only service.
+	HostPort *int   `json:"host_port,omitempty"`
+	Name     string `json:"name"`
+
+	// RepoUrl Public GitHub repository URL.
+	RepoUrl  string `json:"repo_url"`
+	ServerId string `json:"server_id"`
+}
+
 // CreateServiceRequest defines model for CreateServiceRequest.
 type CreateServiceRequest struct {
 	ContainerName string `json:"container_name"`
@@ -534,14 +552,30 @@ type ServiceResponse struct {
 	// PendingChangeCount How many changes are waiting to be deployed: the difference between the service's current configuration and the configuration its last successful deployment actually shipped, counted per field, per domain and per variable. Zero means the running container matches what the service says it is.
 	// A service with nothing to compare against — never deployed, or last deployed before Uploy recorded configurations — reports 1. It is pending, but there is no itemised answer to give.
 	// Derived per request, never stored.
-	PendingChangeCount int       `json:"pending_change_count"`
-	ProjectId          string    `json:"project_id"`
-	ServerId           string    `json:"server_id"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	PendingChangeCount int                    `json:"pending_change_count"`
+	ProjectId          string                 `json:"project_id"`
+	ServerId           string                 `json:"server_id"`
+	Source             *ServiceSourceResponse `json:"source,omitempty"`
+	UpdatedAt          time.Time              `json:"updated_at"`
 }
 
 // ServiceResponseKind defines model for ServiceResponse.Kind.
 type ServiceResponseKind string
+
+// ServiceSourceResponse defines model for ServiceSourceResponse.
+type ServiceSourceResponse struct {
+	Branch   string          `json:"branch"`
+	Detected SourceDetection `json:"detected"`
+	Owner    string          `json:"owner"`
+	Repo     string          `json:"repo"`
+}
+
+// SourceDetection defines model for SourceDetection.
+type SourceDetection struct {
+	Provider        string            `json:"provider"`
+	RuntimeVersions map[string]string `json:"runtime_versions"`
+	StartCommand    *string           `json:"start_command,omitempty"`
+}
 
 // UpdateDomainRequest defines model for UpdateDomainRequest.
 type UpdateDomainRequest struct {
@@ -648,6 +682,9 @@ type CheckConnectionJSONRequestBody = CheckConnectionRequest
 // CreateServiceJSONRequestBody defines body for CreateService for application/json ContentType.
 type CreateServiceJSONRequestBody = CreateServiceRequest
 
+// CreateServiceFromSourceJSONRequestBody defines body for CreateServiceFromSource for application/json ContentType.
+type CreateServiceFromSourceJSONRequestBody = CreateServiceFromSourceRequest
+
 // UpdateServiceJSONRequestBody defines body for UpdateService for application/json ContentType.
 type UpdateServiceJSONRequestBody = UpdateServiceRequest
 
@@ -746,6 +783,9 @@ type ServerInterface interface {
 	// Create a new service
 	// (POST /api/services)
 	CreateService(w http.ResponseWriter, r *http.Request)
+	// Create a service from a public GitHub repository
+	// (POST /api/services/from-source)
+	CreateServiceFromSource(w http.ResponseWriter, r *http.Request)
 	// Delete a service
 	// (DELETE /api/services/{id})
 	DeleteService(w http.ResponseWriter, r *http.Request, id string)
@@ -1466,6 +1506,26 @@ func (siw *ServerInterfaceWrapper) CreateService(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CreateServiceFromSource operation middleware
+func (siw *ServerInterfaceWrapper) CreateServiceFromSource(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, CookieAuthScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateServiceFromSource(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteService operation middleware
 func (siw *ServerInterfaceWrapper) DeleteService(w http.ResponseWriter, r *http.Request) {
 
@@ -2137,6 +2197,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/api/servers/{id}/proxy-logs", wrapper.GetProxyLogs)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services", wrapper.ListServices)
 	m.HandleFunc("POST "+options.BaseURL+"/api/services", wrapper.CreateService)
+	m.HandleFunc("POST "+options.BaseURL+"/api/services/from-source", wrapper.CreateServiceFromSource)
 	m.HandleFunc("DELETE "+options.BaseURL+"/api/services/{id}", wrapper.DeleteService)
 	m.HandleFunc("GET "+options.BaseURL+"/api/services/{id}", wrapper.GetService)
 	m.HandleFunc("PUT "+options.BaseURL+"/api/services/{id}", wrapper.UpdateService)

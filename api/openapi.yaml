@@ -1014,6 +1014,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
     get:
       operationId: listServices
       summary: List services in workspace
@@ -1041,6 +1042,61 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/services/from-source:
+    post:
+      operationId: createServiceFromSource
+      summary: Create a service from a public GitHub repository
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceFromSourceRequest"
+      responses:
+        "201":
+          description: Service created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceResponse"
+        "400":
+          description: Invalid service or repository configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Container name already in use on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Railpack could not determine how to build the repository
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: GitHub could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/services/{id}:
     get:
       operationId: getService
@@ -2282,6 +2338,37 @@ components:
           enum:
             - application
 
+    CreateServiceFromSourceRequest:
+      type: object
+      required:
+        - name
+        - container_name
+        - container_port
+        - server_id
+        - environment_id
+        - repo_url
+      properties:
+        name:
+          type: string
+        container_name:
+          type: string
+        container_port:
+          type: integer
+          description: Container port the built image listens on.
+        host_port:
+          type: integer
+          description: Port published directly on the server. Omit for an internal-only service.
+        server_id:
+          type: string
+        environment_id:
+          type: string
+        repo_url:
+          type: string
+          description: Public GitHub repository URL.
+        branch:
+          type: string
+          default: main
+
     UpdateServiceRequest:
       type: object
       required:
@@ -2384,6 +2471,40 @@ components:
             Combined with has_pending_changes it distinguishes a service that
             will be created on its server from one that will be updated.
             Derived per request, never stored.
+        source:
+          $ref: "#/components/schemas/ServiceSourceResponse"
+
+    SourceDetection:
+      type: object
+      required:
+        - provider
+        - runtime_versions
+      properties:
+        provider:
+          type: string
+        runtime_versions:
+          type: object
+          additionalProperties:
+            type: string
+        start_command:
+          type: string
+
+    ServiceSourceResponse:
+      type: object
+      required:
+        - owner
+        - repo
+        - branch
+        - detected
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        branch:
+          type: string
+        detected:
+          $ref: "#/components/schemas/SourceDetection"
 
     ConfigChange:
       type: object

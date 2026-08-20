@@ -423,11 +423,37 @@ func serviceResponses(ctx context.Context, svcs []db.Service) ([]gen.ServiceResp
 	if err != nil {
 		return nil, err
 	}
+	sources, err := db.ListServiceSources(ctx, serviceIDs(svcs))
+	if err != nil {
+		return nil, err
+	}
 	resp := make([]gen.ServiceResponse, len(svcs))
 	for i, svc := range svcs {
 		resp[i] = serviceToResponse(svc, counts[svc.ID])
+		if src, ok := sources[svc.ID]; ok {
+			resp[i].Source, err = sourceResponsePtr(src)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	return resp, nil
+}
+
+func serviceIDs(svcs []db.Service) []string {
+	ids := make([]string, len(svcs))
+	for i, svc := range svcs {
+		ids[i] = svc.ID
+	}
+	return ids
+}
+
+func sourceResponsePtr(src db.ServiceSource) (*gen.ServiceSourceResponse, error) {
+	resp, err := serviceSourceResponse(src)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 func serviceResponse(ctx context.Context, svc db.Service) (gen.ServiceResponse, error) {

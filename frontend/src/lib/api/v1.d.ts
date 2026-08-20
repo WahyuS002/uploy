@@ -325,6 +325,23 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	'/api/services/from-source': {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Create a service from a public GitHub repository */
+		post: operations['createServiceFromSource'];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	'/api/services/{id}': {
 		parameters: {
 			query?: never;
@@ -731,6 +748,20 @@ export interface components {
 			 */
 			kind: 'application';
 		};
+		CreateServiceFromSourceRequest: {
+			name: string;
+			container_name: string;
+			/** @description Container port the built image listens on. */
+			container_port: number;
+			/** @description Port published directly on the server. Omit for an internal-only service. */
+			host_port?: number;
+			server_id: string;
+			environment_id: string;
+			/** @description Public GitHub repository URL. */
+			repo_url: string;
+			/** @default main */
+			branch: string;
+		};
 		UpdateServiceRequest: {
 			name: string;
 			image: string;
@@ -767,6 +798,20 @@ export interface components {
 			pending_change_count: number;
 			/** @description True once at least one deployment of this service has succeeded. Combined with has_pending_changes it distinguishes a service that will be created on its server from one that will be updated. Derived per request, never stored. */
 			has_deployed: boolean;
+			source?: components['schemas']['ServiceSourceResponse'];
+		};
+		SourceDetection: {
+			provider: string;
+			runtime_versions: {
+				[key: string]: string;
+			};
+			start_command?: string;
+		};
+		ServiceSourceResponse: {
+			owner: string;
+			repo: string;
+			branch: string;
+			detected: components['schemas']['SourceDetection'];
 		};
 		ConfigChange: {
 			/** @description Stable identifier for this change, unique within the list — "image", "domain:app.example.com", "env:DATABASE_URL". */
@@ -2179,6 +2224,84 @@ export interface operations {
 			};
 			/** @description Internal server error */
 			500: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+		};
+	};
+	createServiceFromSource: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				'application/json': components['schemas']['CreateServiceFromSourceRequest'];
+			};
+		};
+		responses: {
+			/** @description Service created */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ServiceResponse'];
+				};
+			};
+			/** @description Invalid service or repository configuration */
+			400: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Not authenticated */
+			401: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Insufficient permissions */
+			403: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Container name already in use on this server */
+			409: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description Railpack could not determine how to build the repository */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					'application/json': components['schemas']['ErrorResponse'];
+				};
+			};
+			/** @description GitHub could not be reached */
+			502: {
 				headers: {
 					[name: string]: unknown;
 				};
