@@ -79,6 +79,10 @@
 	let serviceStarter = $state<Starter | null>(null);
 	let repoAnalysis = $state<AnalysisResponse | null>(null);
 	let analyzingRepo = $state(false);
+	// Which way the step is moving, so what arrives slides in from the side it
+	// came from. Going deeper enters from the right; stepping back returns from
+	// the left, the same grammar /projects/new gets for free by being two routes.
+	let stepDirection = $state<'forward' | 'back'>('forward');
 	// Latches on the first step into the form and stays on, so the canvas has a
 	// direction to come back from. Without it the very first paint of a project
 	// would slide in from the left, explaining a step that never happened.
@@ -179,9 +183,18 @@
 		svcError = '';
 		if (!svcServerId && servers.length > 0) svcServerId = servers[0].id;
 		steppedIntoForm = true;
+		stepDirection = 'forward';
 		serviceStarter = null;
 		repoAnalysis = null;
 		addingService = true;
+	}
+
+	// Both forms step back to the same place, so they step back through the same
+	// function rather than through two copies of it.
+	function backToStarterMenu() {
+		stepDirection = 'back';
+		serviceStarter = null;
+		svcError = '';
 	}
 
 	// One way out of the add-service step, used by both leaving it and finishing
@@ -762,84 +775,105 @@
 						</div>
 					{:else if addingService}
 						<div
-							class="step-enter w-full {serviceStarter === 'github-repo'
-								? 'max-w-120'
-								: 'max-w-105'}"
+							class="w-full {serviceStarter === 'github-repo' ? 'max-w-120' : 'max-w-105'}"
 							data-no-pan
 						>
-							{#if servers.length === 0}
-								<EmptyState
-									icon={ServerStack}
-									title="Connect a server first"
-									description="Uploy needs a server with SSH access before it can deploy a service."
+							<!-- Keyed on the step, because a CSS animation only runs when an
+							     element is born. Swapping the contents of a div that stays put
+							     never was a birth, which is why stepping back arrived with no
+							     motion while stepping in had it. -->
+							{#key serviceStarter}
+								<div
+									class="flex flex-col gap-2 {stepDirection === 'back'
+										? 'step-back'
+										: 'step-enter'}"
 								>
-									{#snippet actions()}
-										{#if isOwner}
-											<Button href="/servers" size="sm">Connect a server</Button>
-										{/if}
-										<Button type="button" variant="secondary" size="sm" onclick={closeAddService}>
-											Cancel
-										</Button>
-									{/snippet}
-								</EmptyState>
-							{:else if serviceStarter === null}
-								<div class="flex flex-col gap-2">
-									{@render starterMenu()}
+									{#if servers.length === 0}
+										<EmptyState
+											icon={ServerStack}
+											title="Connect a server first"
+											description="Uploy needs a server with SSH access before it can deploy a service."
+										>
+											{#snippet actions()}
+												{#if isOwner}
+													<Button href="/servers" size="sm">Connect a server</Button>
+												{/if}
+												<Button
+													type="button"
+													variant="secondary"
+													size="sm"
+													onclick={closeAddService}
+												>
+													Cancel
+												</Button>
+											{/snippet}
+										</EmptyState>
+									{:else if serviceStarter === null}
+										{@render starterMenu()}
+									{:else if serviceStarter === 'github-repo'}
+										<RepoStarterForm
+											analysis={repoAnalysis}
+											submitting={creatingService}
+											analyzing={analyzingRepo}
+											error={svcError}
+											onBack={backToStarterMenu}
+											onChangeRepository={() => {
+												repoAnalysis = null;
+												svcError = '';
+											}}
+											onAnalyze={analyzeRepo}
+											onCreate={createServiceFromRepo}
+										>
+											{#snippet details()}
+												<div class="flex items-center justify-between gap-3">
+													<span class="text-xs text-muted-foreground">Server</span>
+													<Select
+														items={serverItems}
+														bind:value={svcServerId}
+														size="sm"
+														class="w-56"
+													/>
+												</div>
+
+												<div class="flex items-baseline justify-between gap-3 text-xs">
+													<span class="flex-none text-muted-foreground">Deploys to</span>
+													<span class="truncate font-medium text-foreground"
+														>{selectedEnv?.name}</span
+													>
+												</div>
+											{/snippet}
+										</RepoStarterForm>
+									{:else}
+										<ImageStarterForm
+											submitting={creatingService}
+											error={svcError}
+											submitLabel="Create service"
+											backLabel="Back to starters"
+											onBack={backToStarterMenu}
+											onSubmit={createService}
+										>
+											{#snippet details()}
+												<div class="flex items-center justify-between gap-3">
+													<span class="text-xs text-muted-foreground">Server</span>
+													<Select
+														items={serverItems}
+														bind:value={svcServerId}
+														size="sm"
+														class="w-56"
+													/>
+												</div>
+
+												<div class="flex items-baseline justify-between gap-3 text-xs">
+													<span class="flex-none text-muted-foreground">Deploys to</span>
+													<span class="truncate font-medium text-foreground"
+														>{selectedEnv?.name}</span
+													>
+												</div>
+											{/snippet}
+										</ImageStarterForm>
+									{/if}
 								</div>
-							{:else if serviceStarter === 'github-repo'}
-								<RepoStarterForm
-									analysis={repoAnalysis}
-									submitting={creatingService}
-									analyzing={analyzingRepo}
-									error={svcError}
-									onBack={() => {
-										serviceStarter = null;
-										svcError = '';
-									}}
-									onChangeRepository={() => {
-										repoAnalysis = null;
-										svcError = '';
-									}}
-									onAnalyze={analyzeRepo}
-									onCreate={createServiceFromRepo}
-								>
-									{#snippet details()}
-										<div class="flex items-center justify-between gap-3">
-											<span class="text-xs text-muted-foreground">Server</span>
-											<Select items={serverItems} bind:value={svcServerId} size="sm" class="w-56" />
-										</div>
-
-										<div class="flex items-baseline justify-between gap-3 text-xs">
-											<span class="flex-none text-muted-foreground">Deploys to</span>
-											<span class="truncate font-medium text-foreground">{selectedEnv?.name}</span>
-										</div>
-									{/snippet}
-								</RepoStarterForm>
-							{:else}
-								<ImageStarterForm
-									submitting={creatingService}
-									error={svcError}
-									submitLabel="Create service"
-									backLabel="Back to starters"
-									onBack={() => {
-										serviceStarter = null;
-										svcError = '';
-									}}
-									onSubmit={createService}
-								>
-									{#snippet details()}
-										<div class="flex items-center justify-between gap-3">
-											<span class="text-xs text-muted-foreground">Server</span>
-											<Select items={serverItems} bind:value={svcServerId} size="sm" class="w-56" />
-										</div>
-
-										<div class="flex items-baseline justify-between gap-3 text-xs">
-											<span class="flex-none text-muted-foreground">Deploys to</span>
-											<span class="truncate font-medium text-foreground">{selectedEnv?.name}</span>
-										</div>
-									{/snippet}
-								</ImageStarterForm>
-							{/if}
+							{/key}
 						</div>
 					{:else if envServices.length === 0}
 						<div
