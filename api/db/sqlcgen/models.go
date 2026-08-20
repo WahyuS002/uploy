@@ -106,6 +106,18 @@ type ServiceEnvVar struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type ServiceSource struct {
+	ServiceID string      `json:"service_id"`
+	Provider  string      `json:"provider"`
+	Owner     string      `json:"owner"`
+	Repo      string      `json:"repo"`
+	Branch    string      `json:"branch"`
+	RootDir   pgtype.Text `json:"root_dir"`
+	Detected  []byte      `json:"detected"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
 type Session struct {
 	Token       string    `json:"token"`
 	UserID      string    `json:"user_id"`

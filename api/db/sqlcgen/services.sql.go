@@ -98,6 +98,80 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (C
 	return i, err
 }
 
+const createSourceService = `-- name: CreateSourceService :one
+WITH new_service AS (
+    SELECT 'svc-' || gen_random_uuid()::text AS id
+)
+INSERT INTO services (id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id)
+SELECT id, $1, 'uploy/' || id, $2, $3, $4, $5, $6, $7, $8, $9
+FROM new_service
+RETURNING id, name, image, container_name, container_port, host_port, server_id, workspace_id, kind, project_id, environment_id, created_at, updated_at,
+    FALSE::boolean AS has_deployed
+`
+
+type CreateSourceServiceParams struct {
+	Name          string      `json:"name"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+}
+
+type CreateSourceServiceRow struct {
+	ID            string      `json:"id"`
+	Name          string      `json:"name"`
+	Image         string      `json:"image"`
+	ContainerName string      `json:"container_name"`
+	ContainerPort int32       `json:"container_port"`
+	HostPort      pgtype.Int4 `json:"host_port"`
+	ServerID      string      `json:"server_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	Kind          string      `json:"kind"`
+	ProjectID     string      `json:"project_id"`
+	EnvironmentID string      `json:"environment_id"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	HasDeployed   bool        `json:"has_deployed"`
+}
+
+// The generated service id is also the stable namespace for the image tag. A
+// single statement keeps both values deterministic without a placeholder image.
+func (q *Queries) CreateSourceService(ctx context.Context, arg CreateSourceServiceParams) (CreateSourceServiceRow, error) {
+	row := q.db.QueryRow(ctx, createSourceService,
+		arg.Name,
+		arg.ContainerName,
+		arg.ContainerPort,
+		arg.HostPort,
+		arg.ServerID,
+		arg.WorkspaceID,
+		arg.Kind,
+		arg.ProjectID,
+		arg.EnvironmentID,
+	)
+	var i CreateSourceServiceRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Image,
+		&i.ContainerName,
+		&i.ContainerPort,
+		&i.HostPort,
+		&i.ServerID,
+		&i.WorkspaceID,
+		&i.Kind,
+		&i.ProjectID,
+		&i.EnvironmentID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.HasDeployed,
+	)
+	return i, err
+}
+
 const deleteService = `-- name: DeleteService :exec
 DELETE FROM services WHERE id = $1
 `
