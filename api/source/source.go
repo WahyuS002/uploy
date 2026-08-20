@@ -263,6 +263,10 @@ func extractTarball(tarPath, root string) error {
 			return fmt.Errorf("invalid repository tarball path %q", hdr.Name)
 		}
 		switch hdr.Typeflag {
+		case tar.TypeXGlobalHeader, tar.TypeXHeader, tar.TypeGNULongName, tar.TypeGNULongLink:
+			// Metadata entries are consumed by archive/tar and do not represent
+			// files that belong in the extracted source tree.
+			continue
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0o755); err != nil {
 				return err
