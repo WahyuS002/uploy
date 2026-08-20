@@ -54,11 +54,25 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "only application services can be deployed"})
 		return
 	}
+
+	// Load the decrypted config before source analysis so Railpack sees the same
+	// environment values that the resulting container will receive at runtime.
+	cfg, err := db.ServiceConfigOf(r.Context(), svcWithServer.Service)
+	if err != nil {
+		log.Printf("ServiceConfigOf id=%s error: %v", svcWithServer.ID, err)
+		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load service configuration"})
+		return
+	}
+
 	var sourceDeploy *jobs.SourceDeployment
 	if src, sourceErr := db.GetServiceSource(r.Context(), svcWithServer.ID); sourceErr == nil {
 		repo := source.Repo{Owner: src.Owner, Name: src.Repo, Branch: src.Branch}
 		analysisCtx, cancel := context.WithTimeout(r.Context(), sourceAnalysisTimeout)
-		analysis, err := s.analyzeSource(analysisCtx, repo)
+		env := make(map[string]string, len(cfg.EnvVars))
+		for _, pair := range cfg.EnvVars {
+			env[pair.Key] = pair.Value
+		}
+		analysis, err := s.analyzeSourceWithEnv(analysisCtx, repo, env)
 		if err != nil {
 			s.respondSourceAnalysisError(w, analysisCtx, repo, err)
 			cancel()
@@ -82,12 +96,6 @@ func (s *Server) CreateDeployment(w http.ResponseWriter, r *http.Request) {
 	// as the record of what this deploy put on the server. Two assemblies would
 	// be two answers to "what is deployed", and the diff would believe the wrong
 	// one the moment they drifted.
-	cfg, err := db.ServiceConfigOf(r.Context(), svcWithServer.Service)
-	if err != nil {
-		log.Printf("ServiceConfigOf id=%s error: %v", svcWithServer.ID, err)
-		respond.JSON(w, http.StatusInternalServerError, gen.ErrorResponse{Error: "failed to load service configuration"})
-		return
-	}
 	if sourceDeploy != nil {
 		cfg.Image = sourceImageTag(svcWithServer.ID, sourceDeploy.SHA)
 	}

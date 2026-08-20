@@ -70,6 +70,16 @@ func (s *Server) analyzeSource(ctx context.Context, repo source.Repo) (source.An
 	return analyzer.Analyze(ctx, repo)
 }
 
+func (s *Server) analyzeSourceWithEnv(ctx context.Context, repo source.Repo, env map[string]string) (source.Analysis, error) {
+	if s.SourceAnalyzer == nil {
+		return source.DefaultAnalyzer{}.AnalyzeWithEnv(ctx, repo, env)
+	}
+	if analyzer, ok := s.SourceAnalyzer.(source.EnvAnalyzer); ok {
+		return analyzer.AnalyzeWithEnv(ctx, repo, env)
+	}
+	return s.SourceAnalyzer.Analyze(ctx, repo)
+}
+
 func (s *Server) respondSourceAnalysisError(w http.ResponseWriter, ctx context.Context, repo source.Repo, err error) {
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):

@@ -108,9 +108,12 @@ func TestFetchRejectsOversizedTarball(t *testing.T) {
 func TestPrepareParsesRailpackOutput(t *testing.T) {
 	dir := t.TempDir()
 	planPath := filepath.Join(dir, "fake-railpack")
+	argsPath := filepath.Join(dir, "railpack-args")
 	script := `#!/bin/sh
 plan=""
 info=""
+args_file="` + argsPath + `"
+printf '%s\n' "$@" > "$args_file"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --plan-out) plan="$2"; shift 2 ;;
@@ -134,6 +137,16 @@ printf '%s' '{"resolvedPackages":{"node":{"resolvedVersion":"22.11.0"}},"metadat
 	}
 	if !json.Valid(plan.Raw) || info.Provider != "node" || info.RuntimeVersions["node"] != "22.11.0" || info.StartCommand != "node server.js" {
 		t.Fatalf("Prepare() = plan %s, info %+v", plan.Raw, info)
+	}
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(args), "prepare\n"+dir+"\n--plan-out\n"; !strings.HasPrefix(got, want) {
+		t.Fatalf("Prepare() args = %q, want prefix %q", got, want)
+	}
+	if a, b := strings.Index(string(args), "A=one"), strings.Index(string(args), "B=two"); a < 0 || b < 0 || a > b {
+		t.Fatalf("Prepare() did not pass ordered environment values: %q", args)
 	}
 }
 
