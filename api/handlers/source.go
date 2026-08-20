@@ -85,6 +85,8 @@ func (s *Server) respondSourceAnalysisError(w http.ResponseWriter, ctx context.C
 		respond.JSON(w, http.StatusUnprocessableEntity, gen.ErrorResponse{Error: fmt.Sprintf("reading the repository exceeded the %d second limit", int(limit.Seconds()))})
 	case errors.Is(err, source.ErrInvalidBranch):
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: "invalid branch name"})
+	case errors.Is(err, source.ErrRepoNotFound):
+		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: fmt.Sprintf("%s/%s could not be read; it must exist and be public", repo.Owner, repo.Name)})
 	case errors.Is(err, source.ErrBranchNotFound):
 		respond.JSON(w, http.StatusBadRequest, gen.ErrorResponse{Error: fmt.Sprintf("branch %q was not found", repo.Branch)})
 	case errors.Is(err, source.ErrSourceTooLarge):

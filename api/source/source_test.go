@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -26,6 +27,11 @@ func TestParseRepoURL(t *testing.T) {
 		{"short", "owner/name", Repo{Owner: "owner", Name: "name"}},
 		{"git suffix", "https://github.com/owner/name.git", Repo{Owner: "owner", Name: "name"}},
 		{"trailing slash", "github.com/owner/name.git/", Repo{Owner: "owner", Name: "name"}},
+		{"branch page", "https://github.com/owner/name/tree/develop", Repo{Owner: "owner", Name: "name"}},
+		{"file page", "https://github.com/owner/name/blob/main/README.md", Repo{Owner: "owner", Name: "name"}},
+		{"tab query", "https://github.com/owner/name?tab=readme-ov-file", Repo{Owner: "owner", Name: "name"}},
+		{"anchor", "https://github.com/owner/name#install", Repo{Owner: "owner", Name: "name"}},
+		{"issues", "https://github.com/owner/name/issues", Repo{Owner: "owner", Name: "name"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,8 +48,6 @@ func TestParseRepoURL(t *testing.T) {
 	for _, raw := range []string{
 		"http://github.com/owner/name",
 		"https://gitlab.com/owner/name",
-		"https://github.com/owner/name/issues",
-		"https://github.com/owner/name?tab=readme",
 		"github.com/owner",
 		"owner/name/extra",
 		"github.com/owner/name%2Fother",
@@ -368,5 +372,36 @@ func TestResolveSHACachedReusesRecentAnswers(t *testing.T) {
 	branchSHACache.Unlock()
 	if remaining != 1 {
 		t.Fatalf("expired entries were not pruned: %d remain", remaining)
+	}
+}
+
+// GitHub refuses to distinguish a missing repository from a private one, so
+// both arrive as a request to authenticate. With prompts disabled that is what
+// git reports, and it must not read as "GitHub is down".
+func TestResolveSHAClassifiesUnreadableRepositories(t *testing.T) {
+	cases := map[string]struct {
+		stderr string
+		want   error
+	}{
+		"auth prompt": {"fatal: could not read Username for 'https://github.com': terminal prompts disabled", ErrRepoNotFound},
+		"not found":   {"remote: Repository not found.", ErrRepoNotFound},
+		"network":     {"fatal: unable to access 'https://github.com/': Could not resolve host", ErrRemoteUnavailable},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			stub := filepath.Join(dir, "fake-git")
+			if err := os.WriteFile(stub, []byte("#!/bin/sh\necho "+strconv.Quote(tc.stderr)+" >&2\nexit 128\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			oldBinary := gitBinary
+			gitBinary = stub
+			t.Cleanup(func() { gitBinary = oldBinary })
+
+			_, err := ResolveSHA(context.Background(), Repo{Owner: "owner", Name: "demo", Branch: "main"})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("ResolveSHA() error = %v, want %v", err, tc.want)
+			}
+		})
 	}
 }

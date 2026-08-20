@@ -29,6 +29,7 @@ var (
 	ErrInvalidBranch     = errors.New("invalid branch name")
 	ErrBranchNotFound    = errors.New("branch not found")
 	ErrRemoteUnavailable = errors.New("remote repository unavailable")
+	ErrRepoNotFound      = errors.New("repository does not exist or is not public")
 	ErrSourceTooLarge    = errors.New("repository tarball exceeds 500 MB")
 	ErrUnsupportedSource = errors.New("Railpack could not determine how to build this repository")
 
@@ -122,13 +123,22 @@ func ParseRepoURL(raw string) (Repo, error) {
 		}
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, "github.com") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Host, "github.com") || u.User != nil {
 		return Repo{}, ErrInvalidRepoURL
 	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	// A repository is the first two path segments and nothing else. What people
+	// actually paste is whatever page they were looking at -- /tree/main,
+	// /blob/main/README.md, a ?tab= query, a #anchor -- and rejecting those
+	// asked them to hand-edit a URL to reach a field that already shows the
+	// branch it is going to use.
+	// EscapedPath, not Path: a percent-encoded slash must stay inside its
+	// segment where githubSegmentPattern rejects it, rather than being decoded
+	// into a separator and quietly reinterpreted as a shorter repository name.
+	parts := strings.Split(strings.Trim(u.EscapedPath(), "/"), "/")
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
 		return Repo{}, ErrInvalidRepoURL
 	}
+	parts = parts[:2]
 	name := strings.TrimSuffix(parts[1], ".git")
 	if !githubSegmentPattern.MatchString(parts[0]) || !githubSegmentPattern.MatchString(name) {
 		return Repo{}, ErrInvalidRepoURL
@@ -159,8 +169,23 @@ func ResolveSHA(ctx context.Context, r Repo) (string, error) {
 		return "", err
 	}
 	cmd := exec.CommandContext(ctx, gitBinary, "ls-remote", r.cloneURL(), "refs/heads/"+branch)
+	// Without this git answers a missing or private repository by asking for a
+	// username, which either stalls behind a credential helper or fails with a
+	// message about authentication that says nothing about the actual problem.
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		// GitHub answers a missing repository and a private one the same way --
+		// by asking to authenticate -- because telling them apart would leak
+		// which private repositories exist. With prompts disabled that surfaces
+		// as a refusal to read a username, so both land here, and the message
+		// has to name both possibilities rather than guess.
+		lower := strings.ToLower(string(out))
+		for _, marker := range []string{"could not read username", "terminal prompts disabled", "authentication failed", "repository not found"} {
+			if strings.Contains(lower, marker) {
+				return "", fmt.Errorf("%w: %s/%s", ErrRepoNotFound, r.Owner, r.Name)
+			}
+		}
 		return "", &commandError{name: "git ls-remote", output: string(out), err: fmt.Errorf("%w: %v", ErrRemoteUnavailable, err)}
 	}
 	fields := strings.Fields(string(out))
