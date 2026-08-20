@@ -328,11 +328,22 @@ func sourceBuildCommand(docker, workdir, serviceID, image string, source *Source
 	sourceDir := workdir + "/" + source.Repo + "-" + source.SHA
 	envs := sortedEnvVars(source.EnvVars)
 	args := make([]string, 0, len(envs)*2+14)
+	assignments := make([]string, 0, len(envs))
 	for _, env := range envs {
-		args = append(args, env.Key+"="+ssh.ShellQuote(env.Value))
+		assignments = append(assignments, env.Key+"="+ssh.ShellQuote(env.Value))
+	}
+	if len(assignments) > 0 && strings.HasPrefix(docker, "sudo -n ") {
+		// sudo filters ordinary inherited variables, so use its env subcommand
+		// to pass the same in-memory values to Docker without creating a file.
+		args = append(args, "sudo", "-n", "env")
+		args = append(args, assignments...)
+		args = append(args, strings.TrimPrefix(docker, "sudo -n "))
+	} else {
+		args = append(args, assignments...)
+		args = append(args, docker)
 	}
 	args = append(args,
-		docker, "buildx", "build",
+		"buildx", "build",
 		"--build-arg", "BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:"+railpackVersion,
 		"-f", ssh.ShellQuote(workdir+"/railpack-plan.json"),
 		"--build-arg", "cache-key="+serviceID,

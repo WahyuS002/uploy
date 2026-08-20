@@ -249,6 +249,20 @@ func TestSourceBuildCommandWithoutEnvKeepsNormalBuild(t *testing.T) {
 	}
 }
 
+func TestSourceBuildCommandPassesSecretsThroughSudoEnv(t *testing.T) {
+	sha := strings.Repeat("e", 40)
+	source := &SourceDeployment{
+		Repo:    "demo",
+		SHA:     sha,
+		Plan:    json.RawMessage(`{"deploy":{}}`),
+		EnvVars: []db.EnvPair{{Key: "TOKEN", Value: "secret value"}},
+	}
+	cmd := sourceBuildCommand("sudo -n docker", "/tmp/work", "svc-1", "uploy/svc-1:"+sha, source)
+	if !strings.Contains(cmd, "sudo -n env TOKEN='secret value' docker buildx build") {
+		t.Fatalf("sudo build command did not pass env through sudo env: %s", cmd)
+	}
+}
+
 func TestRedactSecretsHidesValuesAndMultilineFragments(t *testing.T) {
 	envs := []db.EnvPair{{Key: "TOKEN", Value: "first\nsecond"}, {Key: "URL", Value: "https://example.test"}}
 	got := redactSecrets("TOKEN=first\nsecond URL=https://example.test", envs)
