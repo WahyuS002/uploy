@@ -2,9 +2,11 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -18,6 +20,7 @@ import (
 )
 
 const proxyContainerName = "uploy-proxy"
+const railpackVersion = "0.37.0"
 
 // TLS foreground polling: check immediately, then retry up to
 // tlsForegroundAttempts−1 more times with tlsRetryInterval pauses
@@ -119,9 +122,13 @@ func RunDeploy(cfg DeployConfig) {
 
 	docker := client.DockerBin()
 
-	// step 1: docker pull
-	appendLog(ctx, cfg.DeploymentID, "pulling image...", "stdout", "pull_image")
-	if !runStep(ctx, client, cfg.DeploymentID, docker+" pull "+cfg.Image) {
+	if cfg.Source == nil {
+		// Image deployments intentionally retain their original pull step.
+		appendLog(ctx, cfg.DeploymentID, "pulling image...", "stdout", "pull_image")
+		if !runStep(ctx, client, cfg.DeploymentID, docker+" pull "+cfg.Image) {
+			return
+		}
+	} else if !runSourceBuild(ctx, client, docker, cfg) {
 		return
 	}
 
@@ -170,6 +177,108 @@ func RunDeploy(cfg DeployConfig) {
 	}
 
 	finishDeploy(cfg.DeploymentID, "success")
+}
+
+func runSourceBuild(ctx context.Context, client *ssh.Client, docker string, cfg DeployConfig) bool {
+	source := cfg.Source
+	if source == nil {
+		return true
+	}
+	if err := source.validate(); err != nil {
+		failDeploy(cfg.DeploymentID, "Invalid source deployment: "+err.Error())
+		return false
+	}
+
+	workdir := sourceWorkdir(cfg.DeploymentID)
+	// The build directory contains the source archive and a generated plan; it
+	// must not survive a successful build or a failure before the build starts.
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if _, err := client.Run(cleanupCtx, "rm -rf "+shellQuote(workdir)); err != nil {
+			log.Printf("remove source workdir deploymentID=%s: %v", cfg.DeploymentID, err)
+		}
+	}()
+
+	appendLog(ctx, cfg.DeploymentID, "fetching source...", "stdout", "fetch_source")
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, source), "fetch_source", "source fetch") {
+		return false
+	}
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), "build", "source plan upload") {
+		return false
+	}
+
+	appendLog(ctx, cfg.DeploymentID, "building source image...", "stdout", "build")
+	return runSourceStep(ctx, client, cfg.DeploymentID, sourceBuildCommand(docker, workdir, cfg.ServiceID, cfg.Image, source), "build", "source build")
+}
+
+func (s SourceDeployment) validate() error {
+	if len(s.SHA) != 40 {
+		return fmt.Errorf("commit SHA is invalid")
+	}
+	for _, char := range s.SHA {
+		if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'f') {
+			return fmt.Errorf("commit SHA is invalid")
+		}
+	}
+	if !validSourceSegment(s.Owner) || !validSourceSegment(s.Repo) {
+		return fmt.Errorf("repository is missing")
+	}
+	if !json.Valid(s.Plan) {
+		return fmt.Errorf("Railpack plan is invalid")
+	}
+	return nil
+}
+
+func validSourceSegment(value string) bool {
+	if value == "" {
+		return false
+	}
+	for i, char := range value {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || (i > 0 && (char == '.' || char == '_' || char == '-'))) {
+			return false
+		}
+	}
+	return true
+}
+
+func sourceWorkdir(deploymentID string) string {
+	return "/tmp/uploy-source-" + deploymentID
+}
+
+func sourceFetchCommand(workdir string, source *SourceDeployment) string {
+	tarballURL := fmt.Sprintf("https://codeload.github.com/%s/%s/tar.gz/%s", url.PathEscape(source.Owner), url.PathEscape(source.Repo), source.SHA)
+	return fmt.Sprintf("rm -rf %s && mkdir -p %s && curl -sfL %s | tar xz -C %s", shellQuote(workdir), shellQuote(workdir), shellQuote(tarballURL), shellQuote(workdir))
+}
+
+func sourcePlanCommand(workdir string, plan []byte) string {
+	delimiter := planDelimiter(plan)
+	return fmt.Sprintf("cat <<'%s' | tee %s >/dev/null\n%s\n%s", delimiter, shellQuote(workdir+"/railpack-plan.json"), plan, delimiter)
+}
+
+func planDelimiter(plan []byte) string {
+	const base = "UPLOY_RAILPACK_PLAN"
+	content := string(plan)
+	for suffix := 0; ; suffix++ {
+		delimiter := base
+		if suffix > 0 {
+			delimiter = fmt.Sprintf("%s_%d", base, suffix)
+		}
+		if content == delimiter || strings.HasPrefix(content, delimiter+"\n") || strings.HasSuffix(content, "\n"+delimiter) || strings.Contains(content, "\n"+delimiter+"\n") {
+			continue
+		}
+		return delimiter
+	}
+}
+
+func sourceBuildCommand(docker, workdir, serviceID, image string, source *SourceDeployment) string {
+	sourceDir := workdir + "/" + source.Repo + "-" + source.SHA
+	return fmt.Sprintf("%s buildx build --build-arg BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:%s -f %s --build-arg cache-key=%s --output type=docker,name=%s %s",
+		docker, railpackVersion, shellQuote(workdir+"/railpack-plan.json"), serviceID, image, shellQuote(sourceDir))
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func runRollingDeploy(ctx context.Context, client *ssh.Client, docker string, cfg DeployConfig, oldDeployment db.Deployment, oldConfig db.ServiceConfig, hasOld bool) bool {
@@ -509,6 +618,32 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 
 	if err := <-done; err != nil {
 		failDeploy(deploymentID, fmt.Sprintf("command failed: %v", err))
+		return false
+	}
+	return true
+}
+
+func runSourceStep(ctx context.Context, client *ssh.Client, deploymentID, command, phase, label string) bool {
+	stdoutCh, stderrCh, done := client.StreamCommandContext(ctx, command)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for line := range stdoutCh {
+			appendLog(ctx, deploymentID, line, "stdout", phase)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for line := range stderrCh {
+			appendLog(ctx, deploymentID, line, "stderr", phase)
+		}
+	}()
+
+	wg.Wait()
+	if err := <-done; err != nil {
+		failDeploy(deploymentID, label+" failed: "+err.Error())
 		return false
 	}
 	return true

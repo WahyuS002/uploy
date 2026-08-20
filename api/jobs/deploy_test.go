@@ -1,6 +1,7 @@
 package jobs
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -143,6 +144,44 @@ func TestBuildDockerRunCmdSetsRestartPolicy(t *testing.T) {
 		cmd := buildDockerRunCmd("docker", tc.cfg)
 		if !strings.Contains(cmd, "--restart unless-stopped") {
 			t.Errorf("%s mode has no restart policy: %s", tc.name, cmd)
+		}
+	}
+}
+
+func TestSourceBuildCommandsUsePinnedPlanAndSHA(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	source := &SourceDeployment{Owner: "owner", Repo: "demo", SHA: sha, Plan: json.RawMessage(`{"deploy":{"startCommand":"node server.js"}}`)}
+	if err := source.validate(); err != nil {
+		t.Fatalf("source.validate() error = %v", err)
+	}
+
+	workdir := sourceWorkdir("deployment-1")
+	fetch := sourceFetchCommand(workdir, source)
+	for _, want := range []string{
+		"curl -sfL",
+		"https://codeload.github.com/owner/demo/tar.gz/" + sha,
+		"tar xz",
+	} {
+		if !strings.Contains(fetch, want) {
+			t.Errorf("fetch command missing %q: %s", want, fetch)
+		}
+	}
+
+	plan := sourcePlanCommand(workdir, source.Plan)
+	if !strings.Contains(plan, "railpack-plan.json") || !strings.Contains(plan, string(source.Plan)) {
+		t.Errorf("plan command did not transfer plan: %s", plan)
+	}
+
+	build := sourceBuildCommand("docker", workdir, "svc-1", "uploy/svc-1:"+sha, source)
+	for _, want := range []string{
+		"docker buildx build",
+		"BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend:" + railpackVersion,
+		"--build-arg cache-key=svc-1",
+		"--output type=docker,name=uploy/svc-1:" + sha,
+		workdir + "/demo-" + sha,
+	} {
+		if !strings.Contains(build, want) {
+			t.Errorf("build command missing %q: %s", want, build)
 		}
 	}
 }
