@@ -8,21 +8,24 @@
 
 	let { data, children } = $props();
 
-	let routeId = $derived(page.route.id ?? '');
-	let isCanvas = $derived(
-		routeId.endsWith('/projects/new') ||
-			routeId.endsWith('/projects/new/image') ||
-			routeId.endsWith('/projects/[id]') ||
-			routeId.endsWith('/projects/[id]/settings')
-	);
+	// Every route under (builder) is a full-bleed canvas with a name in the
+	// topbar, so both facts come from one table rather than two lists that have
+	// to be kept in step. They were two, and /projects/new/repo was added to
+	// neither: it came out framed like a document page, with an empty topbar.
+	const builderRoutes = [
+		{ suffix: '/projects/new/image', label: 'New project / Docker Image' },
+		{ suffix: '/projects/new/repo', label: 'New project / GitHub Repository' },
+		{ suffix: '/projects/[id]/settings', label: 'Project settings' },
+		{ suffix: '/projects/new', label: 'New project' },
+		{ suffix: '/projects/[id]', label: 'Project builder' }
+	];
 
-	let defaultLabel = $derived.by(() => {
-		if (routeId.endsWith('/projects/new/image')) return 'New project / Docker Image';
-		if (routeId.endsWith('/projects/new')) return 'New project';
-		if (routeId.endsWith('/projects/[id]/settings')) return 'Project settings';
-		if (routeId.endsWith('/projects/[id]')) return 'Project builder';
-		return '';
-	});
+	let routeId = $derived(page.route.id ?? '');
+	let builderRoute = $derived(
+		builderRoutes.find((route) => routeId.endsWith(route.suffix)) ?? null
+	);
+	let isCanvas = $derived(builderRoute !== null);
+	let defaultLabel = $derived(builderRoute?.label ?? '');
 
 	const topbar: BuilderTopbarState = $state({
 		label: '',
