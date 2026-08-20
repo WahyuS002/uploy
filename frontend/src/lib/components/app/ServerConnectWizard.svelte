@@ -23,7 +23,7 @@
 
 	let {
 		controller,
-		submitLabel = 'Connect and add server',
+		submitLabel = 'Connect server',
 		class: className,
 		bodyClass,
 		actionsClass,
@@ -114,38 +114,53 @@
 			<div class="flex flex-col gap-3">
 				<div>
 					<h3 class="text-sm font-medium text-foreground">
-						Authorize SSH key on {controller.host}
+						Authorize on {controller.host}
 					</h3>
 					{#if controller.authorizeCommand}
-						<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-							Run this command on the server as <span class="font-medium text-foreground"
-								>{controller.sshUser}</span
-							>:
+						<p class="mt-0.5 text-xs text-muted-foreground">
+							Run as <span class="font-medium text-foreground">{controller.sshUser}</span>:
 						</p>
 					{:else}
-						<p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-							{controller.selectedKey?.name ?? 'This key'} has no public key stored. Authorize it on the
-							server, then continue.
+						<p class="mt-0.5 text-xs text-muted-foreground">
+							{controller.selectedKey?.name ?? 'This key'} has no public key stored.
 						</p>
 					{/if}
 				</div>
 
 				{#if controller.authorizeCommand}
-					<div class="flex flex-col gap-2">
-						<pre
-							class="overflow-x-auto rounded-md border border-border bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed text-foreground">{controller.authorizeCommand}</pre>
+					<!-- One object rather than a block with a button parked under it. The
+					     command is something you copy, so the control that copies it sits
+					     on the same row and the whole step collapses to a single strip.
+
+					     It scrolls instead of wrapping: the key alone is 380-odd
+					     characters, and wrapped it would be the tallest thing in the
+					     dialog for a string nobody reads. -->
+					<div class="flex items-center gap-1 rounded-md border border-border bg-muted p-1">
+						<div class="relative min-w-0 flex-1">
+							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+							<!-- The rule is about not putting <div>s in the tab order. This is the
+							     opposite case: a region that clips its content has to be reachable
+							     without a mouse, or the tail of the command is keyboard-only
+							     unreachable. WCAG 2.1.1 wants the tab stop here. -->
+							<pre
+								tabindex="0"
+								role="group"
+								aria-label="Authorize command"
+								class="command overflow-x-auto px-2 py-1.5 font-mono text-[11px] leading-relaxed text-foreground">{controller.authorizeCommand}</pre>
+							<span
+								aria-hidden="true"
+								class="fade pointer-events-none absolute inset-y-0 right-0 w-8"
+							></span>
+						</div>
 						<CopyButton
+							icon
 							text={controller.authorizeCommand}
 							defaultLabel="Copy command"
-							copiedLabel="Copied"
-							class="w-fit"
+							copiedLabel="Command copied"
+							class="flex-none"
 						/>
 					</div>
 				{/if}
-
-				<p class="text-xs text-muted-foreground">
-					Already authorized this key? Click Connect to continue.
-				</p>
 
 				<ServerConnectFailure {controller} />
 			</div>
@@ -171,3 +186,29 @@
 		{/if}
 	</div>
 </form>
+
+<style>
+	/* The scrollbar is the loudest thing in a 40px strip, and it says nothing the
+	   fade at the end does not already say. Dragging, shift-scroll and the arrow
+	   keys all still move it; only the chrome is gone. */
+	.command {
+		scrollbar-width: none;
+	}
+
+	.command::-webkit-scrollbar {
+		display: none;
+	}
+
+	/* A scroll region has to be reachable without a mouse, and a tab stop with no
+	   visible focus is a trap. The outline sits inside so it does not overlap the
+	   strip's own border. */
+	.command:focus-visible {
+		border-radius: var(--radius-sm);
+		outline: 2px solid var(--ring);
+		outline-offset: -2px;
+	}
+
+	.fade {
+		background: linear-gradient(to right, transparent, var(--muted));
+	}
+</style>

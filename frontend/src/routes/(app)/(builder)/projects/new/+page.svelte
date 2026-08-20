@@ -10,13 +10,7 @@
 	import ServerNode from '$lib/components/app/ServerNode.svelte';
 	import ServerConnectWizard from '$lib/components/app/ServerConnectWizard.svelte';
 	import { ServerCreateController } from '$lib/components/app/server-create-form.svelte';
-	import {
-		Dialog,
-		DialogContent,
-		DialogHeader,
-		DialogTitle,
-		DialogDescription
-	} from '$lib/components/ui/dialog';
+	import { Dialog, DialogContent, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
 	import { toast } from '$lib/components/ui/toast/toast-service.svelte.js';
 	import { createCanvasPan } from '$lib/actions/canvas-pan.svelte';
 	import { Icon } from '@steeze-ui/svelte-icon';
@@ -322,9 +316,6 @@
 	>
 		<DialogHeader class="border-b border-border px-5 pt-4 pr-12 pb-3">
 			<DialogTitle class="text-sm">Connect a server</DialogTitle>
-			<DialogDescription class="text-xs">
-				Add SSH credentials so Uploy can deploy here.
-			</DialogDescription>
 		</DialogHeader>
 
 		<ServerConnectWizard
