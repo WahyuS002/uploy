@@ -210,7 +210,7 @@ func runSourceBuild(ctx context.Context, client *ssh.Client, docker string, cfg 
 	if !runSourceStep(ctx, client, cfg.DeploymentID, sourceFetchCommand(workdir, source), "fetch_source", "source fetch") {
 		return false
 	}
-	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), "build", "source plan upload") {
+	if !runSourceStep(ctx, client, cfg.DeploymentID, sourcePlanCommand(workdir, source.Plan), "fetch_source", "source plan upload") {
 		return false
 	}
 
@@ -610,7 +610,7 @@ func RemoveService(server ssh.ServerConfig, serviceID, containerName string) err
 }
 
 func runStep(ctx context.Context, client *ssh.Client, deploymentID, command string) bool {
-	stdoutCh, stderrCh, done := client.StreamCommandContext(ctx, command)
+	stdoutCh, stderrCh, done := client.StreamCommand(command)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -630,10 +630,6 @@ func runStep(ctx context.Context, client *ssh.Client, deploymentID, command stri
 	wg.Wait()
 
 	if err := <-done; err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			failDeploy(deploymentID, "command exceeded the deployment time limit")
-			return false
-		}
 		failDeploy(deploymentID, fmt.Sprintf("command failed: %v", err))
 		return false
 	}
