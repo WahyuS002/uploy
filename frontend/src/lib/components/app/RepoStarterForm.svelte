@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import { ArrowLeft, Check, GitFork as Github, LoaderCircle } from 'lucide-svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -17,8 +17,8 @@
 	};
 
 	type Props = {
-		serverName: string;
-		serverHost: string;
+		/** Rows shown under the branch row — where the deploy target is spelled out. */
+		details?: Snippet;
 		analysis?: Analysis | null;
 		submitting?: boolean;
 		analyzing?: boolean;
@@ -35,8 +35,7 @@
 	};
 
 	let {
-		serverName,
-		serverHost,
+		details,
 		analysis = null,
 		submitting = false,
 		analyzing = false,
@@ -269,10 +268,11 @@
 				</div>
 			</div>
 
-			<div class="border-t border-border/70 pt-3 text-xs text-muted-foreground">
-				<span>Deploys to </span><span class="font-medium text-foreground">{serverName}</span>
-				<span class="font-mono">({serverHost})</span>
-			</div>
+			{#if details}
+				<div class="flex flex-col gap-2 border-t border-border/70 pt-3">
+					{@render details()}
+				</div>
+			{/if}
 
 			{#if localError || error}
 				<Alert tone="danger">{localError || error}</Alert>

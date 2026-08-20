@@ -9,6 +9,7 @@
 	import DeploymentPanel from '$lib/components/app/DeploymentPanel.svelte';
 	import StarterPanel, { type Starter } from '$lib/components/app/StarterPanel.svelte';
 	import ImageStarterForm from '$lib/components/app/ImageStarterForm.svelte';
+	import RepoStarterForm from '$lib/components/app/RepoStarterForm.svelte';
 	import PendingChangesBar from '$lib/components/app/PendingChangesBar.svelte';
 	import { toast } from '$lib/components/ui/toast/toast-service.svelte.js';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -47,6 +48,7 @@
 	type ServiceResponse = components['schemas']['ServiceResponse'];
 	type ServerResponse = components['schemas']['ServerResponse'];
 	type DeploymentResponse = components['schemas']['DeploymentResponse'];
+	type AnalysisResponse = components['schemas']['AnalyzeSourceResponse'];
 
 	let { data }: { data: PageData } = $props();
 	let canEdit = $derived(data.workspace?.role === 'owner' || data.workspace?.role === 'developer');
@@ -67,10 +69,16 @@
 	// its header, and a child cannot draw outside its own parent's edge.
 	let openDeployment = $state<DeploymentResponse | null>(null);
 
-	// Adding a service is a step on the canvas, not a dialog — the same image-first
-	// flow as /projects/new/image. Everything else (name, container name) is
-	// derived from the image server-side, so there is nothing left to fill in.
+	// Adding a service is a step on the canvas, not a dialog. It opens on the
+	// starter menu rather than on a form, because a service can come from an
+	// image or from a repository and a button that silently picks one of them
+	// hides half of what the canvas can do.
 	let addingService = $state(false);
+	// null while the starter menu is up. Set once a starter is chosen, which is
+	// what decides which form the step shows.
+	let serviceStarter = $state<Starter | null>(null);
+	let repoAnalysis = $state<AnalysisResponse | null>(null);
+	let analyzingRepo = $state(false);
 	// Latches on the first step into the form and stays on, so the canvas has a
 	// direction to come back from. Without it the very first paint of a project
 	// would slide in from the left, explaining a step that never happened.
@@ -171,7 +179,18 @@
 		svcError = '';
 		if (!svcServerId && servers.length > 0) svcServerId = servers[0].id;
 		steppedIntoForm = true;
+		serviceStarter = null;
+		repoAnalysis = null;
 		addingService = true;
+	}
+
+	// One way out of the add-service step, used by both leaving it and finishing
+	// it. Two ways would mean one of them eventually forgets a field.
+	function closeAddService() {
+		addingService = false;
+		serviceStarter = null;
+		repoAnalysis = null;
+		svcError = '';
 	}
 
 	async function createService(image: string, containerPort: number, hostPort: number | null) {
@@ -200,7 +219,7 @@
 			if (data) {
 				services = [...services, data];
 				selectedServiceId = data.id;
-				addingService = false;
+				closeAddService();
 				pan.recenter();
 			}
 		} catch {
@@ -411,7 +430,76 @@
 	}
 
 	function handleStarterSelect(starter: Starter) {
-		if (starter === 'docker-image') startAddService();
+		// The same guard startAddService applies, checked here too: without it a
+		// starter could be selected into a step that never opened.
+		if (!selectedEnvId) return;
+		if (starter !== 'docker-image' && starter !== 'github-repo') return;
+		startAddService();
+		serviceStarter = starter;
+	}
+
+	async function analyzeRepo(repoUrl: string, branch: string) {
+		if (analyzingRepo) return;
+		analyzingRepo = true;
+		svcError = '';
+		try {
+			const { data, error: err } = await api.POST('/api/source/analyze', {
+				body: { repo_url: repoUrl, branch }
+			});
+			if (err || !data) {
+				svcError = (err as { error?: string } | undefined)?.error ?? 'Could not analyze repository';
+				return;
+			}
+			repoAnalysis = data;
+		} catch {
+			svcError = 'Network error';
+		} finally {
+			analyzingRepo = false;
+		}
+	}
+
+	async function createServiceFromRepo(values: {
+		name: string;
+		containerName: string;
+		containerPort: number;
+		branch: string;
+	}) {
+		if (!selectedEnvId || creatingService || !repoAnalysis) return;
+		svcError = '';
+		creatingService = true;
+		try {
+			const {
+				data,
+				error: err,
+				response
+			} = await api.POST('/api/services/from-source', {
+				body: {
+					name: values.name,
+					container_name: values.containerName,
+					container_port: values.containerPort,
+					server_id: svcServerId,
+					environment_id: selectedEnvId,
+					repo_url: `https://github.com/${repoAnalysis.owner}/${repoAnalysis.name}`,
+					branch: values.branch
+				}
+			});
+			if (err || !data) {
+				svcError = (err as { error?: string } | undefined)?.error ?? 'Could not create service';
+				// 422 means the repository itself is the problem, so send the form
+				// back to its first step rather than leaving a confirmation up for
+				// something that cannot be confirmed.
+				if (response?.status === 422) repoAnalysis = null;
+				return;
+			}
+			services = [...services, data];
+			selectedServiceId = data.id;
+			closeAddService();
+			pan.recenter();
+		} catch {
+			svcError = 'Network error';
+		} finally {
+			creatingService = false;
+		}
 	}
 
 	const pan = createCanvasPan({ bounds: 'auto' });
@@ -425,6 +513,8 @@
 		environments = [];
 		services = [];
 		addingService = false;
+		serviceStarter = null;
+		repoAnalysis = null;
 		steppedIntoForm = false;
 		selectedEnvId = '';
 		selectedServiceId = null;
@@ -650,7 +740,12 @@
 							</div>
 						</div>
 					{:else if addingService}
-						<div class="step-enter w-full max-w-105" data-no-pan>
+						<div
+							class="step-enter w-full {serviceStarter === 'github-repo'
+								? 'max-w-120'
+								: 'max-w-105'}"
+							data-no-pan
+						>
 							{#if servers.length === 0}
 								<EmptyState
 									icon={ServerStack}
@@ -661,23 +756,67 @@
 										{#if isOwner}
 											<Button href="/servers" size="sm">Connect a server</Button>
 										{/if}
-										<Button
-											type="button"
-											variant="secondary"
-											size="sm"
-											onclick={() => (addingService = false)}
-										>
+										<Button type="button" variant="secondary" size="sm" onclick={closeAddService}>
 											Cancel
 										</Button>
 									{/snippet}
 								</EmptyState>
+							{:else if serviceStarter === null}
+								<div class="flex flex-col gap-2">
+									<StarterPanel
+										enabled={{ 'github-repo': true, 'docker-image': true }}
+										title="Add a service"
+										onSelect={handleStarterSelect}
+									/>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										class="self-start"
+										onclick={closeAddService}
+									>
+										Back to canvas
+									</Button>
+								</div>
+							{:else if serviceStarter === 'github-repo'}
+								<RepoStarterForm
+									analysis={repoAnalysis}
+									submitting={creatingService}
+									analyzing={analyzingRepo}
+									error={svcError}
+									onBack={() => {
+										serviceStarter = null;
+										svcError = '';
+									}}
+									onChangeRepository={() => {
+										repoAnalysis = null;
+										svcError = '';
+									}}
+									onAnalyze={analyzeRepo}
+									onCreate={createServiceFromRepo}
+								>
+									{#snippet details()}
+										<div class="flex items-center justify-between gap-3">
+											<span class="text-xs text-muted-foreground">Server</span>
+											<Select items={serverItems} bind:value={svcServerId} size="sm" class="w-56" />
+										</div>
+
+										<div class="flex items-baseline justify-between gap-3 text-xs">
+											<span class="flex-none text-muted-foreground">Deploys to</span>
+											<span class="truncate font-medium text-foreground">{selectedEnv?.name}</span>
+										</div>
+									{/snippet}
+								</RepoStarterForm>
 							{:else}
 								<ImageStarterForm
 									submitting={creatingService}
 									error={svcError}
 									submitLabel="Create service"
-									backLabel="Back to canvas"
-									onBack={() => (addingService = false)}
+									backLabel="Back to starters"
+									onBack={() => {
+										serviceStarter = null;
+										svcError = '';
+									}}
 									onSubmit={createService}
 								>
 									{#snippet details()}
@@ -702,7 +841,7 @@
 						>
 							{#if canEdit}
 								<StarterPanel
-									enabled={{ 'docker-image': true }}
+									enabled={{ 'github-repo': true, 'docker-image': true }}
 									title="Add a service"
 									onSelect={handleStarterSelect}
 								/>

@@ -210,8 +210,6 @@
 				{:else}
 					<div class="w-full max-w-120" data-no-pan>
 						<RepoStarterForm
-							serverName={server.name}
-							serverHost={`${server.host}:${server.port}`}
 							{analysis}
 							{submitting}
 							{analyzing}
@@ -220,7 +218,16 @@
 							onChangeRepository={changeRepository}
 							onAnalyze={analyze}
 							onCreate={create}
-						/>
+						>
+							{#snippet details()}
+								<div class="text-xs text-muted-foreground">
+									<span>Deploys to </span><span class="font-medium text-foreground"
+										>{server.name}</span
+									>
+									<span class="font-mono">({server.host}:{server.port})</span>
+								</div>
+							{/snippet}
+						</RepoStarterForm>
 					</div>
 				{/if}
 			</div>
